@@ -1,0 +1,69 @@
+# Build + test CI for a circuit-emulation pedal plugin.
+# TEMPLATE: replace <Pedal> (juce target / product name), <Cod1> (PLUGIN_CODE) and <Mfr1>
+# (PLUGIN_MANUFACTURER_CODE) to match your CMakeLists. This file is inert inside the template
+# folder (GitHub only reads .github at the repo root) — it activates once you copy the template
+# to a new repo's root.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev \
+            libfreetype6-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev \
+            libglu1-mesa-dev mesa-common-dev xvfb
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Run tests (Linux, headless display)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a ctest --test-dir build -C Release --output-on-failure
+
+      - name: Run tests
+        if: runner.os != 'Linux'
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Validate AU (auval)
+        if: runner.os == 'macOS'
+        run: |
+          # On a clean CI runner the freshly-copied .component isn't registered with the
+          # AudioComponentRegistrar yet, so auval reports "didn't find the component" / -50.
+          # Bounce the registrar so it rescans ~/Library/Audio/Plug-Ins/Components and retry.
+          ls -la "$HOME/Library/Audio/Plug-Ins/Components/" || true
+          ok=0
+          for i in 1 2 3 4; do
+            if auval -v aufx <Cod1> <Mfr1>; then ok=1; break; fi
+            echo "::warning::auval attempt $i failed; bouncing AudioComponentRegistrar and retrying"
+            killall -9 AudioComponentRegistrar 2>/dev/null || true
+            sleep 5
+          done
+          [ "$ok" = 1 ]

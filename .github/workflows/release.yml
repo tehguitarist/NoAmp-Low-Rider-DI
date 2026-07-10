@@ -1,0 +1,290 @@
+# Manual-trigger packaging: builds VST3 (+ AU on macOS) on all three platforms, packages a basic
+# installer per platform (.pkg/.exe/.deb) alongside a raw zip, and publishes everything to a
+# GitHub Release. No push/schedule trigger — it ONLY runs when you start it from the Actions tab
+# or `gh workflow run release.yml`, so a release is never cut accidentally.
+# TEMPLATE: replace <Pedal> (juce target / product name) everywhere. Inert until copied to a repo root.
+#
+# macOS signing/notarization is WIRED but gated on secrets that don't exist until you add them —
+# if APPLE_CERT_P12_BASE64 etc. aren't set, the macOS job's signing steps below will fail. Either
+# add the nine secrets (APPLE_CERT_P12_BASE64, APPLE_CERT_PASSWORD, APPLE_SIGNING_IDENTITY,
+# APPLE_TEAM_ID, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_INSTALLER_CERT_P12_BASE64,
+# APPLE_INSTALLER_CERT_PASSWORD, APPLE_INSTALLER_SIGNING_IDENTITY — see build.md for how to obtain
+# each) or delete the signing/notarization steps (through "Clean up keychain") if you don't want
+# signed releases yet. Without signing, Gatekeeper warns on first launch but the plugin still works.
+#
+# The macOS .pkg installer is built from installer/macos/ and wraps the (signed/notarized) AU/VST3
+# bundles with a choice screen — both formats selected by default. The .pkg itself is also signed
+# (productsign, a separate "Developer ID Installer" cert from the Application one used on the
+# bundles) and notarized/stapled by the "Sign + notarize installer" step, so it shows no
+# Gatekeeper warning on double-click either — delete that step too if skipping signing. The
+# Windows .exe (NSIS) and Linux .deb are VST3-only since neither platform has AU.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "Create as a draft release (review before publishing)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Read version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: read
+        run: |
+          VERSION=$(grep -oP '(?<=project\(<Pedal> VERSION )[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: macOS build
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build AU + VST3
+        run: cmake --build build --config Release --target <Pedal>_AU --target <Pedal>_VST3 --parallel
+
+      # --- Signing/notarization: requires the nine APPLE_* secrets. Delete these steps (through
+      # "Clean up keychain") if you haven't set them up yet — see build.md.
+      - name: Import signing certificates
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          APPLE_INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/installer-cert.p12"
+
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode -o "$CERT_PATH"
+          echo "$APPLE_INSTALLER_CERT_P12_BASE64" | base64 --decode -o "$INSTALLER_CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$INSTALLER_CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_INSTALLER_CERT_PASSWORD" -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+          rm -f "$CERT_PATH" "$INSTALLER_CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign AU + VST3
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          for bundle in \
+            "build/<Pedal>_artefacts/Release/AU/<Pedal>.component" \
+            "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3"; do
+            codesign --force --deep --options runtime --timestamp \
+              --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" "$bundle"
+            codesign --verify --deep --strict --verbose=2 "$bundle"
+          done
+
+      - name: Notarize AU + VST3
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          NOTARIZE_ZIP="$RUNNER_TEMP/notarize.zip"
+          NOTARIZE_DIR="$RUNNER_TEMP/notarize"
+          mkdir -p "$NOTARIZE_DIR"
+          cp -R "build/<Pedal>_artefacts/Release/AU/<Pedal>.component" "$NOTARIZE_DIR/"
+          cp -R "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3" "$NOTARIZE_DIR/"
+          ditto -c -k --keepParent "$NOTARIZE_DIR" "$NOTARIZE_ZIP"
+
+          xcrun notarytool submit "$NOTARIZE_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "build/<Pedal>_artefacts/Release/AU/<Pedal>.component"
+          xcrun stapler staple "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3"
+
+      - name: Package
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          # Zip only the AU/VST3 bundles, NOT the whole Release dir — that also contains
+          # lib<Pedal>_SharedCode.a (a build byproduct, not something an end user installs).
+          # ditto -c can't take multiple sources directly, so stage them into one dir first
+          # (named "<Pedal>" so --keepParent gives the zip a clean top-level folder).
+          PKG_DIR="$RUNNER_TEMP/<Pedal>"
+          mkdir -p "$PKG_DIR"
+          cp -R "build/<Pedal>_artefacts/Release/AU" "build/<Pedal>_artefacts/Release/VST3" "$PKG_DIR/"
+          ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "<Pedal>-macOS-v${VERSION}.zip"
+
+      - name: Build installer
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          installer/macos/build_installer.sh "$VERSION" build/<Pedal>_artefacts/Release .
+
+      - name: Sign + notarize installer
+        env:
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          PKG="<Pedal>-macOS-v${VERSION}-Installer.pkg"
+          SIGNED_PKG="$RUNNER_TEMP/signed.pkg"
+
+          productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" \
+            "$PKG" "$SIGNED_PKG"
+          mv "$SIGNED_PKG" "$PKG"
+
+          xcrun notarytool submit "$PKG" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$PKG"
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN_PATH" || true
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: <Pedal>-macOS
+          path: |
+            <Pedal>-macOS-v*.zip
+            <Pedal>-macOS-v*.pkg
+
+  windows:
+    name: Windows build
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Configure
+        run: cmake -B build
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target <Pedal>_VST3 --parallel
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.version }}"
+          Compress-Archive -Path "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3" `
+            -DestinationPath "<Pedal>-Windows-v$version.zip"
+
+      # makensis ships on windows-latest runners but is NOT on PATH — locate it rather than
+      # assume a bare `makensis` call works (it doesn't).
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $version = "${{ needs.version.outputs.version }}"
+
+          $makensis = Get-Command makensis.exe -ErrorAction SilentlyContinue
+          if ($makensis) {
+            $makensisPath = $makensis.Source
+          } else {
+            $candidates = @(
+              "$env:ProgramFiles\NSIS\makensis.exe",
+              "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+            )
+            $makensisPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+
+          if (-not $makensisPath) {
+            Write-Host "makensis not found on this runner — installing via Chocolatey"
+            choco install nsis -y --no-progress
+            $makensisPath = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          }
+
+          Write-Host "Using makensis at $makensisPath"
+          & $makensisPath /DVERSION=$version /DARTEFACTS_DIR="$PWD\build\<Pedal>_artefacts\Release\VST3" installer\windows\Pedal.nsi
+
+          # NSIS resolves a relative OutFile against the .nsi's own directory, not this process's
+          # CWD — move the built installer to the repo root so the upload-artifact glob finds it.
+          Move-Item "installer\windows\<Pedal>-Windows-v$version-Installer.exe" .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: <Pedal>-Windows
+          path: |
+            <Pedal>-Windows-v*.zip
+            <Pedal>-Windows-v*.exe
+
+  linux:
+    name: Linux build
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev ladspa-sdk libcurl4-openssl-dev \
+            libfreetype6-dev libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxinerama-dev libxrandr-dev libxrender-dev libwebkit2gtk-4.1-dev \
+            libglu1-mesa-dev mesa-common-dev
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target <Pedal>_VST3 --parallel
+
+      - name: Package
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          (cd build/<Pedal>_artefacts/Release/VST3 && \
+            zip -r "${GITHUB_WORKSPACE}/<Pedal>-Linux-v${VERSION}.zip" <Pedal>.vst3)
+
+      - name: Build installer
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          installer/linux/build_deb.sh "$VERSION" build/<Pedal>_artefacts/Release .
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: <Pedal>-Linux
+          path: |
+            <Pedal>-Linux-v*.zip
+            <Pedal>-Linux-v*.deb
+
+  publish:
+    name: Publish release
+    needs: [version, macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with: { path: artifacts }
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: <Pedal> v${{ needs.version.outputs.version }}
+          draft: ${{ inputs.draft }}
+          files: |
+            artifacts/**/*.zip
+            artifacts/**/*.pkg
+            artifacts/**/*.exe
+            artifacts/**/*.deb

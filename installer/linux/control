@@ -1,0 +1,9 @@
+Package: <pedal>
+Version: __VERSION__
+Section: sound
+Priority: optional
+Architecture: amd64
+Maintainer: <You> <<you>@example.com>
+Description: <Pedal> plugin (VST3)
+ Replace this description with one line about your plugin, plus optional indented
+ continuation lines (each must start with a single space).

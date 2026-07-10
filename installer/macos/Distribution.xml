@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TEMPLATE: replace com.<you>.<pedal> with your actual bundle ID (must match CMakeLists.txt's
+     BUNDLE_ID), and __VERSION__ stays a placeholder substituted at build time by build_installer.sh.
+     Inert as-is; harmless if copied into a repo that never runs the installer scripts. -->
+<installer-gui-script minSpecVersion="1">
+    <title><Pedal></title>
+    <organization>com.<you></organization>
+    <domains enable_localSystem="true"/>
+    <options customize="allow" require-scripts="false" rootVolumeOnly="true"/>
+
+    <!-- Two installable components, both selected by default. AU is macOS-only, so this is the
+         one platform where a plugin-format choice screen makes sense. AU/VST3 sit at the top
+         level (no wrapping parent line) so the customize screen doesn't show a nameless group. -->
+    <choices-outline>
+        <line choice="au"/>
+        <line choice="vst3"/>
+    </choices-outline>
+
+    <choice id="au"
+            title="Audio Unit (AU)"
+            description="Installs the AU plugin to /Library/Audio/Plug-Ins/Components. Use this for Logic Pro, GarageBand, and other AU hosts."
+            start_selected="true">
+        <pkg-ref id="com.<you>.<pedal>.au"/>
+    </choice>
+
+    <choice id="vst3"
+            title="VST3"
+            description="Installs the VST3 plugin to /Library/Audio/Plug-Ins/VST3. Use this for Ableton Live, Cubase, Reaper, and other VST3 hosts."
+            start_selected="true">
+        <pkg-ref id="com.<you>.<pedal>.vst3"/>
+    </choice>
+
+    <pkg-ref id="com.<you>.<pedal>.au" version="__VERSION__" onConclusion="none">au.pkg</pkg-ref>
+    <pkg-ref id="com.<you>.<pedal>.vst3" version="__VERSION__" onConclusion="none">vst3.pkg</pkg-ref>
+</installer-gui-script>

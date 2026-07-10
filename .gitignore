@@ -1,0 +1,14 @@
+build/
+.DS_Store
+*.user
+*.xcodeproj
+*.xcworkspace
+Builds/
+JuceLibraryCode/
+.idea/
+.vscode/
+# analysis harness artifacts (regenerate from gen_test_signal.py; never commit captures)
+*.wav
+__pycache__/
+.venv/
+analysis/pedal_results*/
