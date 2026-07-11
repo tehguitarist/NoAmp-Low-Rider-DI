@@ -41,6 +41,19 @@
 >   session has headroom, break if it's already large or a fresh perspective seems safer; either is
 >   fine, so it's called out rather than defaulted.
 > - Every other task boundary: **break**, no further comment needed.
+>
+> **On task/phase completion — distil, don't dump.** Before ending a session, write a *concise*
+> summary of what a future session actually needs, then stop. Specifically:
+> - Update `CLAUDE.md` "Current step" to the new state (one short paragraph), and add to its
+>   carry-forwards ONLY durable findings: measured constants (kInputRef, rail V, output makeup,
+>   per-revision zener Cj), resolved ambiguities, any gate result that changed a decision, and
+>   gotchas that cost real time. **Prune** now-obsolete entries in the same pass.
+> - Do NOT record derivation scratch-work, algebra, false starts, restatements of `circuit.md`, or
+>   anything re-derivable from the files on disk. The code + gate results are the record; the summary
+>   is the map to them.
+> - Rule of thumb: if the next executor can reconstruct it cheaply from a file the plan already
+>   points them to, it does not belong in the summary. Keep `CLAUDE.md` under ~2k tokens.
+> - A good completion summary is 3–8 lines. If it's longer, you're dumping, not distilling.
 
 ## Locked decisions (do not re-litigate)
 

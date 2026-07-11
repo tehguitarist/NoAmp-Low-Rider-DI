@@ -21,18 +21,33 @@ Format: clang-format -i src/**/*.{cpp,h}
 
 ## Schematics
 
-Put the schematic images in `schematics/` and load them whenever verifying a circuit detail.
-`.claude/rules/circuit.md` is the source of truth for values/topology — fill it in first.
+Schematic images + FR sim graphs live in `schematics/`; they are transcribed/verified into
+`.claude/rules/circuit.md` (source of truth for values/topology) and `docs/reference-fr-targets.md`
+(quantitative FR targets). **Don't re-read the schematic PNGs** unless a task explicitly needs a
+listed crop — the transcription is verified (three passes, numeric cross-checks in `circuit.md`).
 
 **Use the `schematic-checker` agent any time a circuit value or topology is in doubt; use
-`dsp-validator` after any DSP stage change.** Both read `.claude/rules/circuit.md`/`dsp.md` —
-keep those current and the agents stay useful with no extra setup.
+`dsp-validator` after any DSP stage change.** Both read `circuit.md`/`dsp.md` — keep those current.
 
-@.claude/rules/circuit.md
-@.claude/rules/dsp.md
-@.claude/rules/architecture.md
-@.claude/rules/ui.md
-@.claude/rules/build.md
+## Rule / reference files — READ ON DEMAND, not auto-loaded
+
+> These are **deliberately NOT `@`-included** (that would auto-load ~19k tokens — dominated by the
+> 11k-token `circuit.md` — into *every* session, defeating the per-task reading discipline the build
+> plan depends on). Each task in `docs/build-plan.md` lists the exact files + sections to read. Load
+> only those. `circuit.md` especially is a per-revision reference: a V1-Early task reads the V1-Early
+> tables, not the whole file.
+
+| File | Read when |
+|------|-----------|
+| `.claude/rules/circuit.md` | any DSP/circuit task — **only the relevant revision's tables + cited notes** |
+| `.claude/rules/dsp.md` | any DSP task (WDF/ADAA/oversampling/omega) |
+| `.claude/rules/architecture.md` | processor-level / threading / APVTS / integration tasks |
+| `.claude/rules/build.md` | CMake / CI / test-harness tasks |
+| `.claude/rules/ui.md` + `docs/ui-peripheral-spec.md` | UI tasks |
+| `docs/reference-fr-targets.md` | any linear-stage validation (the FR gates cite its §§) |
+| `docs/calibration-and-gain-staging.md` | level/rail/makeup calibration tasks |
+| `docs/validation-and-capture.md` | capture-based validation (Phase 10) |
+| `docs/build-plan.md` | **start here** — the phased plan with per-task model + read-list + gates |
 
 ## Essential reading (template learnings — do not skip)
 
@@ -91,8 +106,13 @@ keep those current and the agents stay useful with no extra setup.
 
 ## Project-specific carry-forwards
 
-> Record decisions, measured constants (kInputRef, rail voltages, makeup), and open questions here
-> as you go, so the next session resumes cleanly.
+> **On completing each task/phase, distil — don't dump.** Replace "Current step" with the new state,
+> and add to the list below ONLY durable findings a future session genuinely needs: measured
+> constants (kInputRef, rail V, makeup, per-revision zener Cj), resolved ambiguities, gate results
+> that changed a decision, and gotchas that cost real time. **Prune** entries that are now obsolete
+> or captured in code/`circuit.md`, and leave out derivation scratch-work, narration, and anything
+> re-derivable from the files. This file loads at the top of every session — keeping it lean is
+> what keeps every session cheap. Target: this whole file stays well under ~2k tokens.
 
 - **Source material**: three Japanese-language reverse-engineering blog posts by kanengomibako
   (unofficial, non-commercial-use-only schematics) — see `circuit.md` header for URLs. All three
