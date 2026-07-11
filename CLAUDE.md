@@ -103,16 +103,16 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 1 IN PROGRESS — stages 1.1 + 1.2 + 1.3 done & validated (ctest 5/5).** DSP lives
-> in `src/dsp/`: `RtypeNumeric.h` (numeric R-type S-matrix helper), `OpAmpStage.h`
-> (`processNonInvOpAmp` = ideal-op-amp decomposition), `NodalCircuit.h` (bilinear-companion MNA
-> engine for op-amp-embedded linear stages — see method note below), `V1EarlyStages.h`
-> (`V1EarlyInputBuffer`, `V1EarlyPresenceStage`, `V1EarlyDriveStage`, `V1EarlyRecoveryStage` = 2
-> active Sallen-Key LPFs + bridged-T). Tests: `V1EarlyPresenceTest` (1.1), `V1EarlyDriveTest` (1.2),
-> `V1EarlyRecoveryTest` (1.3) — each validates against an independent frequency-domain reference AND
-> the FR §-targets. **NEXT: 1.4 BLEND→LEVEL→gain** (Opus/high — pot-loading interaction, not an ideal
-> crossfade), then 1.5 tone stack (Opus/high), 1.6 output buffer (Sonnet), then run `dsp-validator`.
-> Nothing committed to git yet this phase.
+> **CURRENT: Phase 1 COMPLETE — all V1-Early linear stages 1.1–1.6 done & validated (ctest 8/8,
+> `dsp-validator` clean PASS on E1–E8).** DSP in `src/dsp/`: `RtypeNumeric.h` (numeric R-type
+> S-matrix), `OpAmpStage.h` (ideal-op-amp decomposition), `NodalCircuit.h` (bilinear-companion MNA
+> engine, now multi-input), `V1EarlyStages.h` (`V1EarlyInputBuffer`, `V1EarlyPresenceStage`,
+> `V1EarlyDriveStage`, `V1EarlyRecoveryStage`, `V1EarlyBlendLevelStage`, `V1EarlyToneStackStage`,
+> `V1EarlyOutputStage`). One `tests/V1Early*Test.cpp` per stage, each vs an independent
+> frequency-domain reference (warp-compensated) AND the FR §-targets. **NEXT: ⏸ BREAK then Phase 2 —
+> V1 Early nonlinearity + oversampling (Opus/high): rail clip on the DRIVE-stage output (TLC2264
+> rail-to-rail, ±~4.5 V about VREF) with 1st-order ADAA, oversampling region DRIVE→recovery, prewarp
+> base-rate HF caps. V1E has NO diode solve.** Nothing committed to git for 1.4–1.6 yet.
 
 ## Project-specific carry-forwards
 
@@ -178,6 +178,14 @@ without images.
   correctness from top-octave warp — **and** the FR §-targets. NodalCircuit gotcha (cost real time):
   an input-coupled cap injects `+Gc·vin` into the far node (same sign as a resistor); a grounded-cap
   RC self-check will NOT catch this sign — the bridged-T (input-coupled cap) did.
+- **Two plan-gate expectations were idealized; the faithful models (confirmed vs complex MNA to
+  <0.01 dB) reveal the real behaviour — trust the model, not the naive gate:** (1) BLEND off-side
+  isolation is NOT `<-80 dB` — it's cap-impedance-limited (C1 72 Ω / C12 3.4k at 1 kHz vs the 100k
+  pot), so ~−22..−56 dB, asymmetric, frequency-dependent (a real blend pot leaks the off-side; more
+  faithful than an ideal crossfade). (2) The output buffer (E8) is NOT unity/~6 Hz — it has a fixed
+  **−0.85 dB insertion loss** (R33 1k / R29 10k divider; **feed this into output-makeup calibration
+  Phase 3/10**) and a **~13 Hz** DC-block corner (cascade of two 2.2 µF sections, higher than the
+  netlist's rough "~6 Hz"); flat within 0.25 dB only above ~60–80 Hz.
 - **§3 `fr_presence_drive` is the op-amp gain block ALONE, no twin-T notch** — validate PRESENCE/DRIVE
   gain (1+Zf/Zg) against §3 (min +12.2 / mid +16.7 / max +34.2 dB @ 4.8 kHz, peak migrates 864→4829
   Hz ✓), the notch against §1. **RESOLVED: the twin-T (~−24 dB stage-level) reaches §1's −36.3 dB @

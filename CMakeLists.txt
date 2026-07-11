@@ -106,6 +106,12 @@ target_link_libraries(V1EarlyRecoveryTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(V1EarlyRecoveryTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V1EarlyRecoveryTest COMMAND V1EarlyRecoveryTest)
 
+# 1.4 — V1 Early BLEND -> LEVEL -> gain (coupled pot network) vs complex 2-input MNA.
+add_executable(V1EarlyBlendLevelTest tests/V1EarlyBlendLevelTest.cpp)
+target_link_libraries(V1EarlyBlendLevelTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1EarlyBlendLevelTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1EarlyBlendLevelTest COMMAND V1EarlyBlendLevelTest)
+
 # 0.2 — APVTS state save/restore round-trip. Links the processor + its UI sources directly (no
 # plugin-client wrapper) so it can exercise getStateInformation/setStateInformation standalone.
 juce_add_console_app(StateRoundTrip PRODUCT_NAME "StateRoundTrip")
@@ -131,3 +137,15 @@ target_link_libraries(StateRoundTrip
         juce::juce_recommended_config_flags
 )
 add_test(NAME StateRoundTrip COMMAND StateRoundTrip)
+
+# 1.5 — V1 Early BASS/TREBLE tone stack (inverting Baxandall shelving) vs complex MNA + FR §5/§6.
+add_executable(V1EarlyToneStackTest tests/V1EarlyToneStackTest.cpp)
+target_link_libraries(V1EarlyToneStackTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1EarlyToneStackTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1EarlyToneStackTest COMMAND V1EarlyToneStackTest)
+
+# 1.6 — V1 Early FET-mute + output buffer (unity path); flatness + DC-block corner.
+add_executable(V1EarlyOutputTest tests/V1EarlyOutputTest.cpp)
+target_link_libraries(V1EarlyOutputTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1EarlyOutputTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1EarlyOutputTest COMMAND V1EarlyOutputTest)

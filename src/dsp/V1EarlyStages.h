@@ -276,4 +276,168 @@ private:
 
     NodalCircuit skA, skB, bridgeT;
 };
+
+// -------------------------------------------------------------------------------------------------
+// BLEND -> LEVEL -> gain (IC4A follower + IC4B inverting -2.2). BLEND is a true pan pot: dry (via C1)
+// on one end, wet (via C12) on the other, wiper = mix -> LEVEL pot top; LEVEL wiper -> IC4A. The two
+// B100k pots load each other + the source coupling caps, so this is NOT an ideal crossfade+gain --
+// it's solved as one coupled network (netlists.md E6). Inputs: dry = input-buffer output, wet =
+// recovery output. Output feeds C25 -> tone stack (stage 1.5).
+class V1EarlyBlendLevelStage
+{
+public:
+    V1EarlyBlendLevelStage() { build(); }
+
+    void prepare(double fs)
+    {
+        net.prepare(fs);
+        setBlendLevel(blend01, level01);
+    }
+
+    void reset() noexcept { net.reset(); }
+
+    // blend: 0 = full dry .. 1 = full wet. level: 0 = min .. 1 = max.
+    void setBlendLevel(double blend, double level) noexcept
+    {
+        blend01 = blend;
+        level01 = level;
+        const double kPot = 100.0e3, kMin = 0.5; // clamp wiper-at-end to avoid a 0-ohm (singular) leg
+        auto clamp = [&](double r) { return r < kMin ? kMin : r; };
+        net.setResistorValue(rBlendA, clamp(blend * kPot));        // VR6 a(dry)->wiper
+        net.setResistorValue(rBlendB, clamp((1.0 - blend) * kPot)); // VR6 wiper->b(wet)
+        net.setResistorValue(rLevelA, clamp((1.0 - level) * kPot)); // VR4 top->wiper
+        net.setResistorValue(rLevelB, clamp(level * kPot));         // VR4 wiper->bottom
+        net.rebuild();
+    }
+
+    inline double process(double dry, double wet) noexcept { return net.process(dry, wet); }
+
+private:
+    void build()
+    {
+        using NC = NodalCircuit;
+        // nodes: va6=0 vb6=1 vw6=2(=VR4 top) vw4=3 vb4=4 IC4Aout=5 IC4Bminus=6 IC4Bout=7.
+        net.setNumNodes(8);
+        net.addCapacitor(NC::kInput, 0, 2.2e-6);  // C1 dry coupling
+        net.addCapacitor(NC::kInput2, 1, 47.0e-9); // C12 wet coupling
+        rBlendA = net.addResistor(0, 2, 50.0e3);  // VR6 a->wiper (set by setBlendLevel)
+        rBlendB = net.addResistor(2, 1, 50.0e3);  // VR6 wiper->b
+        rLevelA = net.addResistor(2, 3, 50.0e3);  // VR4 top->wiper
+        rLevelB = net.addResistor(3, 4, 50.0e3);  // VR4 wiper->bottom
+        net.addResistor(4, NC::kDatum, 1.0e3);     // R50
+        net.addUnityBuffer(3, 5);                  // IC4A follower of VR4 wiper
+        net.addResistor(5, 6, 10.0e3);             // R4
+        net.addResistor(6, 7, 22.0e3);             // R30 feedback
+        net.addCapacitor(6, 7, 22.0e-12);          // C22 feedback
+        net.addOpAmp(NC::kDatum, 6, 7);            // IC4B inverting (+ = VCOM, - = 6, out = 7)
+        net.setOutputNode(7);
+    }
+
+    NodalCircuit net;
+    int rBlendA = 0, rBlendB = 0, rLevelA = 0, rLevelB = 0;
+    double blend01 = 0.5, level01 = 0.7;
+};
+
+// -------------------------------------------------------------------------------------------------
+// BASS/TREBLE tone stack (IC4C): inverting Baxandall SHELVING network on V1 Early (V1L/V2 are
+// peaking, built later). One coupled R-type-style network — BASS and TREBLE share the virtual-ground
+// node nV, so it is solved as a single circuit (netlists.md E7). Includes the C25 input coupling
+// from the BLEND/LEVEL stage. Inverting (one polarity flip). Output feeds the FET-mute/output buffer.
+class V1EarlyToneStackStage
+{
+public:
+    V1EarlyToneStackStage() { build(); }
+
+    void prepare(double fs)
+    {
+        net.prepare(fs);
+        setTone(bass01, treble01);
+    }
+
+    void reset() noexcept { net.reset(); }
+
+    // bass/treble in [0,1]; 0.5 = flat centre detent. Wiper toward the OUT-side end = boost.
+    void setTone(double bass, double treble) noexcept
+    {
+        bass01 = bass;
+        treble01 = treble;
+        const double kPot = 100.0e3, kMin = 0.5;
+        auto clamp = [&](double r) { return r < kMin ? kMin : r; };
+        net.setResistorValue(rTrebA, clamp((1.0 - treble) * kPot)); // VR2 a->wiper
+        net.setResistorValue(rTrebB, clamp(treble * kPot));         // VR2 wiper->b
+        net.setResistorValue(rBassA, clamp((1.0 - bass) * kPot));   // VR3 a->wiper
+        net.setResistorValue(rBassB, clamp(bass * kPot));           // VR3 wiper->b
+        net.rebuild();
+    }
+
+    inline double process(double vin) noexcept { return net.process(vin); }
+
+private:
+    void build()
+    {
+        using NC = NodalCircuit;
+        // nodes: nV=0 OUT=1 t0=2 ta2=3 tw2=4 tb2=5 ba3=6 bw3=7 bb3=8 T_IN=9.
+        net.setNumNodes(10);
+        net.addCapacitor(NC::kInput, 9, 2.2e-6); // C25 input coupling from BLEND/LEVEL
+        // TREBLE (series caps -> HF-selective): T_IN -C21- t0 -R51- VR2.a ; VR2.b -C20- OUT ; w -R14- nV
+        net.addCapacitor(9, 2, 10.0e-9);         // C21
+        net.addResistor(2, 3, 10.0e3);           // R51
+        rTrebA = net.addResistor(3, 4, 50.0e3);  // VR2 a->wiper
+        rTrebB = net.addResistor(4, 5, 50.0e3);  // VR2 wiper->b
+        net.addCapacitor(5, 1, 10.0e-9);         // C20
+        net.addResistor(4, 0, 3.3e3);            // R14 wiper->nV
+        // BASS (shunt caps across pot -> LF control): T_IN -R52- VR3.a ; VR3.b -R54- OUT ; w -R53- nV
+        net.addResistor(9, 6, 10.0e3);           // R52
+        rBassA = net.addResistor(6, 7, 50.0e3);  // VR3 a->wiper
+        rBassB = net.addResistor(7, 8, 50.0e3);  // VR3 wiper->b
+        net.addResistor(8, 1, 10.0e3);           // R54
+        net.addCapacitor(6, 7, 22.0e-9);         // C16 (|| VR3 a-wiper)
+        net.addCapacitor(8, 7, 22.0e-9);         // C15 (|| VR3 wiper-b)
+        net.addResistor(7, 0, 10.0e3);           // R53 wiper->nV
+        // Feedback R28 || C29, and the inverting op-amp (+ = VCOM, - = nV, out = OUT).
+        net.addResistor(0, 1, 1.0e6);            // R28
+        net.addCapacitor(0, 1, 22.0e-12);        // C29
+        net.addOpAmp(NC::kDatum, 0, 1);
+        net.setOutputNode(1);
+    }
+
+    NodalCircuit net;
+    int rTrebA = 0, rTrebB = 0, rBassA = 0, rBassB = 0;
+    double bass01 = 0.5, treble01 = 0.5;
+};
+
+// -------------------------------------------------------------------------------------------------
+// FET-mute + output buffer (IC4D unity). Effect-ON only: the SST4393 series JFET (T1) is fully
+// conducting (a short) -- muting is a bypass mechanism handled at the processor level, not modelled
+// here. Electrically this is a unity buffer behind a chain of coupling caps whose corners are all
+// <= ~7 Hz (netlists.md E8); the dominant one (C10/R29 ~ 7 Hz) is the wanted DC block for the
+// asymmetric-clip path (dsp.md). Meters/bypass/volume live in the processor, not this stage.
+class V1EarlyOutputStage
+{
+public:
+    V1EarlyOutputStage() { build(); }
+    void prepare(double fs) { net.prepare(fs); }
+    void reset() noexcept { net.reset(); }
+    inline double process(double vin) noexcept { return net.process(vin); }
+
+private:
+    void build()
+    {
+        using NC = NodalCircuit;
+        // nodes: n0=0 (R33-C7 junction) nMN=1 (T1 shorted: nM=nN) nO=2 IC4Dout=3 nJ=4.
+        net.setNumNodes(5);
+        net.addResistor(NC::kInput, 0, 1.0e3);   // R33
+        net.addCapacitor(0, 1, 2.2e-6);           // C7
+        net.addResistor(1, NC::kDatum, 1.0e6);    // R55
+        net.addResistor(1, NC::kDatum, 1.0e6);    // R56 (T1 shorts nM->nN, so both bias nMN)
+        net.addCapacitor(1, 2, 2.2e-6);           // C10
+        net.addResistor(2, NC::kDatum, 10.0e3);   // R29 (dominant ~7 Hz DC block with C10)
+        net.addUnityBuffer(2, 3);                 // IC4D
+        net.addCapacitor(3, 4, 47.0e-6);          // C9
+        net.addResistor(4, NC::kDatum, 100.0e3);  // R1 pulldown (R13 1k to jack sees no load -> nJ = out)
+        net.setOutputNode(4);
+    }
+
+    NodalCircuit net;
+};
 } // namespace nalr

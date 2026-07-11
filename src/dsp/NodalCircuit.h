@@ -29,12 +29,23 @@ class NodalCircuit
 {
 public:
     static constexpr int kDatum = -1;
-    static constexpr int kInput = -2;
+    static constexpr int kInput = -2;  // first driven input; further inputs are -3, -4, ...
+    static constexpr int kInput2 = -3;
+    static constexpr int kMaxInputs = 4;
     static constexpr int kMaxDim = 16; // internal nodes + op-amp current unknowns
+
+    static bool isInput(int node) noexcept { return node <= kInput; }
+    static int inputIndex(int node) noexcept { return kInput - node; } // -2->0, -3->1, ...
 
     void setNumNodes(int n) noexcept { numNodes = n; }
 
-    void addResistor(int a, int b, double R) { resistors.push_back({ a, b, 1.0 / R }); }
+    // Returns the resistor's index, for later setResistorValue() (e.g. pots). Call rebuild() after.
+    int addResistor(int a, int b, double R)
+    {
+        resistors.push_back({ a, b, 1.0 / R });
+        return (int) resistors.size() - 1;
+    }
+    void setResistorValue(int idx, double R) noexcept { resistors[(size_t) idx].g = 1.0 / R; }
     void addCapacitor(int a, int b, double C) { caps.push_back({ a, b, C, 0.0, 0.0 }); }
     // Ideal op-amp: forces V(p) == V(nn); its output node sources whatever current is needed.
     void addOpAmp(int pNode, int nNode, int outNode) { opamps.push_back({ pNode, nNode, outNode }); }
@@ -85,14 +96,30 @@ public:
 
     inline double process(double vin) noexcept
     {
+        const double vins[kMaxInputs] = { vin, 0.0, 0.0, 0.0 };
+        return solve(vins);
+    }
+
+    // Two-input form (e.g. BLEND: dry on kInput, wet on kInput2).
+    inline double process(double vin0, double vin1) noexcept
+    {
+        const double vins[kMaxInputs] = { vin0, vin1, 0.0, 0.0 };
+        return solve(vins);
+    }
+
+private:
+    inline double solve(const double* vins) noexcept
+    {
         double rhs[kMaxDim] = {};
 
-        // Input-coupled resistors: a conductance g to the known input node injects g*vin into the
-        // far internal node.
+        auto vinOf = [&](int node) -> double { return vins[inputIndex(node)]; };
+
+        // Input-coupled resistors: a conductance g to a known input node injects g*vin into the far
+        // internal node.
         for (const auto& r : resistors)
         {
-            if (r.a == kInput && r.b >= 0) rhs[r.b] += r.g * vin;
-            else if (r.b == kInput && r.a >= 0) rhs[r.a] += r.g * vin;
+            if (isInput(r.a) && r.b >= 0) rhs[r.b] += r.g * vinOf(r.a);
+            else if (isInput(r.b) && r.a >= 0) rhs[r.a] += r.g * vinOf(r.b);
         }
         // Capacitors: Norton history source (+Ieq into a, -Ieq out of b) plus, for an input-coupled
         // cap, the companion conductance term Gc*vin into the far internal node (same as a resistor).
@@ -100,8 +127,8 @@ public:
         {
             if (c.a >= 0) rhs[c.a] += c.Ieq;
             if (c.b >= 0) rhs[c.b] -= c.Ieq;
-            if (c.a == kInput && c.b >= 0) rhs[c.b] += c.Gc * vin;
-            else if (c.b == kInput && c.a >= 0) rhs[c.a] += c.Gc * vin;
+            if (isInput(c.a) && c.b >= 0) rhs[c.b] += c.Gc * vinOf(c.a);
+            else if (isInput(c.b) && c.a >= 0) rhs[c.a] += c.Gc * vinOf(c.b);
         }
 
         double x[kMaxDim] = {};
@@ -114,11 +141,10 @@ public:
         }
 
         auto V = [&](int node) -> double {
-            return node == kDatum ? 0.0 : node == kInput ? vin : x[node];
+            return node == kDatum ? 0.0 : isInput(node) ? vinOf(node) : x[node];
         };
 
-        // Trapezoidal cap state update: Ieq_next = 2*Gc*v - Ieq.
-        for (auto& c : caps)
+        for (auto& c : caps) // trapezoidal cap state update: Ieq_next = 2*Gc*v - Ieq.
         {
             const double v = V(c.a) - V(c.b);
             c.Ieq = 2.0 * c.Gc * v - c.Ieq;
@@ -127,7 +153,6 @@ public:
         return V(outputNode);
     }
 
-private:
     struct Resistor { int a, b; double g; };
     struct Cap { int a, b; double C, Gc, Ieq; };
     struct OpAmp { int p, n, out; };
