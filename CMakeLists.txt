@@ -88,6 +88,24 @@ target_link_libraries(RCLowpassSmokeTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(RCLowpassSmokeTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME RCLowpassSmokeTest COMMAND RCLowpassSmokeTest)
 
+# 1.1 — V1 Early input buffer + twin-T/PRESENCE stage vs analytic nodal reference + FR targets.
+add_executable(V1EarlyPresenceTest tests/V1EarlyPresenceTest.cpp)
+target_link_libraries(V1EarlyPresenceTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1EarlyPresenceTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1EarlyPresenceTest COMMAND V1EarlyPresenceTest)
+
+# 1.2 — V1 Early DRIVE stage (small-signal linear gain) vs analytic + FR §4.
+add_executable(V1EarlyDriveTest tests/V1EarlyDriveTest.cpp)
+target_link_libraries(V1EarlyDriveTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1EarlyDriveTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1EarlyDriveTest COMMAND V1EarlyDriveTest)
+
+# 1.3 — V1 Early recovery (Sallen-Key LPFs + bridged-T) vs complex-MNA + FR §1/§2; first full path.
+add_executable(V1EarlyRecoveryTest tests/V1EarlyRecoveryTest.cpp)
+target_link_libraries(V1EarlyRecoveryTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1EarlyRecoveryTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1EarlyRecoveryTest COMMAND V1EarlyRecoveryTest)
+
 # 0.2 — APVTS state save/restore round-trip. Links the processor + its UI sources directly (no
 # plugin-client wrapper) so it can exercise getStateInformation/setStateInformation standalone.
 juce_add_console_app(StateRoundTrip PRODUCT_NAME "StateRoundTrip")

@@ -22,9 +22,12 @@ Format: clang-format -i src/**/*.{cpp,h}
 ## Schematics
 
 Schematic images + FR sim graphs live in `schematics/`; they are transcribed/verified into
-`.claude/rules/circuit.md` (source of truth for values/topology) and `docs/reference-fr-targets.md`
-(quantitative FR targets). **Don't re-read the schematic PNGs** unless a task explicitly needs a
-listed crop — the transcription is verified (three passes, numeric cross-checks in `circuit.md`).
+`.claude/rules/circuit.md` (component values + roles), `.claude/rules/netlists.md` (**node-level
+per-stage connectivity — what a WDF task actually builds from**), and `docs/reference-fr-targets.md`
+(quantitative FR targets). **Never re-read the schematic PNGs** — four verification passes are done
+(values 3×, node wiring 1×, with numeric cross-checks); the only flagged residual ambiguities are
+tagged `[◐]` in `netlists.md` with a named FR self-validation gate each, so even those resolve
+without images.
 
 **Use the `schematic-checker` agent any time a circuit value or topology is in doubt; use
 `dsp-validator` after any DSP stage change.** Both read `circuit.md`/`dsp.md` — keep those current.
@@ -40,6 +43,7 @@ listed crop — the transcription is verified (three passes, numeric cross-check
 | File | Read when |
 |------|-----------|
 | `.claude/rules/circuit.md` | any DSP/circuit task — **only the relevant revision's tables + cited notes** |
+| `.claude/rules/netlists.md` | any WDF/stage-building task — **only that revision's stage section(s)**; node-level wiring + per-stage gates. Wins over circuit.md's Function cells on conflict |
 | `.claude/rules/dsp.md` | any DSP task (WDF/ADAA/oversampling/omega) |
 | `.claude/rules/architecture.md` | processor-level / threading / APVTS / integration tasks |
 | `.claude/rules/build.md` | CMake / CI / test-harness tasks |
@@ -99,19 +103,16 @@ listed crop — the transcription is verified (three passes, numeric cross-check
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 0 (scaffold) COMPLETE — all three gates green.** Submodules (JUCE/chowdsp_wdf/
-> xsimd) added; `CMakeLists.txt` instantiated with the locked identity; `PluginProcessor`/
-> `PluginEditor` skeleton with the full APVTS param superset (DSP stubbed pass-through);
-> CI/installer template placeholders replaced. `NoAmpLowRiderDI_AU` builds clean and passes `auval`
-> (installed to `~/Library/Audio/Plug-Ins/Components/`). `tests/StateRoundTrip.cpp` (0.2 gate — every
-> param round-trips through `getStateInformation`/`setStateInformation`) and
-> `tests/RCLowpassSmokeTest.cpp` (0.3 gate — chowdsp_wdf compile-time API, measured −3 dB point
-> within 0.05% of analytic at 44.1/48/96 kHz) both registered via `add_test()`; `ctest` 2/2 passing.
-> VST3/standalone not built (AU-only was sufficient for the gate, per user instruction — build on
-> demand later if needed). **Gotcha for next time:** `JucePlugin_Name` is only defined inside a
-> `juce_add_plugin` target's generated config — `PluginProcessor::getName()` used it and broke the
-> standalone test/console-app builds; now a literal string. **NEXT: hard break to Opus 4.8 for
-> Phase 1 (V1 Early linear stages) — fresh session, only the file tree is needed.**
+> **CURRENT: Phase 1 IN PROGRESS — stages 1.1 + 1.2 + 1.3 done & validated (ctest 5/5).** DSP lives
+> in `src/dsp/`: `RtypeNumeric.h` (numeric R-type S-matrix helper), `OpAmpStage.h`
+> (`processNonInvOpAmp` = ideal-op-amp decomposition), `NodalCircuit.h` (bilinear-companion MNA
+> engine for op-amp-embedded linear stages — see method note below), `V1EarlyStages.h`
+> (`V1EarlyInputBuffer`, `V1EarlyPresenceStage`, `V1EarlyDriveStage`, `V1EarlyRecoveryStage` = 2
+> active Sallen-Key LPFs + bridged-T). Tests: `V1EarlyPresenceTest` (1.1), `V1EarlyDriveTest` (1.2),
+> `V1EarlyRecoveryTest` (1.3) — each validates against an independent frequency-domain reference AND
+> the FR §-targets. **NEXT: 1.4 BLEND→LEVEL→gain** (Opus/high — pot-loading interaction, not an ideal
+> crossfade), then 1.5 tone stack (Opus/high), 1.6 output buffer (Sonnet), then run `dsp-validator`.
+> Nothing committed to git yet this phase.
 
 ## Project-specific carry-forwards
 
@@ -150,10 +151,38 @@ listed crop — the transcription is verified (three passes, numeric cross-check
   (SW4A half unused); both output switches short a 22k feedback R → closed = unity = the throw we
   model (open = +10.1 dB = LINE/"+10dB", matching panel labels numerically). Remaining genuinely
   open work: the zener WDF element (planned research spike) and capture-anchored calibration.
+- **4th pass (Fable): node-level netlists for every stage, all three revisions, now in
+  `.claude/rules/netlists.md`** — DSP tasks read their stage's netlist, never a schematic image.
+  Headline finds: V1L/V2 **DRIVE pot is shared between two coupled inverting module stages**
+  (wiper = stage-A output; validated numerically: +12.9/+48.6 dB vs FR §4's +12.5/+48);
+  V1L/V2 presence = pot-in-feedback (different cell from V1e's rheostat-leg); V1L LEVEL =
+  single inverting stage with 100k-loaded wiper (taper interacts); dry tap = input-buffer
+  OUTPUT on all three; recovery = unity Sallen-Key LPF pairs. circuit.md's affected Function
+  cells are annotated; **netlists.md wins on conflict**. Residual `[◐]` items each carry a
+  named FR self-validation gate (e.g. V1L C10/R14 wet-HP read → check §1 LF before trusting).
 - **Locked decisions** (do not re-litigate; full table in `docs/build-plan.md`): one plugin with an
   automatable `revision` choice param + per-revision UI face; V1 Early built first; **three DSP
   graph classes** sharing primitives; identity = Leigh Pierce / `LPrc` / `NALR` /
   `com.leighpierce.noamplowriderdi` (reuse `LPrc` on future pedals).
+- **DSP method (decided Phase 1, user chose "most accurate").** Passive bridge/twin-T stages use
+  chowdsp R-type adaptors with a scattering matrix computed **numerically** from topology + live port
+  impedances (`src/dsp/RtypeNumeric.h`, `S = 2·Aᵀ(A·Gd·Aᵀ)⁻¹·A·Gd − I`, wave conv `v=(a+b)/2,
+  i=(a−b)/2R` verified vs chowdsp) — no hand-transcribed matrices. Non-inverting op-amp *gain* stages
+  use the ideal-op-amp decomposition (`src/dsp/OpAmpStage.h`). **Op-amp-embedded LINEAR stages where
+  the output feeds back into its own input network** (active Sallen-Key, inverting tone/gain — 1.3
+  onward) use a bilinear-companion **MNA engine** (`src/dsp/NodalCircuit.h`, ideal op-amps as
+  nullors): identical accuracy to WDF for linear circuits, far lower silent-error surface than a
+  hand-rolled nullor scattering matrix. WDF wave-domain stays reserved for the Phase-4 nonlinear
+  zener (its real edge). Validate every stage vs an independent frequency-domain reference — for
+  bilinear engines, compare at the **warp-compensated** frequency `fa=(fs/π)tan(πf/fs)` to isolate
+  correctness from top-octave warp — **and** the FR §-targets. NodalCircuit gotcha (cost real time):
+  an input-coupled cap injects `+Gc·vin` into the far node (same sign as a resistor); a grounded-cap
+  RC self-check will NOT catch this sign — the bridged-T (input-coupled cap) did.
+- **§3 `fr_presence_drive` is the op-amp gain block ALONE, no twin-T notch** — validate PRESENCE/DRIVE
+  gain (1+Zf/Zg) against §3 (min +12.2 / mid +16.7 / max +34.2 dB @ 4.8 kHz, peak migrates 864→4829
+  Hz ✓), the notch against §1. **RESOLVED: the twin-T (~−24 dB stage-level) reaches §1's −36.3 dB @
+  ~715 Hz once the recovery superposes (full wet path, 1.3) — the twin-T was correct; no revisit
+  needed.** §1's ~−9 dB LF edge still needs the downstream BLEND (C12) + tone (C25) coupling HPs (1.4/1.5).
 - **The build plan lives in `docs/build-plan.md`** — per-task model (Opus 4.8 vs Sonnet 5) + effort
   assignments, exact read-lists per task (token discipline), and numeric validation gates keyed to
   `docs/reference-fr-targets.md` §§. UI visuals are validated by the user (send PNGs, never
