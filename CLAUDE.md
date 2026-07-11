@@ -104,15 +104,21 @@ without images.
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
 > **CURRENT: Phase 1 COMPLETE — all V1-Early linear stages 1.1–1.6 done & validated (ctest 8/8,
-> `dsp-validator` clean PASS on E1–E8).** DSP in `src/dsp/`: `RtypeNumeric.h` (numeric R-type
-> S-matrix), `OpAmpStage.h` (ideal-op-amp decomposition), `NodalCircuit.h` (bilinear-companion MNA
-> engine, now multi-input), `V1EarlyStages.h` (`V1EarlyInputBuffer`, `V1EarlyPresenceStage`,
-> `V1EarlyDriveStage`, `V1EarlyRecoveryStage`, `V1EarlyBlendLevelStage`, `V1EarlyToneStackStage`,
-> `V1EarlyOutputStage`). One `tests/V1Early*Test.cpp` per stage, each vs an independent
-> frequency-domain reference (warp-compensated) AND the FR §-targets. **NEXT: ⏸ BREAK then Phase 2 —
-> V1 Early nonlinearity + oversampling (Opus/high): rail clip on the DRIVE-stage output (TLC2264
-> rail-to-rail, ±~4.5 V about VREF) with 1st-order ADAA, oversampling region DRIVE→recovery, prewarp
-> base-rate HF caps. V1E has NO diode solve.** Nothing committed to git for 1.4–1.6 yet.
+> `dsp-validator` clean PASS on E1–E8), committed (`302ed64`, `dfeeb7a`).** DSP in `src/dsp/`:
+> `RtypeNumeric.h` (numeric R-type S-matrix), `OpAmpStage.h` (ideal-op-amp decomposition),
+> `NodalCircuit.h` (bilinear-companion MNA engine, now multi-input), `V1EarlyStages.h`
+> (`V1EarlyInputBuffer`, `V1EarlyPresenceStage`, `V1EarlyDriveStage`, `V1EarlyRecoveryStage`,
+> `V1EarlyBlendLevelStage`, `V1EarlyToneStackStage`, `V1EarlyOutputStage`). One
+> `tests/V1Early*Test.cpp` per stage, each vs an independent frequency-domain reference
+> (warp-compensated) AND the FR §-targets. **NEXT: Phase 2 — V1 Early nonlinearity + oversampling
+> (Opus/high per build-plan.md): rail clip on the DRIVE-stage output (TLC2264 rail-to-rail, ±~4.5 V
+> about VREF) with 1st-order ADAA, oversampling region DRIVE→recovery, prewarp base-rate HF caps.
+> V1E has NO diode solve.**
+> **Process gotcha (2026-07-12): the build-plan's per-task model switches (e.g. the Sonnet-5 break
+> before 1.6) got missed mid-Phase-1 — I ran 1.4–1.6 on Opus straight through instead of pausing for
+> the user to `/model` switch. The work itself is correct (validated + dsp-validator PASS), just off
+> the plan's cost profile. Going forward: explicitly call out "this task wants model X" and wait for
+> the user to switch, rather than assuming continuity.**
 
 ## Project-specific carry-forwards
 
