@@ -23,6 +23,24 @@
 > - Never take/inspect UI screenshots — render PNGs headlessly and **hand them to the user**, who
 >   validates visually (explicitly their job, by their request).
 > - Real-pedal captures arrive later from the user. Nothing before Phase 10 may block on them.
+>
+> **Session / context boundaries — default is BREAK (fresh agent/session) at every task, not
+> continue.** This is deliberate, not an oversight: every task already lists the minimal exact files
+> it needs, and all durable state (code, `circuit.md`, git history) lives on disk, not in
+> conversation memory — so a fresh session reconstructs full correctness for near-zero extra tokens,
+> while continuing instead accumulates prior tasks' derivation scratch-work (algebra, false starts)
+> that the next task doesn't need and that pushes the session toward a compaction event mid-phase.
+> Each `**Session:**` line below states the default explicitly and flags the few exceptions:
+> - **Every model switch is a hard break** — mechanically automatic if using the `Agent` tool
+>   (each call is fresh), and should be a new interactive session/`/model` switch otherwise.
+> - **`Bundle`** = deliberately do these consecutive same-model tasks in one session — the tasks are
+>   individually small enough that a fresh session's fixed overhead (re-orienting, re-reading
+>   `CLAUDE.md`) would cost more than the context they'd accumulate.
+> - **`Continue optional`** = a legitimate case where holding the prior task's reasoning in context
+>   has real value (usually: cross-stage consistency on a tight derivation chain) — take it if the
+>   session has headroom, break if it's already large or a fresh perspective seems safer; either is
+>   fine, so it's called out rather than defaulted.
+> - Every other task boundary: **break**, no further comment needed.
 
 ## Locked decisions (do not re-litigate)
 
@@ -44,6 +62,9 @@ Read: `build.md`, `CMakeLists.txt.template`. Do: add JUCE, chowdsp_wdf, xsimd su
 CMakeLists with the locked identity; AU+VST3 + `COPY_PLUGIN_AFTER_BUILD`; gated warning flags; SYSTEM
 includes for chowdsp_wdf; `.github` workflows from templates (replace placeholders).
 **Gate:** `cmake --build build` succeeds; pluginval passes both formats.
+**Session:** *Bundle* with 0.2 and 0.3 — all three are small, same-model, directly sequential
+(0.2 needs 0.1's CMake target to build against, 0.3 needs 0.1's submodule to exist), no derivation
+content to worry about accumulating. One session for all of Phase 0.
 
 **0.2 APVTS + processor skeleton** — *Sonnet 5 / medium.*
 Read: `architecture.md`, the param table above, `src/` template files. Do: `PluginProcessor` with the
@@ -55,6 +76,10 @@ factor selection (`isNonRealtime()`), state save/restore, `revision` as `AudioPa
 **0.3 chowdsp_wdf smoke test** — *Sonnet 5 / low.*
 Read: `dsp.md` (WDF section only), `build.md` testing pattern. Do: RC lowpass console exe.
 **Gate:** −3 dB point within 1% of analytic, at 44.1/48/96 kHz.
+
+---
+**⏸ BREAK — model switch to Opus 4.8** (derivation work starts). Fresh session/agent; Phase 0's
+scaffold reasoning isn't needed, only the resulting file tree (on disk).
 
 ---
 
@@ -70,6 +95,13 @@ with the PRESENCE feedback (`R24` 3.3k, `C31` 10n, `VR5`, `R26` 330k, `C32` 100p
 **Gate:** at PRESENCE 0: notch −35 ±3 dB at 800 Hz ±⅓ oct (§1); PRESENCE max: peak +34 ±2 dB at
 4–5 kHz, and the **peak frequency must migrate upward with the knob** (§3 — a fixed-shape filter
 fails this gate by construction).
+**Session:** default break after each of 1.1–1.5. *Continue optional* across the whole 1.1→1.5 run
+if the session has headroom: they're a strict dependency chain (each stage's output feeds the next),
+and holding the cumulative signal-chain picture in mind is genuinely useful for catching a
+two-notch-style conflation before it's baked into 5 stages of code. The token cost is real (5×
+high-effort derivations in one context risks a mid-chain compaction) — if in doubt, break anyway;
+each stage's needed "interface" from its predecessor (output node, impedance, gain) is short enough
+to restate in the next task's own file reads rather than carried in conversation.
 
 **1.2 DRIVE stage (small-signal linear)** — *Opus 4.8 / medium.*
 Non-inverting variable gain: 1 + `R25` 330k/(`R23` 3.3k + pot leg), `C28` 100p rolloff.
@@ -95,13 +127,28 @@ coupled ideal-op-amp derivation; `ScopedDeferImpedancePropagation` on updates.
 **Gate:** §5/§6 V1-Early columns: BASS shelf +18/−20 dB, TREBLE shelf **asymmetric +8/−20 dB**
 (±2 dB); both flat (±1 dB) at centre detent across 100 Hz–10 kHz.
 
+---
+**⏸ BREAK — model switch to Sonnet 5** (1.6 is mechanical buffer/coupling-cap wiring, not
+derivation — Opus effort isn't needed and the 1.1–1.5 reasoning trail isn't either, only the
+DRIVE-stage output node it buffers from).
+
+---
+
 **1.6 JFET-mute + output buffer (unity path)** — *Sonnet 5 / medium.*
 Effect-on state only (mute = bypass mechanism, handled at processor level per `architecture.md`).
 Unity buffer + coupling caps (`C7/C10/C9`, `R33/R29/R13/R1` per table).
 **Gate:** flat ±0.25 dB 20 Hz–20 kHz, correct ~6 Hz-class HP corners from coupling caps.
+**Session:** *Bundle* the `dsp-validator` run into this same session immediately after — same model,
+trivially cheap (it only reads `circuit.md` + the resulting code, no fresh derivation), no reason to
+pay a new-session overhead for it.
 
 **Run `dsp-validator` (Sonnet 5 / medium) once after 1.6 over the whole V1-Early chain** — cheaper
 than per-stage runs given the analytic gates above already catch value errors.
+
+---
+**⏸ BREAK — model stays Opus 4.8, but domain shifts** (nonlinear/ADAA/oversampling, not linear
+stage derivation). Fresh session: only the DRIVE stage's output-node interface from 1.2 is needed,
+not the other four stages' derivation reasoning.
 
 ---
 
@@ -118,6 +165,10 @@ guidance); factors 1/2/4/8 with glitch-free switching; prewarp base-rate HF caps
 < −70 dBFS in 20 Hz–20 kHz; ADAA on/off A-B shows measurable alias reduction at 1×.
 
 ---
+**⏸ BREAK.** Model stays Opus 4.8 but Phase 3 is processor/integration-level (`architecture.md`),
+not DSP-stage derivation — fresh session, only needs the finished stage classes' interfaces.
+
+---
 
 ## Phase 3 — V1 Early integration  *(Opus 4.8 / high)*
 
@@ -130,6 +181,15 @@ crossfade); build `OfflineRender` console exe mirroring `processBlock`. Provisio
 **Gate:** full-chain FR at 6 knob presets matches composed per-stage analytics (±1 dB); full control
 sweep all-knobs × OS factors: finite, no NaN/Inf, no clicks (automated exe, `add_test()`); plugin
 audible in DAW. **Milestone: V1 Early playable.**
+
+---
+**⏸ HARD BREAK + recommended human checkpoint.** This is the first point the plugin makes sound —
+worth pausing here regardless of token budget so you can actually listen in a DAW before more DSP is
+built on top of it. Phase 4 is a **fully self-contained research task with zero dependency on
+Phases 1–3** (it's a standalone WDF element for later use in Phase 5) — it needs only `dsp.md` +
+`circuit.md`'s nonlinear section, nothing from V1-Early's derivation. That means it's also safe to
+run in parallel with Phases 1–3 rather than after them, if you'd rather not serialize the wait —
+sequencing it here is just the simpler default, not a hard dependency.
 
 ---
 
@@ -150,6 +210,8 @@ appended `dsp.md` section documenting the chosen approach + rejected alternative
 knee; THD of a 1 kHz sine at 3 drive levels is stable across 44.1/96 kHz (no solver divergence);
 with Cj in place, small-signal HF response reproduces the §4 V1L-vs-V1E rolloff difference
 qualitatively. **Do not start Phase 5 until this gate passes.**
+**Session:** self-contained — one Opus session for all of 4.1 (it's sized as a single xhigh-effort
+task already). Break before Phase 5 regardless of what Phase 4 shares a clock with.
 
 ---
 
@@ -161,6 +223,12 @@ Read per task: `circuit.md` V1-Late tables, `reference-fr-targets.md` cited §§
 protection diodes (ignore — small-signal invisible), recovery/bridged-T identical values, BLEND/LEVEL
 identical, output = unity throw. Mostly parameterisation of Phase-1 classes.
 **Gate:** §1 V1-Late column + §3 PRESENCE (peak +27.5 dB at 6–7 kHz — *changed from V1E*).
+**Session:** standalone — small Sonnet task, break before and after (5.2 switches to Opus).
+
+---
+**⏸ BREAK — model switch to Opus 4.8** (5.2 is a new-topology derivation, not parameterisation).
+
+---
 
 **5.2 Peaking tone stack derivation (V1L BASS/TREBLE)** — *Opus 4.8 / high.* New topology (peaking,
 not shelf): `C21` 4.7n/`C7` 22n/`R51,R55` 3.3k/`C20` 1n (TREBLE side), `C16` 10n/`R52,R54` 3.3k/
@@ -169,6 +237,10 @@ the 80 Hz throw).
 **Gate:** §5/§6 V1L columns: BASS +12/−14 dB peaking at ~75 Hz; TREBLE +17 dB peak at 3–4 kHz,
 asymmetric cut; the small opposite-sign 2–4 kHz bump must appear (it's in the sims — its absence
 means a topology error).
+**Session:** *Continue optional* into 5.3 — both Opus/high, adjacent stages in the same signal path
+(tone stack output feeds the module's context indirectly), so light continuity has some value, but
+5.3 mainly needs Phase 4's `ZenerPairT` interface + the module table, not 5.2's tone-stack algebra —
+break is equally fine and arguably safer for context-window health.
 
 **5.3 CH34-9 module (2 op-amp stages + ZenerPairT)** — *Opus 4.8 / high.* Module per `circuit.md`
 table (IC100A/B, R101/R102/R105/R106 220k/220k/100k/220k, D100 via Phase-4 element), DRIVE pot
@@ -176,8 +248,17 @@ integration (`R25` 22k, `VR1`, `C8`/`R17`).
 **Gate:** small-signal §4 (max ~+48 dB, min ~+12.5 dB, HF rolloff > V1E's); clipping onset at
 ±3.9 V-equivalent input drive; §8 four-panel voiced checkpoints (PRESENCE/DRIVE combos) ±2 dB.
 
+---
+**⏸ BREAK — model switch to Sonnet 5** (5.4 is mechanical processBlock wiring identical in shape
+to 3.1 — only needs the finished V1-Late stage classes' interfaces).
+
+---
+
 **5.4 Integrate `V1LateDSP`** — *Sonnet 5 / medium.* Same processBlock pattern as 3.1.
 **Gate:** same sweep gates as 3.1, plus §1 V1-Late column end-to-end.
+
+---
+**⏸ HARD BREAK + optional human checkpoint** (second revision playable — worth a listen before V2).
 
 ---
 
@@ -188,6 +269,13 @@ integration (`R25` 22k, `VR1`, `C8`/`R17`).
 §0–1. New `R47`+`C42` LP corner; drop bridged-T.
 **Gate:** §1 V2 column, especially high bump ~−10 dB @ 2.5–3 kHz and −40 dB @ ~8 kHz; deep notch
 still present ~−36 dB.
+**Session:** standalone — break before and after (6.2 switches to Opus).
+
+---
+**⏸ BREAK — model switch to Opus 4.8** (6.2 is switch-topology derivation, the last genuinely new
+math in the plan — everything after this is parameterisation/integration/mechanical work).
+
+---
 
 **6.2 MID stage + MID SHIFT + BASS SHIFT** — *Opus 4.8 / high.* Read: `circuit.md` resolved-wiring
 notes (Validation notes section) **and, only if the derivation disagrees with the gates,**
@@ -198,9 +286,19 @@ scattering matrices per switch (`setSMatrixData()` swap); BASS SHIFT as second m
 ~45 Hz, 80 Hz throw ≡ V1L values. Per `circuit.md`: if centres come out wrong, the switch-throw
 interpretation is inverted — flip it, don't hunt elsewhere.
 
+---
+**⏸ BREAK — model switch to Sonnet 5** (6.3 is mechanical integration, same shape as 3.1/5.4).
+
+---
+
 **6.3 Integrate `V2DSP` + module respin** — *Sonnet 5 / medium.* CH40 module = CH34-9 class with V2
 constants (`R901/R902/R903`, different Cj fit); coupling-cap value changes (1u class) per table.
 **Gate:** 3.1-style sweep + §1 V2 column + §4 V2 drive curves.
+
+---
+**⏸ HARD BREAK + optional human checkpoint** (all three revisions playable independently — good
+point to A/B them by ear before wiring the in-plugin switch between them). Also the natural point
+to update `CLAUDE.md` "Current step" to "all 3 revisions playable, integrating".
 
 ---
 
@@ -211,6 +309,12 @@ change handled like an OS-factor change (block-start reset + swap, brief crossfa
 audio thread — graphs pre-allocated). V2-only params no-op elsewhere.
 **Gate:** automated test flipping revision every N blocks under signal: no NaN/clicks/allocs
 (instrument with assertions); state round-trip preserves revision.
+**Session:** standalone.
+
+---
+**⏸ BREAK — same model (Sonnet 5), but domain fully changes** (UI, not DSP/processor). Fresh
+session: nothing from Phases 0–7's DSP reasoning is relevant, only the three DSP classes' param
+interfaces (already exposed via APVTS, so not even code-level detail is needed).
 
 ---
 
@@ -224,6 +328,12 @@ as a top-mounted slide switch; V2-only controls hidden on V1 revisions. Headless
 `build.md`) producing PNGs at 1.0×/1.5×/2.0× scale × 3 revisions.
 **Gate:** build + headless renders produced. **Send the 9 PNGs to the user — do NOT self-review
 beyond "it compiled and rendered".** Iterate on user feedback only.
+**Session:** the render→send→wait-for-feedback→iterate loop is naturally its own session per round;
+each iteration round is cheap (layout tweaks, not derivation) so bundling several rounds together if
+feedback comes back quickly in one sitting is fine — no strong reason to force a break between them.
+
+---
+**⏸ BREAK** (build/CI/perf-probe domain — `build.md` only, nothing from UI or DSP needed).
 
 ---
 
@@ -234,6 +344,12 @@ Read: `build.md` (probes + CI sections). `PerfBenchmark`, `OSFidelity`, `Feature
 FeatureProfile shows a real lever (V1E has no diode solve — likely only V1L/V2 zener omega matters;
 follow `dsp.md` HQ guidance).
 **Gate:** CI green on all three platforms; ctest suite green locally.
+**Session:** standalone; low effort, small enough that internal sub-steps don't need their own breaks.
+
+---
+**⏸ HARD BREAK — externally blocked.** Phase 10 waits on captures you provide; there's nothing to
+prepare in advance beyond what's already in `validation-and-capture.md`. When captures arrive, this
+is unavoidably a fresh session anyway (new data, new analysis), so no context to preserve from here.
 
 ---
 
@@ -258,3 +374,7 @@ deficit per calibration doc §4 before touching constants.
   captures later prove otherwise.
 - The source schematics are non-commercial-licensed reference material; ship no redrawn schematic
   assets (see `circuit.md` license reminder).
+- **Session boundaries are marked inline** (`⏸ BREAK` / `Bundle` / `Continue optional`) at every
+  task and phase transition — see "Session / context boundaries" in the preamble for the policy.
+  Every model switch is a hard break; three points are flagged as good human-listening checkpoints
+  (end of Phase 3, end of Phase 5, end of Phase 6).
