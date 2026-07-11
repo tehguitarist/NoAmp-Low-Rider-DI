@@ -1,0 +1,9 @@
+[submodule "libs/JUCE"]
+	path = libs/JUCE
+	url = https://github.com/juce-framework/JUCE
+[submodule "libs/chowdsp_wdf"]
+	path = libs/chowdsp_wdf
+	url = https://github.com/Chowdhury-DSP/chowdsp_wdf
+[submodule "libs/xsimd"]
+	path = libs/xsimd
+	url = https://github.com/xtensor-stack/xsimd

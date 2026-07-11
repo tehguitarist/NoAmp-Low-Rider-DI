@@ -2,7 +2,7 @@
 # installer per platform (.pkg/.exe/.deb) alongside a raw zip, and publishes everything to a
 # GitHub Release. No push/schedule trigger — it ONLY runs when you start it from the Actions tab
 # or `gh workflow run release.yml`, so a release is never cut accidentally.
-# TEMPLATE: replace <Pedal> (juce target / product name) everywhere. Inert until copied to a repo root.
+# TEMPLATE: replace NoAmpLowRiderDI (juce target / product name) everywhere. Inert until copied to a repo root.
 #
 # macOS signing/notarization is WIRED but gated on secrets that don't exist until you add them —
 # if APPLE_CERT_P12_BASE64 etc. aren't set, the macOS job's signing steps below will fail. Either
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/checkout@v6
       - id: read
         run: |
-          VERSION=$(grep -oP '(?<=project\(<Pedal> VERSION )[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
+          VERSION=$(grep -oP '(?<=project\(NoAmpLowRiderDI VERSION )[0-9]+\.[0-9]+\.[0-9]+' CMakeLists.txt)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   macos:
@@ -56,7 +56,7 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build AU + VST3
-        run: cmake --build build --config Release --target <Pedal>_AU --target <Pedal>_VST3 --parallel
+        run: cmake --build build --config Release --target NoAmpLowRiderDI_AU --target NoAmpLowRiderDI_VST3 --parallel
 
       # --- Signing/notarization: requires the nine APPLE_* secrets. Delete these steps (through
       # "Clean up keychain") if you haven't set them up yet — see build.md.
@@ -91,8 +91,8 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           for bundle in \
-            "build/<Pedal>_artefacts/Release/AU/<Pedal>.component" \
-            "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3"; do
+            "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmpLowRiderDI.component" \
+            "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3"; do
             codesign --force --deep --options runtime --timestamp \
               --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" "$bundle"
             codesign --verify --deep --strict --verbose=2 "$bundle"
@@ -107,8 +107,8 @@ jobs:
           NOTARIZE_ZIP="$RUNNER_TEMP/notarize.zip"
           NOTARIZE_DIR="$RUNNER_TEMP/notarize"
           mkdir -p "$NOTARIZE_DIR"
-          cp -R "build/<Pedal>_artefacts/Release/AU/<Pedal>.component" "$NOTARIZE_DIR/"
-          cp -R "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3" "$NOTARIZE_DIR/"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmpLowRiderDI.component" "$NOTARIZE_DIR/"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3" "$NOTARIZE_DIR/"
           ditto -c -k --keepParent "$NOTARIZE_DIR" "$NOTARIZE_ZIP"
 
           xcrun notarytool submit "$NOTARIZE_ZIP" \
@@ -117,25 +117,25 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --wait
 
-          xcrun stapler staple "build/<Pedal>_artefacts/Release/AU/<Pedal>.component"
-          xcrun stapler staple "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3"
+          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmpLowRiderDI.component"
+          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3"
 
       - name: Package
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           # Zip only the AU/VST3 bundles, NOT the whole Release dir — that also contains
-          # lib<Pedal>_SharedCode.a (a build byproduct, not something an end user installs).
+          # libNoAmpLowRiderDI_SharedCode.a (a build byproduct, not something an end user installs).
           # ditto -c can't take multiple sources directly, so stage them into one dir first
-          # (named "<Pedal>" so --keepParent gives the zip a clean top-level folder).
-          PKG_DIR="$RUNNER_TEMP/<Pedal>"
+          # (named "NoAmpLowRiderDI" so --keepParent gives the zip a clean top-level folder).
+          PKG_DIR="$RUNNER_TEMP/NoAmpLowRiderDI"
           mkdir -p "$PKG_DIR"
-          cp -R "build/<Pedal>_artefacts/Release/AU" "build/<Pedal>_artefacts/Release/VST3" "$PKG_DIR/"
-          ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "<Pedal>-macOS-v${VERSION}.zip"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/AU" "build/NoAmpLowRiderDI_artefacts/Release/VST3" "$PKG_DIR/"
+          ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "NoAmpLowRiderDI-macOS-v${VERSION}.zip"
 
       - name: Build installer
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          installer/macos/build_installer.sh "$VERSION" build/<Pedal>_artefacts/Release .
+          installer/macos/build_installer.sh "$VERSION" build/NoAmpLowRiderDI_artefacts/Release .
 
       - name: Sign + notarize installer
         env:
@@ -145,7 +145,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          PKG="<Pedal>-macOS-v${VERSION}-Installer.pkg"
+          PKG="NoAmpLowRiderDI-macOS-v${VERSION}-Installer.pkg"
           SIGNED_PKG="$RUNNER_TEMP/signed.pkg"
 
           productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" \
@@ -166,10 +166,10 @@ jobs:
 
       - uses: actions/upload-artifact@v6
         with:
-          name: <Pedal>-macOS
+          name: NoAmpLowRiderDI-macOS
           path: |
-            <Pedal>-macOS-v*.zip
-            <Pedal>-macOS-v*.pkg
+            NoAmpLowRiderDI-macOS-v*.zip
+            NoAmpLowRiderDI-macOS-v*.pkg
 
   windows:
     name: Windows build
@@ -183,14 +183,14 @@ jobs:
         run: cmake -B build
 
       - name: Build VST3
-        run: cmake --build build --config Release --target <Pedal>_VST3 --parallel
+        run: cmake --build build --config Release --target NoAmpLowRiderDI_VST3 --parallel
 
       - name: Package
         shell: pwsh
         run: |
           $version = "${{ needs.version.outputs.version }}"
-          Compress-Archive -Path "build/<Pedal>_artefacts/Release/VST3/<Pedal>.vst3" `
-            -DestinationPath "<Pedal>-Windows-v$version.zip"
+          Compress-Archive -Path "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3" `
+            -DestinationPath "NoAmpLowRiderDI-Windows-v$version.zip"
 
       # makensis ships on windows-latest runners but is NOT on PATH — locate it rather than
       # assume a bare `makensis` call works (it doesn't).
@@ -217,18 +217,18 @@ jobs:
           }
 
           Write-Host "Using makensis at $makensisPath"
-          & $makensisPath /DVERSION=$version /DARTEFACTS_DIR="$PWD\build\<Pedal>_artefacts\Release\VST3" installer\windows\Pedal.nsi
+          & $makensisPath /DVERSION=$version /DARTEFACTS_DIR="$PWD\build\NoAmpLowRiderDI_artefacts\Release\VST3" installer\windows\Pedal.nsi
 
           # NSIS resolves a relative OutFile against the .nsi's own directory, not this process's
           # CWD — move the built installer to the repo root so the upload-artifact glob finds it.
-          Move-Item "installer\windows\<Pedal>-Windows-v$version-Installer.exe" .
+          Move-Item "installer\windows\NoAmpLowRiderDI-Windows-v$version-Installer.exe" .
 
       - uses: actions/upload-artifact@v6
         with:
-          name: <Pedal>-Windows
+          name: NoAmpLowRiderDI-Windows
           path: |
-            <Pedal>-Windows-v*.zip
-            <Pedal>-Windows-v*.exe
+            NoAmpLowRiderDI-Windows-v*.zip
+            NoAmpLowRiderDI-Windows-v*.exe
 
   linux:
     name: Linux build
@@ -251,25 +251,25 @@ jobs:
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: Build VST3
-        run: cmake --build build --config Release --target <Pedal>_VST3 --parallel
+        run: cmake --build build --config Release --target NoAmpLowRiderDI_VST3 --parallel
 
       - name: Package
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          (cd build/<Pedal>_artefacts/Release/VST3 && \
-            zip -r "${GITHUB_WORKSPACE}/<Pedal>-Linux-v${VERSION}.zip" <Pedal>.vst3)
+          (cd build/NoAmpLowRiderDI_artefacts/Release/VST3 && \
+            zip -r "${GITHUB_WORKSPACE}/NoAmpLowRiderDI-Linux-v${VERSION}.zip" NoAmpLowRiderDI.vst3)
 
       - name: Build installer
         run: |
           VERSION="${{ needs.version.outputs.version }}"
-          installer/linux/build_deb.sh "$VERSION" build/<Pedal>_artefacts/Release .
+          installer/linux/build_deb.sh "$VERSION" build/NoAmpLowRiderDI_artefacts/Release .
 
       - uses: actions/upload-artifact@v6
         with:
-          name: <Pedal>-Linux
+          name: NoAmpLowRiderDI-Linux
           path: |
-            <Pedal>-Linux-v*.zip
-            <Pedal>-Linux-v*.deb
+            NoAmpLowRiderDI-Linux-v*.zip
+            NoAmpLowRiderDI-Linux-v*.deb
 
   publish:
     name: Publish release
@@ -281,7 +281,7 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.version.outputs.version }}
-          name: <Pedal> v${{ needs.version.outputs.version }}
+          name: NoAmpLowRiderDI v${{ needs.version.outputs.version }}
           draft: ${{ inputs.draft }}
           files: |
             artifacts/**/*.zip

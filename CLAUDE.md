@@ -99,10 +99,19 @@ listed crop — the transcription is verified (three passes, numeric cross-check
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Planning complete. Schematic analysis (Step 1) verified over three passes — all
-> `circuit.md` open items resolved (switch wirings, output throws, the `?` mark). Build plan with
-> per-task model/effort assignments and numeric validation gates: `docs/build-plan.md`. NEXT:
-> execute Phase 0 (scaffold, Sonnet 5) per the plan.**
+> **CURRENT: Phase 0 (scaffold) COMPLETE — all three gates green.** Submodules (JUCE/chowdsp_wdf/
+> xsimd) added; `CMakeLists.txt` instantiated with the locked identity; `PluginProcessor`/
+> `PluginEditor` skeleton with the full APVTS param superset (DSP stubbed pass-through);
+> CI/installer template placeholders replaced. `NoAmpLowRiderDI_AU` builds clean and passes `auval`
+> (installed to `~/Library/Audio/Plug-Ins/Components/`). `tests/StateRoundTrip.cpp` (0.2 gate — every
+> param round-trips through `getStateInformation`/`setStateInformation`) and
+> `tests/RCLowpassSmokeTest.cpp` (0.3 gate — chowdsp_wdf compile-time API, measured −3 dB point
+> within 0.05% of analytic at 44.1/48/96 kHz) both registered via `add_test()`; `ctest` 2/2 passing.
+> VST3/standalone not built (AU-only was sufficient for the gate, per user instruction — build on
+> demand later if needed). **Gotcha for next time:** `JucePlugin_Name` is only defined inside a
+> `juce_add_plugin` target's generated config — `PluginProcessor::getName()` used it and broke the
+> standalone test/console-app builds; now a literal string. **NEXT: hard break to Opus 4.8 for
+> Phase 1 (V1 Early linear stages) — fresh session, only the file tree is needed.**
 
 ## Project-specific carry-forwards
 

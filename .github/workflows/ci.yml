@@ -1,5 +1,5 @@
 # Build + test CI for a circuit-emulation pedal plugin.
-# TEMPLATE: replace <Pedal> (juce target / product name), <Cod1> (PLUGIN_CODE) and <Mfr1>
+# TEMPLATE: replace NoAmpLowRiderDI (juce target / product name), NALR (PLUGIN_CODE) and LPrc
 # (PLUGIN_MANUFACTURER_CODE) to match your CMakeLists. This file is inert inside the template
 # folder (GitHub only reads .github at the repo root) — it activates once you copy the template
 # to a new repo's root.
@@ -61,7 +61,7 @@ jobs:
           ls -la "$HOME/Library/Audio/Plug-Ins/Components/" || true
           ok=0
           for i in 1 2 3 4; do
-            if auval -v aufx <Cod1> <Mfr1>; then ok=1; break; fi
+            if auval -v aufx NALR LPrc; then ok=1; break; fi
             echo "::warning::auval attempt $i failed; bouncing AudioComponentRegistrar and retrying"
             killall -9 AudioComponentRegistrar 2>/dev/null || true
             sleep 5

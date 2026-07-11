@@ -1,9 +1,9 @@
-Package: <pedal>
+Package: noamplowriderdi
 Version: __VERSION__
 Section: sound
 Priority: optional
 Architecture: amd64
-Maintainer: <You> <<you>@example.com>
-Description: <Pedal> plugin (VST3)
- Replace this description with one line about your plugin, plus optional indented
- continuation lines (each must start with a single space).
+Maintainer: Leigh Pierce <leighpierce@me.com>
+Description: NoAmp Low Rider DI plugin (VST3)
+ Circuit-level emulation of the Tech 21 SansAmp Bass Driver DI, with three selectable circuit
+ revisions (V1 Early, V1 Late, V2).
