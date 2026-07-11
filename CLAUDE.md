@@ -103,22 +103,21 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 1 COMPLETE — all V1-Early linear stages 1.1–1.6 done & validated (ctest 8/8,
-> `dsp-validator` clean PASS on E1–E8), committed (`302ed64`, `dfeeb7a`).** DSP in `src/dsp/`:
-> `RtypeNumeric.h` (numeric R-type S-matrix), `OpAmpStage.h` (ideal-op-amp decomposition),
-> `NodalCircuit.h` (bilinear-companion MNA engine, now multi-input), `V1EarlyStages.h`
-> (`V1EarlyInputBuffer`, `V1EarlyPresenceStage`, `V1EarlyDriveStage`, `V1EarlyRecoveryStage`,
-> `V1EarlyBlendLevelStage`, `V1EarlyToneStackStage`, `V1EarlyOutputStage`). One
-> `tests/V1Early*Test.cpp` per stage, each vs an independent frequency-domain reference
-> (warp-compensated) AND the FR §-targets. **NEXT: Phase 2 — V1 Early nonlinearity + oversampling
-> (Opus/high per build-plan.md): rail clip on the DRIVE-stage output (TLC2264 rail-to-rail, ±~4.5 V
-> about VREF) with 1st-order ADAA, oversampling region DRIVE→recovery, prewarp base-rate HF caps.
-> V1E has NO diode solve.**
-> **Process gotcha (2026-07-12): the build-plan's per-task model switches (e.g. the Sonnet-5 break
-> before 1.6) got missed mid-Phase-1 — I ran 1.4–1.6 on Opus straight through instead of pausing for
-> the user to `/model` switch. The work itself is correct (validated + dsp-validator PASS), just off
-> the plan's cost profile. Going forward: explicitly call out "this task wants model X" and wait for
-> the user to switch, rather than assuming continuity.**
+> **CURRENT: Phase 2 COMPLETE — V1 Early nonlinearity + oversampling (2.1) done & validated (ctest
+> 9/9), committed.** New DSP: `src/dsp/RailClip.h` (hard-clamp op-amp rail saturation, ±4.2 V about
+> VCOM, 1st-order ADAA with exact piecewise antiderivative + midpoint fallback, runtime `setADAA`
+> for HQ/A-B) and `src/dsp/V1EarlyDriveClipRecovery.h` (oversampled region: DRIVE→rail-clip→recovery,
+> factors 1/2/4/8× via pre-built per-factor `juce::dsp::Oversampling`, glitch-free block-start
+> switching, no audio-thread alloc; DRIVE+recovery re-discretised at OS rate). `V1EarlyDriveStage`
+> gained `reset()`. `tests/V1EarlyNonlinearTest.cpp` (JUCE console app) gates it. **NEXT: Phase 3 —
+> V1 Early integration (Opus/high): wire `V1EarlyDSP` into `processBlock` (per-channel double
+> scratch, meters, bypass crossfade, `isNonRealtime()` OS select), build `OfflineRender` exe,
+> provisional `kInputRef`. Milestone: V1 Early playable. Read `architecture.md`, calibration §1–2,
+> `analysis/*.py` docstrings.**
+> **Process note: model discipline heeded this session — Phase 2 is Opus 4.8/high and I was already
+> on Opus 4.8 (fresh session per the plan's hard break), so no `/model` switch was needed; confirmed
+> before starting rather than assuming. (Prior gotcha: 1.4–1.6 ran on Opus when the plan wanted a
+> Sonnet-5 break — correct work, wrong cost profile. Keep calling out "this task wants model X".)**
 
 ## Project-specific carry-forwards
 
@@ -197,6 +196,19 @@ without images.
   Hz ✓), the notch against §1. **RESOLVED: the twin-T (~−24 dB stage-level) reaches §1's −36.3 dB @
   ~715 Hz once the recovery superposes (full wet path, 1.3) — the twin-T was correct; no revisit
   needed.** §1's ~−9 dB LF edge still needs the downstream BLEND (C12) + tone (C25) coupling HPs (1.4/1.5).
+- **Phase 2 (V1E nonlinearity) findings.** (1) Rail clip = **±4.2 V** about VCOM (matches the locked
+  power constant; the build-plan §2.1 "±4.5 V" text is STALE — forgets D5). Hard clamp (rail-to-rail
+  TLC226x), 1st-order ADAA, exact piecewise antiderivative — `RailClip.h`. (2) **Recovery DC gain =
+  0.6875** (IC3C R17/R12 = 22/32 input attenuator, the −3.3 dB): the DRIVE→recovery region OUTPUT =
+  (clip-node volts)×0.6875, so at full drive it saturates at ≈±4.2·0.6875 = ±2.89 V, NOT ±4.2 —
+  **feed this recovery attenuation into Phase-3/10 output-makeup calibration**. (3) Gate results: 4×
+  OS aliasing is below the −94 dB measurement floor (1× genuine −79 dB alias driven to the floor by
+  OS); ADAA cuts 1× aliasing by ~22 dB. (4) **Prewarp DEFERRED to Phase 9**: on V1E the dominant HF
+  (cab-sim) caps live in the oversampled DRIVE→recovery region so they're correctly NOT prewarped;
+  every remaining base-rate HF corner is knob-swept (presence peak, tone-pot shelves — dsp.md forbids
+  prewarping swept corners) EXCEPT the one fixed tone-stack feedback corner **C29 ~7.2 kHz** (sub-dB)
+  — record it as the single deferred prewarp target, to be tuned with the low-OS shelf against
+  `OSFidelity` (don't perturb the gated 1.5 stage blind now).
 - **The build plan lives in `docs/build-plan.md`** — per-task model (Opus 4.8 vs Sonnet 5) + effort
   assignments, exact read-lists per task (token discipline), and numeric validation gates keyed to
   `docs/reference-fr-targets.md` §§. UI visuals are validated by the user (send PNGs, never

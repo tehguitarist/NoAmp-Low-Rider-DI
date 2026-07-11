@@ -181,6 +181,10 @@ public:
         zfSrc.propagateImpedanceChange();
     }
 
+    // Clears the single stored state (C28) so an oversampling-factor change (re-prepare at a new rate)
+    // starts from rest rather than carrying a stale wave value.
+    void reset() noexcept { C28.reset(); }
+
     // drive in [0,1]. VR1 rheostat to VCOM: wiper at pin1 (knob max) -> 0 -> max gain; pin3 (min) ->
     // 100k -> min gain. So R_vr1 = (1 - d) * 100k.
     void setDrive(double drive01) noexcept

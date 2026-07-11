@@ -149,3 +149,14 @@ add_executable(V1EarlyOutputTest tests/V1EarlyOutputTest.cpp)
 target_link_libraries(V1EarlyOutputTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(V1EarlyOutputTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V1EarlyOutputTest COMMAND V1EarlyOutputTest)
+
+# 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
+# region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
+juce_add_console_app(V1EarlyNonlinearTest PRODUCT_NAME "V1EarlyNonlinearTest")
+target_sources(V1EarlyNonlinearTest PRIVATE tests/V1EarlyNonlinearTest.cpp)
+target_compile_definitions(V1EarlyNonlinearTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V1EarlyNonlinearTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME V1EarlyNonlinearTest COMMAND V1EarlyNonlinearTest)
