@@ -14,9 +14,11 @@
 > **Sonnet 5 / medium** (they check against `circuit.md`, they don't re-derive).
 >
 > **Global token rules for every task:**
-> - `circuit.md` + `docs/reference-fr-targets.md` are the source of truth. **Never re-read the
->   schematic PNGs** unless a task explicitly lists a crop file — the transcription is verified
->   (two independent passes + numeric cross-checks documented in `circuit.md` Validation notes).
+> - `circuit.md` (values) + `.claude/rules/netlists.md` (node-level wiring, wins on conflict) +
+>   `docs/reference-fr-targets.md` are the source of truth. **Never re-read the schematic PNGs** —
+>   the transcription is verified (three value passes + a 4th node-level pass, numeric
+>   cross-checks documented in `circuit.md` Validation notes / `netlists.md` corrections list).
+>   Every WDF stage task reads its revision's stage section(s) in `netlists.md`.
 > - Read only the rule files a task lists. `dsp.md` is required for all DSP tasks; `build.md` for
 >   build/CI tasks; `architecture.md` for processor-level tasks; `ui.md` + `docs/ui-peripheral-spec.md`
 >   for UI tasks.
@@ -99,7 +101,8 @@ scaffold reasoning isn't needed, only the resulting file tree (on disk).
 ## Phase 1 — V1 Early linear stages  *(each task: derive analytic transfer function first, then WDF/ideal-op-amp implementation, then a console test exe that sweeps FR and asserts against BOTH the analytic curve and `reference-fr-targets.md`)*
 
 Read for every 1.x task: `dsp.md`, `circuit.md` (V1-Early tables + topology notes only),
-`docs/reference-fr-targets.md` (the cited §), `build.md` "Testing pattern".
+`.claude/rules/netlists.md` (the E-sections for the stage being built), `docs/reference-fr-targets.md`
+(the cited §), `build.md` "Testing pattern".
 
 **1.1 Input buffer + twin-T/PRESENCE stage** — *Opus 4.8 / high.*
 The three-22n twin-T-style network (`C17/C18/C19`, `R3` 2.2k, `R11` 22k, `R16/R22` 100k) around IC3B
@@ -230,13 +233,20 @@ task already). Break before Phase 5 regardless of what Phase 4 shares a clock wi
 
 ## Phase 5 — V1 Late DSP  *(reuses Phase 1 primitives; can start 5.1–5.2 in parallel with Phase 4 since they're linear)*
 
-Read per task: `circuit.md` V1-Late tables, `reference-fr-targets.md` cited §§, `dsp.md`.
+Read per task: `circuit.md` V1-Late tables, `netlists.md` L-sections for the stage, 
+`reference-fr-targets.md` cited §§, `dsp.md`.
 
-**5.1 Deltas on shared linear stages** — *Sonnet 5 / medium.* PRESENCE `R26`=10k (not 330k!), input
-protection diodes (ignore — small-signal invisible), recovery/bridged-T identical values, BLEND/LEVEL
-identical, output = unity throw. Mostly parameterisation of Phase-1 classes.
+**5.1 Deltas on shared linear stages** — *Sonnet 5 / medium.* ⚠ Updated after the 4th-pass trace
+(`netlists.md` L1–L6): these are NOT all value tweaks. (a) PRESENCE is a **different topology**
+(pot-in-feedback, wiper→(−), cold leg R24+C31→GND — netlists L3; `R26` 10k is just an
+AC-transparent isolation R, NOT a feedback leg) — new presence cell, shared verbatim with V2.
+(b) Recovery S-K values retuned (R48/R49 33k, no V1e-style input attenuator — L5a) and a NEW wet
+make-up buffer IC3B (+10.1 dB, C42 rolloff, flagged C10/R14 read — L5d). (c) LEVEL is a **single
+inverting stage with a 100k-loaded wiper** (L6), not V1e's buffered follower+inverter — model the
+pot loading. (d) Input protection diodes: ignore (small-signal invisible); bridged-T identical;
+output = unity throw.
 **Gate:** §1 V1-Late column + §3 PRESENCE (peak +27.5 dB at 6–7 kHz — *changed from V1E*).
-**Session:** standalone — small Sonnet task, break before and after (5.2 switches to Opus).
+**Session:** standalone — break before and after (5.2 switches to Opus).
 
 ---
 **⏸ BREAK — model switch to Opus 4.8** (5.2 is a new-topology derivation, not parameterisation).
@@ -255,9 +265,11 @@ means a topology error).
 5.3 mainly needs Phase 4's `ZenerPairT` interface + the module table, not 5.2's tone-stack algebra —
 break is equally fine and arguably safer for context-window health.
 
-**5.3 CH34-9 module (2 op-amp stages + ZenerPairT)** — *Opus 4.8 / high.* Module per `circuit.md`
-table (IC100A/B, R101/R102/R105/R106 220k/220k/100k/220k, D100 via Phase-4 element), DRIVE pot
-integration (`R25` 22k, `VR1`, `C8`/`R17`).
+**5.3 CH34-9 module (2 op-amp stages + ZenerPairT)** — *Opus 4.8 / high.* Module per `netlists.md`
+L4 (authoritative): **the DRIVE pot is shared between the two coupled inverting stages** — IC100A's
+output IS the wiper; VR1.a→R25→IC100A(−) sets stage-A gain while VR1.b→C8→R17→IC100B(−) sets
+stage-B attenuation, complementarily (min/max +12.9/+48.6 dB, already numerically validated vs §4).
+Build as ONE stage object; D100 via Phase-4 element in stage-B's feedback (∥ R102 220k).
 **Gate:** small-signal §4 (max ~+48 dB, min ~+12.5 dB, HF rolloff > V1E's); clipping onset at
 ±3.9 V-equivalent input drive; §8 four-panel voiced checkpoints (PRESENCE/DRIVE combos) ±2 dB.
 
@@ -277,7 +289,7 @@ to 3.1 — only needs the finished V1-Late stage classes' interfaces).
 
 ## Phase 6 — V2 DSP
 
-**6.1 Recovery retune + no bridged-T** — *Sonnet 5 / medium.* Read: `circuit.md` V2 recovery table
+**6.1 Recovery retune + no bridged-T** — *Sonnet 5 / medium.* Read: `netlists.md` V5, `circuit.md` V2 recovery table
 (incl. the warning that the ~800 Hz notch REMAINS — it's in the twin-T), `reference-fr-targets.md`
 §0–1. New `R47`+`C42` LP corner; drop bridged-T.
 **Gate:** §1 V2 column, especially high bump ~−10 dB @ 2.5–3 kHz and −40 dB @ ~8 kHz; deep notch
@@ -290,9 +302,12 @@ math in the plan — everything after this is parameterisation/integration/mecha
 
 ---
 
-**6.2 MID stage + MID SHIFT + BASS SHIFT** — *Opus 4.8 / high.* Read: `circuit.md` resolved-wiring
-notes (Validation notes section) **and, only if the derivation disagrees with the gates,**
-`schematics/crops/v2_midshift_zoom.png`. Baxandall peaking MID around U3A; two precomputed
+**6.2 MID stage + MID SHIFT + BASS SHIFT** — *Opus 4.8 / high.* Read: `netlists.md` V6/V7 +
+`circuit.md` resolved-wiring notes (Validation notes section) **and, only if the derivation
+disagrees with the gates,** `schematics/crops/v2_midshift_zoom.png`. Note (4th pass): U3A's fixed
+feedback is `R55` 100k (flat gain −1 with `R23` 100k in; missing from circuit.md's first-pass
+table), and V2's LEVEL buffer U3B is **non-inverting** ×3.2 (`R36` 10k series into (+)) — the
+polarity table in `netlists.md` depends on both. Baxandall peaking MID around U3A; two precomputed
 scattering matrices per switch (`setSMatrixData()` swap); BASS SHIFT as second matrix pair on the
 5.2 stack.
 **Gate:** §7: centres ~430/~850 Hz (±15%), ±18 dB extremes; §5: BASS 40 Hz throw +14/−17 dB @
@@ -305,7 +320,8 @@ interpretation is inverted — flip it, don't hunt elsewhere.
 ---
 
 **6.3 Integrate `V2DSP` + module respin** — *Sonnet 5 / medium.* CH40 module = CH34-9 class with V2
-constants (`R901/R902/R903`, different Cj fit); coupling-cap value changes (1u class) per table.
+constants (netlists.md V4: same coupled-pot topology, `R14`/`R15`/`R903` in the L4 roles, coupling
+caps 2.2u→1u, different Cj fit); BLEND/LEVEL differ from V1L (U3B non-inverting — netlists V6).
 **Gate:** 3.1-style sweep + §1 V2 column + §4 V2 drive curves.
 
 ---
@@ -358,6 +374,16 @@ FeatureProfile shows a real lever (V1E has no diode solve — likely only V1L/V2
 follow `dsp.md` HQ guidance).
 **Gate:** CI green on all three platforms; ctest suite green locally.
 **Session:** standalone; low effort, small enough that internal sub-steps don't need their own breaks.
+
+**9.x (optional) Factory presets** — *Sonnet 5 / low.* Source: **Tech 21's official BDDI owner's
+manuals** (both versions carry printed "sample settings" charts — SVT, fat tube, bright, slap,
+etc.). The koichizikan blog (`koichizikan.seesaa.net/article/sansamp_bddi_v2.html`, photos
+`sansamp_bddi_v2_008/009.png`) shows the two manuals' charts side by side and confirms Tech 21
+itself compensated V2's chart vs V1's (slight mid-cut on V2's MID to recover the "donshari"
+scoop, since V2's mid is post-blend — see circuit.md's semantic note). Ship per-revision presets
+from the matching revision's own manual chart; do NOT copy V1 knob positions onto V2. Knob values
+must be read off the manual images at implementation time — they are not transcribed anywhere in
+this repo yet.
 
 ---
 **⏸ HARD BREAK — externally blocked.** Phase 10 waits on captures you provide; there's nothing to

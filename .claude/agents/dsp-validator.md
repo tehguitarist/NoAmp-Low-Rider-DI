@@ -34,7 +34,10 @@ When invoked, you will be given a DSP stage to validate. Follow this process:
 - Flag any `float` template parameter on `ResistorT`, `CapacitorT`, `DiodePairT`, `DiodeT`, `RtypeAdaptor`, or `WDFSeriesT`/`WDFParallelT`
 
 ### 3. WDF Topology
-- Confirm the WDF tree structure matches `circuit.md`'s topology (series/parallel/R-type)
+- Confirm the WDF tree structure matches the stage's node-level netlist in
+  `.claude/rules/netlists.md` (the authoritative wiring reference — it wins over circuit.md's
+  Function cells on conflict), component-by-component: every `A —X— B` entry must correspond to
+  the implemented series/parallel/R-type structure
 - Confirm R-type adaptors are used where the circuit has feedback or non-tree topology
 - Confirm no WDF tree reconstruction at runtime for switch changes — only `setSMatrixData()` calls
 - Confirm Newton-Raphson is used only for nonlinear stages, not linear stages

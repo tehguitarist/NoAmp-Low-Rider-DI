@@ -27,6 +27,12 @@ multi-channel-series section, which doesn't apply here).
 | `schematics/{v1-early,v1-late,v2}/fr_*.png` | LTspice-style sim'd frequency-response reference curves per control — **quantitatively transcribed into `docs/reference-fr-targets.md`** (2×-upscaled reading copies in `schematics/crops/fr/`). Use those numbers to validate the WDF model's FR against the author's SPICE sim, independent of real-pedal captures |
 | `schematics/v1-late/fr_electrolytic_cap_addition.png` | A/B sim of the optional C0 electrolytic cap variant (see Validation notes) |
 
+> **Node-level connectivity (which terminal connects to which node, stage by stage, all three
+> revisions) lives in `.claude/rules/netlists.md`** — traced once on a 4th pass so DSP/WDF tasks
+> never need to re-read a schematic image. Where a "Function" cell in this file disagrees with a
+> netlist, **the netlist wins** (the 4th pass corrected several cells; affected rows are annotated
+> inline below).
+
 ---
 
 ## ⚠ Schematic-reading gotchas (generic — kept from template)
@@ -146,11 +152,16 @@ model entirely with no loss of fidelity to the 1/4" output.
     around low-power op-amps throughout (TLC2262/2264, all CMOS rail-to-rail, low Iq) rather than
     the more typical TL07x/JRC4558-class parts guitar pedals usually use for the *main* signal path
     (TL072 only appears in the XLR driver, which we're not modelling).
-- **For DSP modelling purposes: use a single nominal ~9 V rail** (matching this template's
-  "single 9 V supply, no charge pump" default) — the phantom-vs-battery ~1 V headroom difference is
-  a minor, out-of-scope refinement (battery/DC-adapter is realistically the dominant use case for a
-  guitarist/bassist testing this plugin), but note it in `docs/calibration-and-gain-staging.md` if
-  headroom calibration ever seems ~1 V off from a battery-powered reference capture.
+- **For DSP modelling purposes — LOCKED (2026-07-12): nominal rail VCC = 8.4 V** (9 V
+  battery/adapter minus D5's ~0.6 V series drop), so **VCOM = 4.2 V** and the op-amp rail clamp
+  is **±4.2 V about signal ground** (rail-to-rail TLC226x). Use these constants in every rail-clip
+  implementation — do NOT use ±4.5 V (that forgets D5). The V1L/V2 zener clip (±~3.9 V) is
+  supply-independent and unaffected by this choice; it only matters for V1 Early's rail-only clip
+  and the V1L/V2 above-zener ceiling. Rationale: battery/DC-adapter is the dominant real-world
+  case; the phantom-power alternative (10 V regulated → ±5 V, MORE headroom) is documented but
+  out of scope. Phase 10 capture calibration is the final authority and absorbs any residual
+  assumption error — if headroom calibration ever seems ~1 V off from a reference capture, check
+  whether that capture was phantom-powered before touching this constant.
 - **VCOM (bias) generation** — present in near-identical form on all three revisions: a resistive
   divider off VCC (`R31`/`R32` in V1e/V1l, similar in V2) heavily filtered by large electrolytics
   (`C11`/`C38`/`C41` class, 220 µF–47 µF), feeding the ▲ signal-reference rail used throughout the
@@ -200,7 +211,14 @@ op-amp's feedback leg:
   this as a well-verified, hard-won data point, not a guess.
 
 **Both zeners are the same nominal value (3.3 V) and same back-to-back topology** — V2's module is
-functionally a refinement/respin of V1 Late's, not a different circuit. The author explicitly notes
+functionally a refinement/respin of V1 Late's, not a different circuit. **Consequence the source
+author calls out explicitly (V1L article): the clip threshold became supply-independent.** V1
+Early's only clip is the op-amp rail → its distortion onset scales with the actual rail (battery
+sag, 9 V adapter vs 10 V phantom); V1 Late/V2's zener threshold (±~3.9 V) is fixed regardless of
+supply. So supply-voltage sensitivity is a *revision-dependent* behaviour: it matters for V1
+Early's clip calibration (pick and document ONE nominal rail; a sagging-battery "mode" would be a
+V1e-only easter egg) and is irrelevant to V1L/V2's clip onset (the rail only sets the later,
+higher hard ceiling). The author explicitly notes
 this class of zener has **non-trivial junction capacitance** that measurably rolls off DRIVE's high
 end (visible in the DRIVE frequency-response sims — compare `fr_presence_drive.png` across
 revisions) and that this capacitance **varies significantly by package/manufacturer/lot**, so don't
@@ -396,16 +414,23 @@ listed where they differ from V1 Early's role, or are new.*
 | C31 | 10n | PRESENCE feedback cap |
 | R24 | 3.3k | PRESENCE feedback series |
 | VR5 | PRESENCE, B100k | presence control |
-| R26 | 10k | PRESENCE feedback fixed leg (**note: 10k here vs 330k on V1 Early — significantly different feedback ratio, don't copy the V1-Early value**) |
+| R26 | 10k | ~~PRESENCE feedback fixed leg~~ **CORRECTED (4th pass, netlists.md L2/L3):** series isolation R between the twin-T output and IC2A(+) — AC-transparent (no current into the CMOS input). V1L presence gain comes entirely from VR5 sitting IN the feedback path (pot ends: output / R24+C31→GND; **wiper → IC2A(−)**) — a different topology from V1 Early's rheostat-leg + fixed-330k cell, not a value change |
 | C32 | 100p | PRESENCE rolloff |
 | R23 | 10k | series out |
 | C28 | 2.2u | coupling into DRIVE/clip module |
 
 ### DRIVE / clip module — `CH34-9 Module` (see Nonlinear devices)
+
+> **Topology note (4th pass, netlists.md L4):** the DRIVE pot is **shared between two coupled
+> inverting stages** — IC100A's output IS the pot wiper; the wiper→R25 half sets stage-A gain
+> while the wiper→C8 half sets stage-B input attenuation, complementarily. Min/max work out to
+> +12.9/+48.6 dB, matching FR §4's +12.5/+48 dB (numeric cross-validation). Model as ONE stage
+> object, not two independent op-amp stages.
+
 | Ref | Value | Function |
 |-----|-------|----------|
-| R25 | 22k | module feedback |
-| VR1 | DRIVE, B100k | drive control |
+| R25 | 22k | stage-A feedback (IC100A out = VR1 wiper → VR1.a → R25 → IC100A(−)) |
+| VR1 | DRIVE, B100k | drive control — coupled dual role, see topology note above |
 | C8 | 2.2u | coupling |
 | R17 | 10k | series in |
 | IC100A | TLC2262 (ch. A) | module input stage |
@@ -443,10 +468,10 @@ author to the added zener module's junction capacitance plus the retuned notch l
 | Ref | Value | Function |
 |-----|-------|----------|
 | VR6 | BLEND, B100k | |
-| IC3A | TLC2264 (ch. A) | LEVEL buffer |
+| IC3A | TLC2264 (ch. A) | ~~LEVEL buffer~~ **CORRECTED (4th pass, netlists.md L6):** single INVERTING gain stage — VR4 wiper → R4 100k → IC3A(−), feedback R30 220k, gain −2.2. The LEVEL wiper is *loaded* by 100k into virtual ground (taper interacts), unlike V1 Early's buffered wiper |
 | VR4 | LEVEL, B100k | |
-| R50, R4 | 1k, 100k | |
-| R30 | 220k (vs V1 Early's 22k feedback network — retuned) | |
+| R50, R4 | 1k, 100k | R50 = pot bottom leg to VCOM; R4 = wiper → IC3A(−) input R |
+| R30 | 220k (vs V1 Early's 22k feedback network — retuned) | IC3A feedback |
 
 ### BASS / TREBLE tone stack — **retuned from shelving to PEAKING type**
 | Ref | Value | Function |
@@ -533,8 +558,8 @@ would be lower part-count/cost) and it holds with no exceptions anywhere in the 
 ### DRIVE / clip module — `U5 CH40 Module` (see Nonlinear devices)
 | Ref | Value | Function |
 |-----|-------|----------|
-| R14 | 22k | series in |
-| VR13 | DRIVE, B100k | drive control |
+| R14 | 22k | ~~series in~~ **CORRECTED (4th pass, netlists.md V4):** stage-A feedback — same coupled-pot two-op-amp topology as V1 Late's CH34-9 (U901A out = VR13 wiper; VR13.a→R14→U901A(−); VR13.b→C4→R15→U901B(−)); min/max +12.9/+48.6 dB matches FR §4 |
+| VR13 | DRIVE, B100k | drive control — coupled dual role, see R14 note |
 | C4 | 1u | coupling |
 | R15 | 10k | series into module |
 | U901A | TLC2262 (ch. A) | module input stage |
@@ -578,12 +603,13 @@ for V2.*
 | Ref | Value | Function |
 |-----|-------|----------|
 | VR50 | BLEND, B100k | |
-| R67, R63 | 10k, 22k | LEVEL buffer feedback |
-| U3B | TLC2262 (ch. B) | LEVEL buffer |
+| R67, R63 | 10k, 22k | LEVEL buffer feedback — U3B is **non-inverting ×3.2 (+10.1 dB)**: leg R67 (−)→VCOM, feedback R63 (netlists.md V6) |
+| U3B | TLC2262 (ch. B) | LEVEL gain stage (non-inverting, no polarity flip) |
 | VR51 | LEVEL, B100k | |
-| R36, R39, R48(empty) | 10k, 1k, — | LEVEL pot legs |
-| R23 | 100k | series into MID stage |
-| U3A | TLC2262 (ch. A) | MID stage op-amp |
+| R36, R39, R48(empty) | 10k, 1k, — | **R36 = series R between VR51 wiper and U3B(+)** (not a pot leg — 4th-pass correction); R39 = pot bottom → VCOM; R48 empty footprint parallels R39 |
+| R23 | 100k | series into MID stage (U3B out → R23 → U3A(−)) |
+| R55 | 100k | **U3A fixed feedback (−)→OUT — MID flat gain = −1. Missing from the first-pass table; added on the 4th pass (netlists.md V6)** |
+| U3A | TLC2262 (ch. A) | MID stage op-amp (inverting — one polarity flip) |
 | C19, C21 | 10n, 10n | MID shift network caps |
 | R27 | 1M | MID shift network |
 | SW5A, SW5B | 2-position switch, "MID SHIFT 500/1000Hz" (author measured actual shift points as ~400–450 Hz and ~800–900 Hz, not the silkscreened 500/1000) | DPDT toggling caps in the MID wiper leg — **wiring RESOLVED, see Validation notes**. Baxandall peaking stage: `R23` 100k in, `C11` 100p stability, pot rail `R21` 3.3k / `VR1` B100k / `R62` 3.3k, wiper leg `C19`+`C21` 10n w/ `R27` 1M (SW5B) and `C13`+`C36` 10n w/ `R13` 1M (SW5A) |
@@ -720,6 +746,14 @@ finalized here. Record the final decision in `architecture.md` once made.
 
 ## Validation notes / open items
 
+- **4th pass (2026-07-11): full node-level connectivity traced into `.claude/rules/netlists.md`**
+  — every stage on all three revisions now has a text netlist, so no build task should need a
+  schematic image again. Eight corrections/additions came out of it (annotated inline in the
+  tables above, full list at the bottom of netlists.md); the headline ones: V1L/V2 presence is a
+  pot-in-feedback topology (≠ V1e); the V1L/V2 **DRIVE pot is shared between two coupled
+  inverting module stages** (numerically validated against FR §4 at both extremes); V1L LEVEL is
+  a single inverting stage with a loaded wiper; the dry tap is the input-buffer **output** on all
+  three revisions.
 - **Corrections applied during the 2nd-pass verification (were wrong in the first draft):**
   1. **LEVEL is a post-BLEND master level, not a dry-path level** — fixed in the signal-path summary
      and the BLEND/LEVEL table after a node-level trace. Signal order is
