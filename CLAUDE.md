@@ -103,21 +103,24 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 2 COMPLETE — V1 Early nonlinearity + oversampling (2.1) done & validated (ctest
-> 9/9), committed.** New DSP: `src/dsp/RailClip.h` (hard-clamp op-amp rail saturation, ±4.2 V about
-> VCOM, 1st-order ADAA with exact piecewise antiderivative + midpoint fallback, runtime `setADAA`
-> for HQ/A-B) and `src/dsp/V1EarlyDriveClipRecovery.h` (oversampled region: DRIVE→rail-clip→recovery,
-> factors 1/2/4/8× via pre-built per-factor `juce::dsp::Oversampling`, glitch-free block-start
-> switching, no audio-thread alloc; DRIVE+recovery re-discretised at OS rate). `V1EarlyDriveStage`
-> gained `reset()`. `tests/V1EarlyNonlinearTest.cpp` (JUCE console app) gates it. **NEXT: Phase 3 —
-> V1 Early integration (Opus/high): wire `V1EarlyDSP` into `processBlock` (per-channel double
-> scratch, meters, bypass crossfade, `isNonRealtime()` OS select), build `OfflineRender` exe,
-> provisional `kInputRef`. Milestone: V1 Early playable. Read `architecture.md`, calibration §1–2,
-> `analysis/*.py` docstrings.**
-> **Process note: model discipline heeded this session — Phase 2 is Opus 4.8/high and I was already
-> on Opus 4.8 (fresh session per the plan's hard break), so no `/model` switch was needed; confirmed
-> before starting rather than assuming. (Prior gotcha: 1.4–1.6 ran on Opus when the plan wanted a
-> Sonnet-5 break — correct work, wrong cost profile. Keep calling out "this task wants model X".)**
+> **CURRENT: Phase 3 COMPLETE — V1 Early integration done & validated (ctest 10/10). NOT yet
+> committed. Milestone reached: V1 Early is playable.** New: `src/dsp/V1EarlyDSP.h` (top-level
+> per-channel chain in verified signal order — input buffer → twin-T/PRESENCE → [OS region:
+> DRIVE→rail-clip→recovery] → BLEND(dry,wet)→LEVEL → BASS/TREBLE → output; dry tap = input-buffer
+> output; change-gated setParams; block-based processBlock with internal dry-tap scratch) and
+> `src/dsp/Calibration.h` (shared `nalr::kInputRef`/`kOutputMakeup`, single source of truth for
+> processor + OfflineRender). `PluginProcessor` now runs the real chain per channel: DAW↔volts via
+> kInputRef, per-block gain ramps precomputed ONCE and shared L/R (avoids the stereo double-advance),
+> bypass crossfade, meters (DAW domain), `isNonRealtime()` live/render OS select, latency reported +
+> updated on factor change. `analysis/offline_render.cpp` (OfflineRender exe) mirrors processBlock
+> gain staging for the A/B harness. `tests/V1EarlyIntegrationTest.cpp` gates assembly (all-knobs × OS
+> finite/bounded, silence→silence at max gain, glitch-free OS switching, dry-path passthrough).
+> **NEXT: ⏸ HARD BREAK + human checkpoint — first sound; user should LISTEN in a DAW before more DSP.
+> Then Phase 4 — Zener clip research spike (Opus 4.8 / XHIGH; self-contained, no dep on Phases 1–3):
+> `src/dsp/ZenerPairT.h` for the antiparallel zener pair (±~3.9 V, +Cj term), unit test, dsp.md
+> writeup. Read `dsp.md` nonlinear+omega, `circuit.md` Nonlinear devices, DZ23C3V3/BZB984-C3V3
+> datasheets (WebSearch OK). Model: Phase 4 wants XHIGH effort — bump before starting.**
+> **Process note: Phase 3 ran on Opus 4.8/high as planned (fresh session, no `/model` needed).**
 
 ## Project-specific carry-forwards
 
@@ -209,6 +212,18 @@ without images.
   prewarping swept corners) EXCEPT the one fixed tone-stack feedback corner **C29 ~7.2 kHz** (sub-dB)
   — record it as the single deferred prewarp target, to be tuned with the low-OS shelf against
   `OSFidelity` (don't perturb the gated 1.5 stage blind now).
+- **Phase 3 (integration) facts for Phase 10 calibration.** (1) Provisional constants in
+  `src/dsp/Calibration.h`: **kInputRef = 3.27 V/FS** (calibration §1 worked example, NOT measured),
+  **kOutputMakeup = 1.0** (interim). Both re-anchored from captures in Phase 10 — don't treat as
+  final. (2) **LEVEL is modelled INSIDE the DSP** (the pedal's LEVEL pot, in V1EarlyBlendLevelStage),
+  so there is NO separate `volumeGain` scalar in the processor — output gain = `kOutputMakeup ·
+  dbToGain(outTrim) / kInputRef` only (`outputGainFor()`). Don't go looking for a volume taper to
+  fit; LEVEL's law is the circuit. (3) Measured dry-path (blend=0) gain at LEVEL noon = **−0.70 dB**
+  (integration test) — near-unity, consistent with the −0.85 dB output-buffer loss; confirms the
+  dry-tap→BLEND→LEVEL→tone→output wiring and that kInputRef cancels in the linear path. (4) Processor
+  gotcha resolved: per-sample SmoothedValue advanced per-channel ramps 2× too fast in stereo and
+  desyncs L/R — precompute the input-trim/output-gain/bypass ramps ONCE per block into shared arrays,
+  index both channels into them.
 - **The build plan lives in `docs/build-plan.md`** — per-task model (Opus 4.8 vs Sonnet 5) + effort
   assignments, exact read-lists per task (token discipline), and numeric validation gates keyed to
   `docs/reference-fr-targets.md` §§. UI visuals are validated by the user (send PNGs, never

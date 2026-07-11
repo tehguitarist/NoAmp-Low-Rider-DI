@@ -81,20 +81,46 @@ NoAmpLowRiderDIAudioProcessor::NoAmpLowRiderDIAudioProcessor()
     pBypass             = apvts.getRawParameterValue(idBypass);
 }
 
-void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
+float NoAmpLowRiderDIAudioProcessor::outputGainFor(float outTrimDb) const noexcept
+{
+    // Fold kOutputMakeup and 1/kInputRef into the output gain so kInputRef cancels in the linear path
+    // (calibration doc §1). LEVEL/volume is modelled inside the DSP (the pedal's LEVEL pot), so the
+    // only processor-side scalars are makeup, the output trim, and the volts<->float conversion.
+    return (float) (nalr::kOutputMakeup / nalr::kInputRef) * juce::Decibels::decibelsToGain(outTrimDb);
+}
+
+void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     currentSampleRate = sampleRate;
+    maxBlockSize = juce::jmax(1, samplesPerBlock);
 
     inputGainSmoothed.reset(sampleRate, 0.02);
     outputGainSmoothed.reset(sampleRate, 0.02);
     bypassMix.reset(sampleRate, kBypassRampSeconds);
 
     inputGainSmoothed.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
-    outputGainSmoothed.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(pOutputTrim->load()));
+    outputGainSmoothed.setCurrentAndTargetValue(outputGainFor(pOutputTrim->load()));
     bypassMix.setCurrentAndTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
 
-    // DSP stages are stubbed pass-through in Phase 0 — no chowdsp_wdf capacitors to .prepare() yet.
-    // Real stages will chain their .prepare(sampleRate) calls here (dsp.md "prepareToPlay requirements").
+    // OS factor from the LIVE param, so the pre-prepare reports the right latency (offline bounce
+    // switches to the render factor at the first isNonRealtime() block).
+    currentOSFactor = 1 << (int) pOversampling->load();
+
+    for (auto& d : dsp)
+    {
+        d.setOversamplingFactor(currentOSFactor);
+        d.prepare(sampleRate, maxBlockSize); // prepare() applies the pending factor
+        d.reset();
+    }
+
+    reportedLatency = dsp[0].getLatencySamples();
+    setLatencySamples(reportedLatency);
+
+    voltsScratch.assign((size_t) maxBlockSize, 0.0);
+    dryCopy.assign((size_t) maxBlockSize, 0.0f);
+    inTrimRamp.assign((size_t) maxBlockSize, 0.0f);
+    outGainRamp.assign((size_t) maxBlockSize, 0.0f);
+    bypassRamp.assign((size_t) maxBlockSize, 0.0f);
 }
 
 void NoAmpLowRiderDIAudioProcessor::releaseResources() {}
@@ -112,44 +138,79 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 {
     juce::ScopedNoDenormals noDenormals;
 
+    const int numChannels = juce::jmin(buffer.getNumChannels(), (int) dsp.size());
+    const int numSamples = juce::jmin(buffer.getNumSamples(), maxBlockSize);
+
     // Pick OS factor: render factor during offline bounce, live factor otherwise (architecture.md).
     const int wantFactor = 1 << (isNonRealtime() ? (int) pRenderOversampling->load() : (int) pOversampling->load());
-    currentOSFactor = wantFactor; // real oversampler reinit lands with the first real DSP stage
 
-    inputGainSmoothed.setTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
-    outputGainSmoothed.setTargetValue(juce::Decibels::decibelsToGain(pOutputTrim->load()));
-    bypassMix.setTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
+    // Pot values -> DSP (change-gated inside setParams). Shared across channels. V1 Early taper is
+    // identity (all B100k linear), so the 0..1 params pass straight through.
+    for (auto& d : dsp)
+    {
+        d.setOversamplingFactor(wantFactor);
+        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(),
+                    pTreble->load());
+    }
+    currentOSFactor = wantFactor;
+
     bypassed.store(pBypass->load() > 0.5f);
 
-    const int numChannels = buffer.getNumChannels();
-    const int numSamples = buffer.getNumSamples();
+    // Pre-compute the per-sample gain ramps ONCE per block so both channels see the identical ramp
+    // (advancing a SmoothedValue per channel would ramp twice as fast in stereo and desync L/R).
+    inputGainSmoothed.setTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
+    outputGainSmoothed.setTargetValue(outputGainFor(pOutputTrim->load()));
+    bypassMix.setTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
+    for (int i = 0; i < numSamples; ++i)
+    {
+        inTrimRamp[(size_t) i] = inputGainSmoothed.getNextValue();
+        outGainRamp[(size_t) i] = outputGainSmoothed.getNextValue();
+        bypassRamp[(size_t) i] = bypassMix.getNextValue();
+    }
 
     for (int ch = 0; ch < numChannels; ++ch)
     {
         auto* data = buffer.getWritePointer(ch);
         float peakIn = 0.0f, peakOut = 0.0f;
 
+        // Input trim (DAW domain) -> meter + dry copy; then scale into the volts domain (calibration
+        // doc §1). Dry copy is the RAW input for honest true-bypass; meter reads post-trim.
         for (int i = 0; i < numSamples; ++i)
         {
-            const float dry = data[i];
-            const float wet = dry * inputGainSmoothed.getNextValue();
+            dryCopy[(size_t) i] = data[i];
+            const float wet = data[i] * inTrimRamp[(size_t) i];
             peakIn = juce::jmax(peakIn, std::abs(wet));
+            voltsScratch[(size_t) i] = (double) wet * nalr::kInputRef;
+        }
 
-            // Stubbed pass-through: real WDF chain (input -> oversampled clip -> tone -> recovery)
-            // lands stage-by-stage starting Phase 1 (architecture.md processBlock step c).
-            float processed = wet * kOutputMakeup;
+        // The circuit, in real volts (input buffer -> notch/presence -> oversampled drive/clip/recovery
+        // -> blend/level -> tone -> output buffer).
+        dsp[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
 
-            processed *= outputGainSmoothed.getNextValue();
-
-            const float mix = bypassMix.getNextValue();
-            data[i] = processed * (1.0f - mix) + dry * mix;
-
+        // Back to DAW domain (kOutputMakeup/kInputRef folded into outGainRamp) + bypass crossfade.
+        for (int i = 0; i < numSamples; ++i)
+        {
+            const float processed = (float) voltsScratch[(size_t) i] * outGainRamp[(size_t) i];
+            const float mix = bypassRamp[(size_t) i];
+            data[i] = processed * (1.0f - mix) + dryCopy[(size_t) i] * mix;
             peakOut = juce::jmax(peakOut, std::abs(data[i]));
         }
 
         if (ch == 0) { inputLevelL.store(peakIn); outputLevelL.store(peakOut); }
         else if (ch == 1) { inputLevelR.store(peakIn); outputLevelR.store(peakOut); }
     }
+
+    // Report OS-factor latency changes to the host (only when it actually changed — the call can
+    // trigger a host graph re-sync). getLatencySamples() reflects the factor the DSP just applied.
+    if (const int lat = dsp[0].getLatencySamples(); lat != reportedLatency)
+    {
+        reportedLatency = lat;
+        setLatencySamples(lat);
+    }
+
+    // Clear any channels beyond the DSP's reach (e.g. a host handing >2 channels) to avoid stale data.
+    for (int ch = numChannels; ch < buffer.getNumChannels(); ++ch)
+        buffer.clear(ch, 0, buffer.getNumSamples());
 }
 
 juce::AudioProcessorEditor* NoAmpLowRiderDIAudioProcessor::createEditor()

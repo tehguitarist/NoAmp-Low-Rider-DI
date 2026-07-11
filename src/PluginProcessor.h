@@ -1,14 +1,20 @@
 #pragma once
 
+#include <array>
+#include <vector>
+
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <juce_dsp/juce_dsp.h>
 
-// NoAmp Low Rider DI — plugin processor skeleton (Phase 0 scaffold).
+#include "dsp/Calibration.h"
+#include "dsp/V1EarlyDSP.h"
+
+// NoAmp Low Rider DI — plugin processor.
 //
-// DSP graphs (V1EarlyDSP / V1LateDSP / V2DSP, see architecture.md + circuit.md) are stubbed as a
-// straight pass-through here; they land stage-by-stage starting Phase 1. This class owns the APVTS,
-// smoothed input/output gain, bypass crossfade, and metering per architecture.md's processBlock
-// contract — that plumbing doesn't change shape when the real DSP is dropped in.
+// Phase 3 wires the V1 Early chain (nalr::V1EarlyDSP, one instance per channel) into processBlock.
+// V1 Late / V2 graphs land later; the `revision` param currently only ever selects V1 Early. This
+// class owns the APVTS, smoothed input/output gain, bypass crossfade, metering, and the DAW<->volts
+// conversion around the DSP (architecture.md processBlock contract + calibration doc §1).
 class NoAmpLowRiderDIAudioProcessor final : public juce::AudioProcessor
 {
 public:
@@ -63,6 +69,9 @@ public:
     static constexpr const char* idBypass                = "bypass";
 
 private:
+    // Output gain = kOutputMakeup * dbToGain(outTrimDb) / kInputRef (calibration doc §1).
+    float outputGainFor(float outTrimDb) const noexcept;
+
     // Cached atomic parameter pointers (avoid string lookups on the audio thread).
     std::atomic<float>* pRevision            = nullptr;
     std::atomic<float>* pDrive               = nullptr;
@@ -88,12 +97,19 @@ private:
     std::atomic<float> outputLevelL { 0.0f }, outputLevelR { 0.0f };
     std::atomic<bool> bypassed { false };
 
-    // Calibration placeholders — anchored from real measurements in Phase 7 (calibration doc §1-2).
-    static constexpr float kInputRef     = 1.0f;
-    static constexpr float kOutputMakeup = 1.0f;
+    // One DSP chain per channel (WDF trees hold per-channel state, so they can't be shared). Only
+    // V1 Early exists so far; V1 Late / V2 join as a variant selected by the `revision` param.
+    std::array<nalr::V1EarlyDSP, 2> dsp;
+
+    // Pre-allocated audio-thread scratch (sized in prepareToPlay; never reallocated in processBlock).
+    std::vector<double> voltsScratch;                       // volts-domain block, reused per channel
+    std::vector<float> dryCopy;                              // DAW-domain raw input, for bypass mix
+    std::vector<float> inTrimRamp, outGainRamp, bypassRamp;  // per-block gain ramps, shared L/R
 
     int currentOSFactor = 1;
+    int reportedLatency = 0;
     double currentSampleRate = 44100.0;
+    int maxBlockSize = 512;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NoAmpLowRiderDIAudioProcessor)
 };

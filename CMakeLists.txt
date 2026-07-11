@@ -160,3 +160,24 @@ target_link_libraries(V1EarlyNonlinearTest
     PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1EarlyNonlinearTest COMMAND V1EarlyNonlinearTest)
+
+# 3 — V1 Early full-chain integration: all-knobs × OS-factor stability sweep (finite, bounded, no
+# clicks, no self-oscillation) + dry-path passthrough. JUCE console app (OS region needs juce::dsp).
+juce_add_console_app(V1EarlyIntegrationTest PRODUCT_NAME "V1EarlyIntegrationTest")
+target_sources(V1EarlyIntegrationTest PRIVATE tests/V1EarlyIntegrationTest.cpp)
+target_compile_definitions(V1EarlyIntegrationTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V1EarlyIntegrationTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME V1EarlyIntegrationTest COMMAND V1EarlyIntegrationTest)
+
+# 3 — OfflineRender: runs the real V1 Early chain + processBlock gain staging for the analysis A/B
+# harness (docs/validation-and-capture.md §2). JUCE console app for WAV I/O + juce::dsp Oversampling.
+juce_add_console_app(OfflineRender PRODUCT_NAME "OfflineRender")
+target_sources(OfflineRender PRIVATE analysis/offline_render.cpp)
+target_compile_definitions(OfflineRender
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(OfflineRender
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp juce::juce_audio_formats
+    PUBLIC juce::juce_recommended_config_flags)
