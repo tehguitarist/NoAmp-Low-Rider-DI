@@ -1,0 +1,260 @@
+# NoAmp Low Rider DI — Build Plan (authored by Fable 5, for delegated execution)
+
+> **How to use this plan.** Each task states: goal, **exact inputs to read** (read nothing else —
+> token discipline), deliverables, a **numeric validation gate**, and the **model + effort** to run
+> it with. Tasks are sized so one task ≈ one agent run or one focused session. Do tasks in order
+> within a phase; phases 4–6 have some parallelism noted. Update `CLAUDE.md` "Current step" after
+> each phase.
+>
+> **Model guidance.** `Opus 4.8` = derivation-heavy work (transfer functions, WDF topology,
+> scattering matrices, calibration, anything where a subtle error is expensive to detect).
+> `Sonnet 5` = mechanical/boilerplate work with a checkable gate (scaffold, tests, UI wiring, CI).
+> Effort levels: low / medium / high / xhigh. Do not upgrade models "to be safe" — the gates catch
+> errors; that's what they're for. The `schematic-checker` and `dsp-validator` agents should run as
+> **Sonnet 5 / medium** (they check against `circuit.md`, they don't re-derive).
+>
+> **Global token rules for every task:**
+> - `circuit.md` + `docs/reference-fr-targets.md` are the source of truth. **Never re-read the
+>   schematic PNGs** unless a task explicitly lists a crop file — the transcription is verified
+>   (two independent passes + numeric cross-checks documented in `circuit.md` Validation notes).
+> - Read only the rule files a task lists. `dsp.md` is required for all DSP tasks; `build.md` for
+>   build/CI tasks; `architecture.md` for processor-level tasks; `ui.md` + `docs/ui-peripheral-spec.md`
+>   for UI tasks.
+> - Never take/inspect UI screenshots — render PNGs headlessly and **hand them to the user**, who
+>   validates visually (explicitly their job, by their request).
+> - Real-pedal captures arrive later from the user. Nothing before Phase 10 may block on them.
+
+## Locked decisions (do not re-litigate)
+
+| Decision | Value |
+|---|---|
+| Revisions | V1 Early / V1 Late / V2, one plugin, **APVTS choice param `revision`** (automatable, saved); UI face re-lays-out per revision |
+| First playable | **V1 Early** end-to-end, then V1 Late, then V2 |
+| DSP architecture | **Three DSP graph classes** (`V1EarlyDSP`, `V1LateDSP`, `V2DSP`) sharing helper primitives (op-amp stage helper, tone-stack helpers, zener module class). Rationale: topologies differ structurally (clip element presence, shelf vs peaking stack, extra V2 stage) — a single parametrised graph would be all special cases. Runtime `setSMatrixData()` swaps only *within* V2 (MID SHIFT, BASS SHIFT). |
+| Plugin identity | Company **Leigh Pierce**, mfr code **LPrc**, plugin code **NALR**, bundle `com.leighpierce.noamplowriderdi`, targets `NoAmpLowRiderDI_AU` / `_VST3` |
+| Out of scope | XLR/DI path, phantom power, LINE/+10dB throws (unity modelled), V1L C0 electrolytic sub-variant, NJM064/TL062 sub-variant. All documented in `circuit.md`. |
+| Params (superset) | `revision`(choice 3) `drive` `presence` `blend` `level` `bass` `treble` (0..1 float, linear pots — B100k everywhere, taper = identity) `mid`(V2) `mid_shift`(V2 choice) `bass_shift`(V2 choice) `input_trim` `output_trim` `oversampling` `render_oversampling` `bypass`. V2-only params inert on V1 revisions (UI hides them). |
+
+---
+
+## Phase 0 — Scaffold  *(all Sonnet 5)*
+
+**0.1 Submodules + CMake** — *Sonnet 5 / low.*
+Read: `build.md`, `CMakeLists.txt.template`. Do: add JUCE, chowdsp_wdf, xsimd submodules; instantiate
+CMakeLists with the locked identity; AU+VST3 + `COPY_PLUGIN_AFTER_BUILD`; gated warning flags; SYSTEM
+includes for chowdsp_wdf; `.github` workflows from templates (replace placeholders).
+**Gate:** `cmake --build build` succeeds; pluginval passes both formats.
+
+**0.2 APVTS + processor skeleton** — *Sonnet 5 / medium.*
+Read: `architecture.md`, the param table above, `src/` template files. Do: `PluginProcessor` with the
+superset params, cached atomic pointers, smoothed values, bypass crossfade, meter atomics, dual-OS-
+factor selection (`isNonRealtime()`), state save/restore, `revision` as `AudioParameterChoice`
+(default: V1 Early). DSP graphs stubbed as pass-through.
+**Gate:** loads in DAW, params automate, state round-trips (write a small state-roundtrip test exe).
+
+**0.3 chowdsp_wdf smoke test** — *Sonnet 5 / low.*
+Read: `dsp.md` (WDF section only), `build.md` testing pattern. Do: RC lowpass console exe.
+**Gate:** −3 dB point within 1% of analytic, at 44.1/48/96 kHz.
+
+---
+
+## Phase 1 — V1 Early linear stages  *(each task: derive analytic transfer function first, then WDF/ideal-op-amp implementation, then a console test exe that sweeps FR and asserts against BOTH the analytic curve and `reference-fr-targets.md`)*
+
+Read for every 1.x task: `dsp.md`, `circuit.md` (V1-Early tables + topology notes only),
+`docs/reference-fr-targets.md` (the cited §), `build.md` "Testing pattern".
+
+**1.1 Input buffer + twin-T/PRESENCE stage** — *Opus 4.8 / high.*
+The three-22n twin-T-style network (`C17/C18/C19`, `R3` 2.2k, `R11` 22k, `R16/R22` 100k) around IC3B
+with the PRESENCE feedback (`R24` 3.3k, `C31` 10n, `VR5`, `R26` 330k, `C32` 100p). This stage owns the
+**deep ~800 Hz notch**.
+**Gate:** at PRESENCE 0: notch −35 ±3 dB at 800 Hz ±⅓ oct (§1); PRESENCE max: peak +34 ±2 dB at
+4–5 kHz, and the **peak frequency must migrate upward with the knob** (§3 — a fixed-shape filter
+fails this gate by construction).
+
+**1.2 DRIVE stage (small-signal linear)** — *Opus 4.8 / medium.*
+Non-inverting variable gain: 1 + `R25` 330k/(`R23` 3.3k + pot leg), `C28` 100p rolloff.
+**Gate:** +40.1 dB max / +12.4 dB min flat-band (§4, exact values already derived in `circuit.md`);
+HF rolloff onset ~2 kHz at max.
+
+**1.3 Recovery + bridged-T mid-cut** — *Opus 4.8 / medium.*
+`R17/R12/R18/R48/R49/C13/C23/C14` recovery filters + the bridged-T (`R36` 22k, `C27` 22n, `C30` 47n,
+`R9` 6.2k) + buffers.
+**Gate:** isolated bridged-T: −10.5 ±1 dB at 400–450 Hz (§2); full wet path at PRESENCE 0/DRIVE 0
+reproduces the §1 V1-Early column (all 5 rows, ±2 dB / ±⅓ oct).
+
+**1.4 BLEND → LEVEL → gain stage** — *Opus 4.8 / high.*
+Model the actual pot network (dry `C1` 2.2u into one end, wet `C12` 47n into the other, wiper→VR4
+top, VR4 wiper→IC4A follower→IC4B inverting −R30/R4 with C22). **Pot loading interacts — this is NOT
+an ideal crossfade + gain;** the two B100k pots load each other and the wet/dry source impedances.
+**Gate:** DC/1 kHz mix law vs analytic network solution at 5 blend × 5 level positions (25-point
+table, ±0.5 dB); verify BLEND=full-dry passes zero wet signal (<−80 dB).
+
+**1.5 Baxandall shelving tone stack (coupled BASS+TREBLE)** — *Opus 4.8 / high.*
+Single coupled network around IC4C (values per `circuit.md` V1-Early table). One R-type solve or
+coupled ideal-op-amp derivation; `ScopedDeferImpedancePropagation` on updates.
+**Gate:** §5/§6 V1-Early columns: BASS shelf +18/−20 dB, TREBLE shelf **asymmetric +8/−20 dB**
+(±2 dB); both flat (±1 dB) at centre detent across 100 Hz–10 kHz.
+
+**1.6 JFET-mute + output buffer (unity path)** — *Sonnet 5 / medium.*
+Effect-on state only (mute = bypass mechanism, handled at processor level per `architecture.md`).
+Unity buffer + coupling caps (`C7/C10/C9`, `R33/R29/R13/R1` per table).
+**Gate:** flat ±0.25 dB 20 Hz–20 kHz, correct ~6 Hz-class HP corners from coupling caps.
+
+**Run `dsp-validator` (Sonnet 5 / medium) once after 1.6 over the whole V1-Early chain** — cheaper
+than per-stage runs given the analytic gates above already catch value errors.
+
+---
+
+## Phase 2 — V1 Early nonlinearity + oversampling  *(Opus 4.8 / high)*
+
+Read: `dsp.md` (ADAA + oversampling + top-octave sections), `docs/calibration-and-gain-staging.md`
+§6 (rails), `circuit.md` op-amp section.
+
+**2.1** Rail clip on the DRIVE stage output (TLC2264 rail-to-rail, ~9 V single supply → ±4.5 V about
+VREF in bipolar model) with **1st-order ADAA** (exact piecewise antiderivative). V1E has **no diode
+solve at all** — do not add one. Oversampling region spans DRIVE→recovery (per `dsp.md` region
+guidance); factors 1/2/4/8 with glitch-free switching; prewarp base-rate HF caps per `dsp.md`.
+**Gate:** DC-step polarity test per stage; aliasing components at 4× OS with 1 kHz full-drive sine
+< −70 dBFS in 20 Hz–20 kHz; ADAA on/off A-B shows measurable alias reduction at 1×.
+
+---
+
+## Phase 3 — V1 Early integration  *(Opus 4.8 / high)*
+
+Read: `architecture.md`, `docs/calibration-and-gain-staging.md` §1–2 (provisional constants),
+`analysis/gen_test_signal.py` + `analyze.py` docstrings.
+
+**3.1** Wire `V1EarlyDSP` into `processBlock` (per-channel, double scratch, meters, bypass
+crossfade); build `OfflineRender` console exe mirroring `processBlock`. Provisional `kInputRef`
+(document as provisional — final anchor comes from user captures in Phase 10).
+**Gate:** full-chain FR at 6 knob presets matches composed per-stage analytics (±1 dB); full control
+sweep all-knobs × OS factors: finite, no NaN/Inf, no clicks (automated exe, `add_test()`); plugin
+audible in DAW. **Milestone: V1 Early playable.**
+
+---
+
+## Phase 4 — Zener clip research spike  *(Opus 4.8 / xhigh — the one genuinely open research item)*
+
+Read: `dsp.md` (nonlinear + omega sections), `circuit.md` "Nonlinear devices", datasheets for
+DZ23C3V3/BZB984-C3V3 (WebSearch permitted for Vz/Izt/Cj figures).
+
+**4.1** Build a reusable WDF element for an **antiparallel zener pair in a feedback leg**: forward
+Shockley conduction one way ∥ reverse breakdown (~3.3 V knee) the other → effective ±(Vf+Vz) ≈ ±3.9 V
+symmetric threshold; include a parallel junction-capacitance term (this produces the DRIVE HF
+rolloff — see `reference-fr-targets.md` §4; treat Cj as a fit parameter per revision, start ~100 pF
+class). Candidate approaches in preference order: (a) piecewise-exponential single nonlinearity with
+tabulated/analytic wave solve honouring AccurateOmega; (b) composed WDF (DiodeT + biased branch);
+(c) validated waveshape approximation. Deliverables: `src/dsp/ZenerPairT.h`, unit test, and an
+appended `dsp.md` section documenting the chosen approach + rejected alternatives.
+**Gate:** DC transfer sweep matches piecewise-analytic curve within 1% below knee and 5% through the
+knee; THD of a 1 kHz sine at 3 drive levels is stable across 44.1/96 kHz (no solver divergence);
+with Cj in place, small-signal HF response reproduces the §4 V1L-vs-V1E rolloff difference
+qualitatively. **Do not start Phase 5 until this gate passes.**
+
+---
+
+## Phase 5 — V1 Late DSP  *(reuses Phase 1 primitives; can start 5.1–5.2 in parallel with Phase 4 since they're linear)*
+
+Read per task: `circuit.md` V1-Late tables, `reference-fr-targets.md` cited §§, `dsp.md`.
+
+**5.1 Deltas on shared linear stages** — *Sonnet 5 / medium.* PRESENCE `R26`=10k (not 330k!), input
+protection diodes (ignore — small-signal invisible), recovery/bridged-T identical values, BLEND/LEVEL
+identical, output = unity throw. Mostly parameterisation of Phase-1 classes.
+**Gate:** §1 V1-Late column + §3 PRESENCE (peak +27.5 dB at 6–7 kHz — *changed from V1E*).
+
+**5.2 Peaking tone stack derivation (V1L BASS/TREBLE)** — *Opus 4.8 / high.* New topology (peaking,
+not shelf): `C21` 4.7n/`C7` 22n/`R51,R55` 3.3k/`C20` 1n (TREBLE side), `C16` 10n/`R52,R54` 3.3k/
+`C15` 100n/`R53` 100k/`R29` 1M (BASS side), coupled on IC3C. Reusable as the V2 stack (same values on
+the 80 Hz throw).
+**Gate:** §5/§6 V1L columns: BASS +12/−14 dB peaking at ~75 Hz; TREBLE +17 dB peak at 3–4 kHz,
+asymmetric cut; the small opposite-sign 2–4 kHz bump must appear (it's in the sims — its absence
+means a topology error).
+
+**5.3 CH34-9 module (2 op-amp stages + ZenerPairT)** — *Opus 4.8 / high.* Module per `circuit.md`
+table (IC100A/B, R101/R102/R105/R106 220k/220k/100k/220k, D100 via Phase-4 element), DRIVE pot
+integration (`R25` 22k, `VR1`, `C8`/`R17`).
+**Gate:** small-signal §4 (max ~+48 dB, min ~+12.5 dB, HF rolloff > V1E's); clipping onset at
+±3.9 V-equivalent input drive; §8 four-panel voiced checkpoints (PRESENCE/DRIVE combos) ±2 dB.
+
+**5.4 Integrate `V1LateDSP`** — *Sonnet 5 / medium.* Same processBlock pattern as 3.1.
+**Gate:** same sweep gates as 3.1, plus §1 V1-Late column end-to-end.
+
+---
+
+## Phase 6 — V2 DSP
+
+**6.1 Recovery retune + no bridged-T** — *Sonnet 5 / medium.* Read: `circuit.md` V2 recovery table
+(incl. the warning that the ~800 Hz notch REMAINS — it's in the twin-T), `reference-fr-targets.md`
+§0–1. New `R47`+`C42` LP corner; drop bridged-T.
+**Gate:** §1 V2 column, especially high bump ~−10 dB @ 2.5–3 kHz and −40 dB @ ~8 kHz; deep notch
+still present ~−36 dB.
+
+**6.2 MID stage + MID SHIFT + BASS SHIFT** — *Opus 4.8 / high.* Read: `circuit.md` resolved-wiring
+notes (Validation notes section) **and, only if the derivation disagrees with the gates,**
+`schematics/crops/v2_midshift_zoom.png`. Baxandall peaking MID around U3A; two precomputed
+scattering matrices per switch (`setSMatrixData()` swap); BASS SHIFT as second matrix pair on the
+5.2 stack.
+**Gate:** §7: centres ~430/~850 Hz (±15%), ±18 dB extremes; §5: BASS 40 Hz throw +14/−17 dB @
+~45 Hz, 80 Hz throw ≡ V1L values. Per `circuit.md`: if centres come out wrong, the switch-throw
+interpretation is inverted — flip it, don't hunt elsewhere.
+
+**6.3 Integrate `V2DSP` + module respin** — *Sonnet 5 / medium.* CH40 module = CH34-9 class with V2
+constants (`R901/R902/R903`, different Cj fit); coupling-cap value changes (1u class) per table.
+**Gate:** 3.1-style sweep + §1 V2 column + §4 V2 drive curves.
+
+---
+
+## Phase 7 — Revision switching  *(Sonnet 5 / medium)*
+
+Read: `architecture.md`, processor code. All three DSP graphs owned by the processor; `revision`
+change handled like an OS-factor change (block-start reset + swap, brief crossfade, no allocation on
+audio thread — graphs pre-allocated). V2-only params no-op elsewhere.
+**Gate:** automated test flipping revision every N blocks under signal: no NaN/clicks/allocs
+(instrument with assertions); state round-trip preserves revision.
+
+---
+
+## Phase 8 — UI  *(Sonnet 5 / medium; user validates visuals)*
+
+Read: `ui.md`, `docs/ui-peripheral-spec.md`, `src/ui/` headers only.
+Peripherals as-is (side panels, VU, trims, OS strip, footswitch, LED). Centre face: knob rows per
+revision (V1e/V1l: PRESENCE DRIVE BASS TREBLE LEVEL BLEND; V2: + MID knob, MID-SHIFT & BASS-SHIFT
+switches via `ThreePositionSwitch` in 2-pos mode or small toggles); a 3-way revision selector styled
+as a top-mounted slide switch; V2-only controls hidden on V1 revisions. Headless-render exe (per
+`build.md`) producing PNGs at 1.0×/1.5×/2.0× scale × 3 revisions.
+**Gate:** build + headless renders produced. **Send the 9 PNGs to the user — do NOT self-review
+beyond "it compiled and rendered".** Iterate on user feedback only.
+
+---
+
+## Phase 9 — Probes, CI, polish  *(Sonnet 5 / low)*
+
+Read: `build.md` (probes + CI sections). `PerfBenchmark`, `OSFidelity`, `FeatureProfile` exes,
+`add_test()` registration, README performance table, `.clang-format` pass. HQ toggle **only if**
+FeatureProfile shows a real lever (V1E has no diode solve — likely only V1L/V2 zener omega matters;
+follow `dsp.md` HQ guidance).
+**Gate:** CI green on all three platforms; ctest suite green locally.
+
+---
+
+## Phase 10 — Capture validation  *(BLOCKED until user provides captures; then Opus 4.8 / high)*
+
+Read: `docs/validation-and-capture.md`, `docs/calibration-and-gain-staging.md`, `analysis/*.py`.
+Anchor `kInputRef`, calibrate output makeup per revision, run the four analyses (FR / swept-THD /
+null / knob-tracking), fit the zener Cj per revision against captured DRIVE HF, decompose any level
+deficit per calibration doc §4 before touching constants.
+**Gate:** per `validation-and-capture.md` thresholds; report best/worst null honestly per revision.
+
+---
+
+## Standing notes for executors
+
+- The FR gates cite `docs/reference-fr-targets.md` §§ — those numbers are ±1–2 dB graph-read
+  targets, so gate tolerances above are already widened; do not tighten or loosen them.
+- Two mid-notches exist (~800 Hz deep, all revisions; ~430 Hz gentle, V1e/V1l only) — `circuit.md`
+  §"two-notch note". Conflating them is the known failure mode of this circuit.
+- LEVEL is post-BLEND. The signal order is PRESENCE→DRIVE→…→BLEND→LEVEL→[V2 MID]→BASS/TREBLE→out.
+- All pots are linear (B100k). No taper functions anywhere — `TaperUtils.h` stays unused unless
+  captures later prove otherwise.
+- The source schematics are non-commercial-licensed reference material; ship no redrawn schematic
+  assets (see `circuit.md` license reminder).

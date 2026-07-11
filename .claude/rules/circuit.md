@@ -1,111 +1,793 @@
-# Circuit Reference — <PEDAL NAME>  (TEMPLATE — fill in from the schematic)
+# Circuit Reference — NoAmp Low Rider DI (Tech 21 SansAmp Bass Driver DI)
 
-> This file is the **source of truth** for component values and topology. Fill every `<...>`
-> placeholder by reading the schematic directly. Do NOT approximate or copy values from a build
-> kit / forum trace without confirming against the primary schematic.
+> Source: unofficial reverse-engineered traces by **kanengomibako** (可燃ごみ箱), published as three
+> separate blog posts (Japanese, with schematic images). Translated/transcribed here directly from
+> the schematic images (component-designator-for-designator) plus the accompanying prose. The
+> author explicitly states these are **unofficial, independently reverse-engineered, may contain
+> inaccuracies, and commercial use is prohibited** — keep that license constraint in mind for any
+> distributable asset that embeds a redrawn copy of these schematics.
+>
+> Source pages (Japanese):
+> - V1 early: https://kanengomibako.github.io/pages/00283.html (2022-03-16)
+> - V1 late: https://kanengomibako.github.io/pages/00284.html (2022-04-04)
+> - V2: https://kanengomibako.github.io/pages/00285.html (2022-05-03)
+
+We are modelling **three circuit revisions** of the same pedal, selectable in the UI/DSP, not a
+multi-stage series pedal (see "Circuit revision variants" below instead of the template's
+multi-channel-series section, which doesn't apply here).
 
 ## Schematics
 
-List every image in `schematics/` and its role (which is authoritative for what):
-
 | File | Role |
 |------|------|
-| `<primary>.png` | Primary source of truth for values + topology |
-| `<switch_ref>.jpg` | Authoritative for switch/diode network |
-| `<older>.png` | Cross-reference only — values may differ |
+| `schematics/v1-early/schematic.png` | Primary source of truth for **V1 Early** values + topology |
+| `schematics/v1-late/schematic.png` | Primary source of truth for **V1 Late** values + topology |
+| `schematics/v2/schematic.png` | Primary source of truth for **V2** values + topology |
+| `schematics/crops/{v1-early,v1-late,v2}_{TL,TR,BL,BR}_2x.png` | 2×-upscaled quadrant crops of the above — use these to resolve any component this file doesn't already capture; they're what was actually read to write this document |
+| `schematics/{v1-early,v1-late,v2}/fr_*.png` | LTspice-style sim'd frequency-response reference curves per control — **quantitatively transcribed into `docs/reference-fr-targets.md`** (2×-upscaled reading copies in `schematics/crops/fr/`). Use those numbers to validate the WDF model's FR against the author's SPICE sim, independent of real-pedal captures |
+| `schematics/v1-late/fr_electrolytic_cap_addition.png` | A/B sim of the optional C0 electrolytic cap variant (see Validation notes) |
 
 ---
 
-## ⚠ Schematic-reading gotchas (these caused real bugs)
+## ⚠ Schematic-reading gotchas (generic — kept from template)
 
-- **Resistor value notation:** `2m2` / `2M2` means **2.2 MΩ**, `2k2` = 2.2 kΩ, `2R2` = 2.2 Ω. The
-  letter is the decimal point AND the multiplier. Misreading `2m2` as 2.2 Ω (or 2.2 mΩ) is an easy
-  ~6-orders-of-magnitude error. Double-check every R against its neighbours' magnitudes.
-- **Series vs pulldown:** a large resistor (e.g. 2.2 MΩ) at the input is usually a **pulldown to
-  ground** (bias/pop suppression), not a series element. A 2.2 MΩ *series* resistor would attenuate
-  ~14 dB and roll off treble hard — if your model does that, you've mis-traced the topology.
-- **Pot wiring:** confirm pin1/pin3/wiper → node mapping for every pot. "Rheostat" (wiper jumpered
-  to an end, no ground leg) behaves very differently from a "divider". Trace it; don't assume.
-- **Taper:** note the designation (A = audio/log, B = linear). Kits sometimes substitute — follow
-  the schematic, not the kit.
-- **Op-amp inverting vs non-inverting:** verify which input the signal enters. Confirm output
-  polarity later with a DC-step test per stage.
-- **Power section parts in the signal columns:** supply-filter R/C (and any series Schottky) can be
-  mislabelled as signal-path parts. Exclude VREF-divider and supply-filter components from the DSP
-  model.
-- **Same component VALUES ≠ same TOPOLOGY across schematic sources.** Two traces of "the same"
-  pedal (an early-revision trace vs a later kit/clone) can share every R/C value designator-for-
-  designator while wiring one network completely differently (e.g. two independent series R+C
-  branches to ground vs one shared branch-then-shared-cap-to-ground). Identical values are NOT
-  evidence the topology matches — redraw the actual node connections from each source before
-  concluding they agree, especially for any network feeding a feedback node.
-- **If the pedal has more than one full gain stage in series ("channels"/"sides"), verify the
-  ACTUAL signal order from the real unit (continuity trace, or an unambiguous schematic signal-flow
-  arrow) — never assume it from the physical/UI layout.** Left-to-right, top-to-bottom, or numbered
-  ("1/2", "A/B") layout is a UI/PCB-placement convention and is **not** guaranteed to match which
-  stage the input actually reaches first. Getting this backwards still produces a plausible-sounding
-  result (both stages are real circuits, so it "works"), which is exactly why it's easy to ship
-  before catching it — confirm the order explicitly, early, rather than inferring it.
+- **Resistor value notation:** `2m2`/`2M2` = 2.2 MΩ, `2k2` = 2.2 kΩ, `2R2` = 2.2 Ω.
+- **Series vs pulldown:** a large R at the input is usually a pulldown to ground, not series.
+- **Pot wiring:** confirm pin1/pin3/wiper → node mapping per pot; don't assume divider vs rheostat.
+- **Taper:** all pots on this pedal are marked **`B100k`** (linear) on all three schematics — no
+  audio-taper pots anywhere in this circuit. Confirm against a real unit if a knob "feels" logarithmic
+  in practice (kits substitute), but the schematics are unambiguous and consistent across all three
+  revisions, so treat linear as correct absent contrary evidence.
+- **Op-amp inverting vs non-inverting:** verify per stage; confirm output polarity w/ DC-step test.
+- **Ground vs bias-reference symbol — TWO distinct symbols are used throughout all three
+  schematics, and they are NOT the same node:**
+  - Hollow downward triangle (▽) = **true chassis/output ground** (jack shields, XLR pin 1, DC
+    barrel sleeve).
+  - Solid upward arrowhead (▲) = **VCOM / signal bias reference** (the VCC/2 virtual-ground node
+    generated by the R31/R32/C11/C38/C41-style divider — see Power section). Most op-amp `+`
+    inputs, pot cold ends, and "ground" symbols throughout the *audio* signal path tie to this node,
+    **not** to true ground. Model this as **VREF = 0 V signal ground / bipolar** per `dsp.md`, i.e.
+    treat every ▲ as the WDF-domain zero, and don't confuse it with the ▽ chassis ground (which
+    never appears inside the audio path itself, only at the jacks).
+- **This pedal's "clipping module" is a small purpose-built sub-board, not discrete parts on the
+  main PCB, for V1-Late and V2** (see Nonlinear devices below) — don't miss it: it's drawn as a
+  dashed-line box (`CH34-9 Module` / `U5 CH40 Module`) with its own internal op-amp and zener, easy
+  to skim past as if it were just another local feedback network.
+- **V1 Early has NO discrete clipping diodes in the drive stage at all** — see Nonlinear devices.
+  Don't go looking for a diode pair that isn't there.
+- The literal `?` next to `IC3A` on the V1-Early source schematic is the author's IC part-number
+  uncertainty (sanded/molded chip), NOT a wiring question — resolved; see Validation notes.
 
 ---
 
-## Signal path summary
+## Signal path summary (common shape across all three revisions)
+
+**Verified by node-level trace of the V1-Early schematic (BLEND/LEVEL region zoomed), and confirmed
+structurally identical on V1-Late and V2:**
 
 ```
-IN → <input/bias> → <stage 1 ...> → <clip?> → <tone?> → <recovery> → <volume> → OUT
+IN ─┬─ input buffer (unity, TLC226x) → [PRESENCE stage → DRIVE stage+clip, "tube amp emulation"]
+    │       → recovery stage(s) → wet-path buffer → C-coupling ─────────────┐  (WET)
+    │   (V1e/V1l recovery contains BOTH the deep ~800 Hz character notch     │
+    │    AND a gentle ~430 Hz bridged-T mid-cut; V2 keeps the ~800 Hz notch  │
+    │    but DROPS the ~430 Hz bridged-T — see Nonlinear/Notch notes)        │
+    │                                                                        ▼
+    └─ C-coupling (dry tap) ───────────────────────────────────────→  BLEND pot (VR6/VR6/VR50)
+                                        mixes DRY (one end) vs WET (other end); wiper = mix
+                                        [this is why PRESENCE/DRIVE have no effect at BLEND=full-dry:
+                                         the wet path carrying them is simply not in the mix]
+                                                          │ (wiper)
+                                                          ▼
+                                          LEVEL pot (VR4/VR4/VR51)  ← master level, POST-blend
+                                                          │ (wiper)
+                                                          ▼
+                                   buffer/gain (IC4A+IC4B / IC3A / U3B) →
+                                   → [V2 ONLY: MID stage] → BASS/TREBLE tone stack →
+                                   → JFET mute switch (bypass/effect-off gain kill, HEF4013B-driven) →
+                                   → 1/4" output buffer → 1/4" instrument-level OUTPUT jack
+                                        ↘ (parallel tap, PRE 1/4" buffer) XLR balanced driver +
+                                          phantom handling + line/inst pad switches — OUT OF SCOPE.
 ```
-VREF = VCC/2 virtual ground; model bipolar (VREF = 0 V signal ground). Note the supply (e.g. single
-9 V, no charge pump) since it sets op-amp output headroom — see calibration doc §6.
 
-## Component values (from `<primary>` — do not approximate)
+**Control order is: PRESENCE→DRIVE (cascaded, wet path) ... then BLEND (dry/wet mix) → LEVEL (master)
+→ [V2: MID] → BASS → TREBLE → output.** LEVEL is a **post-BLEND master level**, NOT a dry-path level
+(an earlier draft of this doc had that wrong — corrected after a node-level trace: BLEND's wiper
+feeds the LEVEL pot's top, LEVEL's wiper feeds the buffer into the tone stack). The dry tap is a
+simple series cap off the input (V1e `C1` 2.2u) into one end of BLEND — no separate dry buffer/level.
 
-### <Stage / network name>
+VREF = VCC/2 virtual ground (the ▲ symbol above); model **bipolar** (VREF = 0 V signal ground) per
+`dsp.md`. Single supply, **no charge pump, cannot run at 12 V/18 V** (per user — unlike other pedals
+in this template line, there is no elevated-rail mod to model). See Power section for the exact
+rail voltage(s).
+
+> **Quantitative frequency-response targets for every stage/control on all three revisions are in
+> `docs/reference-fr-targets.md`** — read off the author's SPICE sims, they're the first-pass
+> validation reference (independent of, and available before, any real-pedal capture).
+
+### Scope decision: DI / line-out / XLR circuitry is OUT OF SCOPE
+
+Per the project brief, we are modelling **instrument-level 1/4" output only** — never the XLR/DI
+balanced output, phantom-power input handling, or the LINE-level pad/boost switches, since none of
+that affects what a guitarist/bassist hears through the 1/4" OUTPUT jack in normal use. This is
+safe to skip because **the XLR balanced driver taps off the audio chain at a node BEFORE the final
+1/4"-output buffer, in parallel, not in series** — confirmed on all three schematics:
+
+- **V1 Early:** tone-stack output (IC4C pin 8) → R33/C7 → T1 (JFET mute) → splits to (a) C10 →
+  IC4D (1/4" output buffer) → R13 → X2, and (b) down to IC2A/IC2B (TL072, XLR balanced driver) →
+  X1 (XLR). Only path (a) matters.
+- **V1 Late:** tone-stack output (IC3C pin 8) → R33 → T1 (JFET mute) → splits to (a) IC3D (1/4"
+  buffer, gain set by SW4A/SW4B INST/LINE switch) → C9 → R13 → X2, and (b) IC4A/IC4B (TL072, XLR
+  driver, its own SW3A/SW3B INST/LINE switch) → X1. Only path (a) matters; for path (a), model the
+  **INST** throw of SW4A/SW4B (see Interactive/coupled controls).
+- **V2:** tone-stack output (U6B pin 7) → R24 → Q4 (JFET mute) → splits to (a) U6A (1/4" buffer,
+  its own SW1B "+10dB 1/4\" OUTPUT" switch) → C38 → R41 → J5, and (b) U7A/U7B (XLR driver, its own
+  -20 dB pad SW2A/SW2B and phantom/ground-connect SW3A/SW3B) → J4. Only path (a) matters; model
+  SW1B at the unity throw (feedback shorted — resolved in Validation notes; the buffer reduces to a
+  plain unity follower).
+
+None of the skipped XLR-side circuitry feeds back into path (a), so it can be omitted from the WDF
+model entirely with no loss of fidelity to the 1/4" output.
+
+---
+
+## Power supply
+
+- **Single supply, bipolar VREF = VCC/2, no charge pump, no 12 V/18 V mode on any revision** (per
+  physical hardware — the pedal only ever accepts 9 V battery, 9 V DC adapter, or 48 V phantom).
+- **VCC is NOT the same across power sources**, per the author's measurement/tracing:
+  - **Battery or 9 V DC adapter:** VCC ≈ raw supply voltage (minus a small series-diode drop, D5 in
+    all three revisions), **not zener-regulated** — sags with battery condition.
+  - **48 V phantom power:** power is drawn from the balanced XLR output through a
+    resistor+diode network, then **regulated to a clean 10 V by a 10 V zener** (D1 in V1e/V1l, D15
+    in V2) — i.e. phantom power gives **more headroom** (~10 V clean) than battery/9 V DC (~9 V,
+    unregulated), which is the opposite of what you might expect and is called out explicitly by
+    the author ("phantom power → higher drive voltage → distorts less easily than battery/9 V").
+  - Phantom current availability is small, which the author notes is *why* this pedal was designed
+    around low-power op-amps throughout (TLC2262/2264, all CMOS rail-to-rail, low Iq) rather than
+    the more typical TL07x/JRC4558-class parts guitar pedals usually use for the *main* signal path
+    (TL072 only appears in the XLR driver, which we're not modelling).
+- **For DSP modelling purposes: use a single nominal ~9 V rail** (matching this template's
+  "single 9 V supply, no charge pump" default) — the phantom-vs-battery ~1 V headroom difference is
+  a minor, out-of-scope refinement (battery/DC-adapter is realistically the dominant use case for a
+  guitarist/bassist testing this plugin), but note it in `docs/calibration-and-gain-staging.md` if
+  headroom calibration ever seems ~1 V off from a battery-powered reference capture.
+- **VCOM (bias) generation** — present in near-identical form on all three revisions: a resistive
+  divider off VCC (`R31`/`R32` in V1e/V1l, similar in V2) heavily filtered by large electrolytics
+  (`C11`/`C38`/`C41` class, 220 µF–47 µF), feeding the ▲ signal-reference rail used throughout the
+  audio path. Standard VREF generator — no special modelling needed beyond "it's a clean, quiet
+  VCC/2," per `architecture.md`.
+- **Power resistor value variance (R37/R59/R61/R62 class, current-limiting into the zener/rail):**
+  the author found different production units used different parallel-resistor combinations here
+  (e.g. one 220 Ω, two 220 Ω in parallel, two 470 Ω in parallel) — **this is supply-filter
+  component tolerance, not signal path, exclude from the DSP model** per the standard gotcha.
+- **V2-specific: R54 is a PTC resettable fuse (`0805L010`), not a resistor** — the author found a
+  burnt R54 on one real unit and inferred Tech21 running-change from a plain resistor to a PTC fuse
+  here, likely after field failures. Also not signal-path relevant.
+
+---
+
+## Nonlinear devices — THIS IS THE HEADLINE DIFFERENCE BETWEEN REVISIONS
+
+### V1 Early: **no discrete clipping diodes anywhere in the tube-amp-emulation stage**
+
+The PRESENCE/DRIVE gain stage (`IC3B` presence sub-stage → `IC3A` drive sub-stage) is pure R/C
+feedback (`R24`/`C31`/`R26`/`C32` for PRESENCE; `R23`/`C28`/`R25` for DRIVE) — **no diode pair, no
+zener, nothing**. The only source of distortion in this era of the circuit is **op-amp output-rail
+saturation** as DRIVE increases the stage's gain. Model this stage as a straight ideal-op-amp
+gain-set/feedback-leg pair (per `dsp.md`'s "ideal op-amp decomposition") with **only the rail clamp
+as the nonlinearity** (per `dsp.md`'s ADAA section — this is likely the dominant aliasing source on
+this revision, same role the rail clamp plays as "the hardest nonlinearity" in the generic
+`dsp.md` guidance). This is a first-order behavioural difference from V1 Late/V2, not just a
+component-value tweak — confirm this reading against the schematic before assuming a diode pair
+belongs here by analogy with the later revisions.
+
+### V1 Late & V2: a small potted **zener-clipping sub-module** in the DRIVE feedback path
+
+Both later revisions replace the plain feedback resistor network with a 2-op-amp sub-board (drawn
+as a dashed box on the schematic) containing a **back-to-back 3.3 V zener pair** in the second
+op-amp's feedback leg:
+
+- **V1 Late — `CH34-9 Module`:** `IC100A`/`IC100B` (TLC2262, dual) + `D100` = **`DZ23C3V3`**
+  (3.3 V zener pair, back-to-back/antiparallel symbol) + `R100`(unused)/`R101` 220k/`R102`
+  220k/`R103`(unused)/`R104`(unused)/`R105` 100k/`R106` 220k. The author found this same potted
+  module (marked `CH33-6`, `CH34-5`, or `CH34-9` depending on lot) is **shared with Tech 21's
+  Character Series** pedals — it's a generic Tech21 building block, not BDDI-specific.
+- **V2 — `U5 CH40 Module`:** `U901A`/`U901B` (TLC2262, dual) + `D901` = **`BZB984-C3V3`** (3.3 V
+  zener pair, SOT-663 package) + `R901` 220k/`R902` 100k/`R903` 220k. The author identified this
+  part number **by direct measurement + breadboard reconstruction** (they could not read the
+  molded/sanded marking, measured a 3.3 V zener characteristic, found `BZB984-C3V3` as the only
+  matching SOT-663 zener, built a clone on breadboard, and confirmed matching behaviour) — treat
+  this as a well-verified, hard-won data point, not a guess.
+
+**Both zeners are the same nominal value (3.3 V) and same back-to-back topology** — V2's module is
+functionally a refinement/respin of V1 Late's, not a different circuit. The author explicitly notes
+this class of zener has **non-trivial junction capacitance** that measurably rolls off DRIVE's high
+end (visible in the DRIVE frequency-response sims — compare `fr_presence_drive.png` across
+revisions) and that this capacitance **varies significantly by package/manufacturer/lot**, so don't
+assume a generic zener model without accounting for a junction-capacitance term if the top-end
+DRIVE roll-off needs to match captures closely.
+
+**⚠ DSP-modelling flag for `dsp.md`:** this is a **reverse-breakdown zener clip**, not the standard
+forward-conducting diode-pair clip (1N4148-style) the rest of the template's `dsp.md` guidance
+assumes. A back-to-back zener pair clips asymmetrically-per-half-cycle-but-symmetric-overall: on a
+positive swing, one zener forward-conducts (~0.6 V) while the other reverse-breaks-down at ~3.3 V,
+giving an effective threshold around **Vf + Vz ≈ 3.9 V** in that leg (then symmetric on the negative
+swing). `chowdsp_wdf`'s `DiodePairT`/`DiodeT` model forward Shockley conduction only — they do not
+have a reverse-breakdown term. This will need either (a) a bespoke nonlinear WDF element combining
+forward diode conduction with a reverse zener-breakdown branch, or (b) an approximation validated
+against the sims/captures (e.g. a mismatched-pair-style construction analogous to the generic
+`dsp.md` asymmetric-clip pattern, but centred at the zener threshold rather than 0 V). Flag this as
+a research spike before the "nonlinear stage" build step — don't assume `DiodePairT` as-is will be
+correct here the way it might be for a garden-variety fuzz.
+
+### JFET mute switches (bypass/effect-off gain kill — NOT audio-signal clipping)
+
+All three revisions use small-signal JFETs (`SST4393`/`MMBF4393`, same part, different package
+marking) as **series or shunt audio switches**, driven by the `HEF4013B`-based effect-on/off logic
+(see Interactive/coupled controls), to mute/reduce gain when the effect is toggled off — this is a
+**bypass mechanism, not a tonal nonlinearity**. Relevant to `architecture.md`'s bypass design (this
+pedal is not a true-bypass relay design — it's a continuously-wet BLEND architecture with a FET
+gain-mute for the "off" state) but should NOT be modelled as part of the WDF clipping/tone chain.
+V2's article explicitly measured the effect-off bleed-through of V1 Late at "-80 dB @ 3.5 kHz, -60
+dB @ 10 kHz" and judged it inaudible — i.e. the FET mute is not a perfect break, just very deep
+attenuation; worth matching loosely if bypass fidelity ever matters, low priority otherwise.
+
+---
+
+## Component values — V1 EARLY (from `schematics/v1-early/schematic.png`)
+
+### Input buffer
 | Ref | Value | Function |
 |-----|-------|----------|
-| `<R?>` | `<value>` | `<role>` |
-| `<C?>` | `<value>` | `<role>` |
-| `<pot>` | `<A/B + value>` | `<taper + role>` |
+| C4 | 47n | input coupling |
+| R10 | 10k | series |
+| R2 | 1M | pulldown/bias to VCOM (▲) |
+| C0 | — (unpopulated on the traced unit) | empty footprint — see Validation notes, rare populated variant exists |
+| IC1B | TLC2262 (dual, only channel B used) | input unity buffer, non-inverting (signal into pin 5/+) |
 
-(Repeat a table per network: input, each gain stage, clipping/diode network, tone, recovery,
-output volume.)
+### PRESENCE / DRIVE "tube amp emulation" gain+clip stage
+| Ref | Value | Function |
+|-----|-------|----------|
+| C19, C18, C17 | 22n each | series coupling / notch network around IC3B |
+| R16 | 100k | feedback-adjacent |
+| R22 | 100k | bias pulldown |
+| R3, R11 | 2.2k, 22k | notch network legs |
+| IC3B | TLC2264 (quad, ch. B) | first sub-stage (pre-PRESENCE shaping) |
+| R24 | 3.3k | PRESENCE feedback series |
+| C31 | 10n | PRESENCE feedback cap |
+| VR5 | PRESENCE, B100k | presence control, in feedback divider |
+| R26 | 330k | PRESENCE feedback fixed leg |
+| C32 | 100p | PRESENCE feedback rolloff |
+| IC3A | TLC2264 (quad, ch. A) — **marked `?` by original author, verify** | DRIVE gain stage — **NO clipping diodes on this stage** (see Nonlinear devices) |
+| R23 | 3.3k | DRIVE feedback series |
+| VR1 | DRIVE, B100k | drive control, in feedback divider |
+| R25 | 330k | DRIVE feedback fixed leg |
+| C28 | 100p | DRIVE feedback rolloff |
 
-### Nonlinear devices
-- Diode/transistor type: `<e.g. 1N4148>`. **Use exact datasheet/Shockley params** (Is, Vt, n, Rs).
-  `nDiodes` in chowdsp = ideality factor n, NOT a count.
+### Recovery / fixed mid-scoop notch stage (feeds into BLEND)
+| Ref | Value | Function |
+|-----|-------|----------|
+| R17 | 10k | series from drive stage |
+| R12, R18 | 22k, 10k | notch network legs to IC3C |
+| R48, R49 | 22k, 22k | notch network |
+| C13 | 470p | notch |
+| C23 | 47n | notch |
+| IC3C | TLC2264 (ch. C) | notch/recovery buffer |
+| R35, R34 | 33k, 33k | series to next stage |
+| C33, C34 | 2.2n, 1n | coupling/filter |
+| IC3D | TLC2264 (ch. D) | further recovery buffer |
+| R36 | 22k | **bridged-T** bridge resistor (gentle ~430 Hz mid-cut — see two-notch note below) |
+| C27, C30 | 22n, 47n | bridged-T caps (with R36/R9 form the ~430 Hz / ~−10 dB dip) |
+| R9 | 6.2k | bridged-T leg to VCOM |
+| IC1A | TLC2262 (ch. A) | unity buffer of the bridged-T output = final "wet" (tube-emulation) path buffer before BLEND |
+| C12 | 47n | output coupling of wet path into BLEND |
 
-## Topology — node graphs
+> **⚠ TWO DISTINCT mid-notches — do not conflate (this was a doc error, now corrected):**
+> 1. **Deep character notch ~750–800 Hz, ~−35 dB** — the dominant "SansAmp mid-scoop." It comes from
+>    the **input twin-T-style network** feeding the PRESENCE stage (the three series 22n caps
+>    `C17`/`C18`/`C19` + shunt legs `R3` 2.2k / `R11` 22k), NOT from the bridged-T here. Present in
+>    **all three revisions** (V2 keeps it).
+> 2. **Gentle bridged-T mid-cut ~430 Hz, ~−10 dB** — the `R36`/`C27`/`C30`/`R9` network in *this*
+>    recovery table. The author's `v2/fr_midcut_circuit_ref.png` inset (`R76`22k/`C55`22n/`C54`47n/
+>    `R77`6.2k) is this exact network in isolation. Present in **V1e + V1l only; REMOVED on V2** and
+>    replaced by the switchable MID control.
+>
+> Verified by node-level trace (`schematics/crops/v1e_wetout_zoom.png`) and confirmed against the
+> author's isolated-sub-network sim. See `docs/reference-fr-targets.md` §0–2 for the quantitative
+> split and why removing the bridged-T on V2 does NOT remove the deep 800 Hz notch.
 
-Describe each stage's connections at the node level (use these directly to build the WDF tree).
-Mark each stage **Linear** or **Nonlinear**, and which adaptor type it needs (series/parallel tree
-vs R-type for feedback). For switched sub-circuits, list each position as a distinct topology →
-precomputed scattering matrix.
+*Full wet-path sim at PRESENCE 0% / DRIVE 0% / BLEND 100% (`fr_tubeamp_emulation.png`): broad low bump
+~+1 dB @ ~90 Hz, deep notch ~−35 dB @ ~800 Hz, second bump ~+1.5 dB @ ~3 kHz, steep rolloff to
+~−40 dB by ~11–12 kHz. See `docs/reference-fr-targets.md` §1 for the per-revision target table.*
 
-## Op-amp model
+### BLEND mix → LEVEL (master) → buffer into tone stack
+*(Signal order here: dry `C1` + wet `C12` meet at BLEND; BLEND wiper → LEVEL top; LEVEL wiper →
+IC4A follower → IC4B gain → tone stack. LEVEL is the post-blend master level, verified by trace.)*
+| Ref | Value | Function |
+|-----|-------|----------|
+| C1 | 2.2u | **dry** tap coupling, straight from input node into one end of BLEND (no dry buffer) |
+| VR6 | BLEND, B100k | dry/wet mix pot (dry one end, wet `C12` other end, wiper = mix → LEVEL) |
+| VR4 | LEVEL, B100k | **master level**, fed from BLEND wiper; wiper → IC4A |
+| R50 | 1k | LEVEL pot bottom leg to VCOM |
+| IC4A | TLC2264 (ch. A) | unity follower of LEVEL wiper |
+| R4 | 10k | series IC4A→IC4B (sets IC4B inverting gain with R30) |
+| IC4B | TLC2264 (ch. B) | inverting gain stage (~−R30/R4 ≈ −2.2, ~+7 dB) into tone stack |
+| R30, C22 | 22k, 22p | IC4B feedback + HF rolloff |
+| C25 | 2.2u | coupling into BASS/TREBLE stack |
 
-- Part + supply; not rail-to-rail → model asymmetric output saturation (calibration doc §6).
-- Ideal op-amp for the gain/feedback solve; rails as a separate output clamp.
+### BASS / TREBLE tone stack (Baxandall-type shelving — see Validation notes for the V1L/V2 contrast)
+| Ref | Value | Function |
+|-----|-------|----------|
+| C21, C20 | 10n, 10n | TREBLE network coupling |
+| R51 | 10k | TREBLE network |
+| VR2 | TREBLE, B100k | treble control (author notes: pin-3 side has a 10k in series, reducing the amount of treble *boost* available vs cut) |
+| R14 | 3.3k | TREBLE network leg |
+| R28 | 1M | fixed feedback |
+| C29 | 22p | feedback rolloff |
+| R53 | 10k | bias leg |
+| R52, R54 | 10k, 10k | BASS network legs |
+| C16, C15 | 22n, 22n | BASS network |
+| VR3 | BASS, B100k | bass control |
+| IC4C | TLC2264 (ch. C) | tone-stack op-amp (single stage does both BASS and TREBLE, classic Baxandall) |
+
+*Sim (`fr_bass_treble.png`): BASS gives roughly ±18 dB shelving centred low, rolling flat by
+~1 kHz; TREBLE gives roughly +8/-4 dB shelving above ~1–2 kHz. Shelving (not peaking) shape on this
+revision — contrast V1 Late/V2 below.*
+
+### JFET mute + output buffer
+| Ref | Value | Function |
+|-----|-------|----------|
+| R33 | 1k | series into mute switch |
+| C7 | 2.2u | coupling |
+| T1 | SST4393 (JFET) | series mute switch, bypass logic |
+| D3 | 4148 | gate protection/bias |
+| R55, R56 | 1M, 1M | pulldowns |
+| C10 | 2.2u | coupling |
+| R29 | 10k | bias |
+| IC4D | TLC2264 (ch. D) | 1/4" output buffer, non-inverting |
+| C9 | 47u | output coupling |
+| R13 | 1k | series to jack |
+| R1 | 100k | output pulldown |
+| X2 | — | 1/4" OUTPUT jack (TRS, ring switches to parallel-out path) |
+
+*(IC2A/IC2B TL072 XLR balanced driver, T2/D2 second JFET mute leg for the XLR path, SW1A/SW1B
+phantom+ground-connect switch, D6, R5–R9/R15/R19–R21/R57/R58 XLR-driver components — all XLR-only,
+out of scope per the scope decision above.)*
+
+### Power / bias / effect-on-off logic
+| Ref | Value | Function |
+|-----|-------|----------|
+| BT1 | 9 V battery | |
+| X4 | DC_IN | 9 V adapter jack |
+| D5 | T4148 | reverse-polarity / power-OR diode |
+| R59, R37 | 33R, 100R | current limit into rail (production-variant tolerance, see Power section) |
+| D1 | 10 V Zener | rail regulation (phantom path — see Power section) |
+| C6, C5, C38, C41 | 220u, 47u, 47u, 47u | VCC filtering |
+| R32, R31, C11 | 10k, 10k, 220u | VCOM bias divider + filter |
+| IC5C | HEF4013B (package power pins only; logic below) | |
+| SW2 | EFFECT_ON/OFF | momentary pushbutton |
+| C37, R38–R41, R45–R47, C35, C36 | — | debounce/latch RC network around 2× HEF4013B flip-flops (`IC5A`, `IC5B`) — mechanical-switch debounce + toggle logic for the FET mute, not audio path |
+| D2, R44, C40, R43, C39 | — | JFET gate bias/timing for T1/T2 mute switches |
+| LD1 | 4.7 V Zener (marked "LED" in one label — likely the LED's forward-drop reference, verify) | effect-on indicator LED drive |
+
+---
+
+## Component values — V1 LATE (from `schematics/v1-late/schematic.png`)
+
+*Same overall shape as V1 Early; only the PRESENCE/DRIVE clip stage, the BASS/TREBLE tone stack
+topology, and the added INST/LINE + phantom-connect switches differ meaningfully. Values below are
+listed where they differ from V1 Early's role, or are new.*
+
+### Input buffer
+| Ref | Value | Function |
+|-----|-------|----------|
+| C4 | 47n | input coupling |
+| R10 | 10k | series |
+| R2 | 1M | pulldown/bias |
+| D7, D8 | — (new vs V1 Early — small-signal diodes, likely input protection) | |
+| IC2B | TLC2264 (ch. B) | input buffer |
+
+### PRESENCE stage (unchanged shape from V1 Early)
+| Ref | Value | Function |
+|-----|-------|----------|
+| C19, C18, C17 | 22n, 22n, 22n | notch network |
+| R16, R22, R3, R11 | 100k, 100k, 2.2k, 22k | notch network |
+| IC2A | TLC2264 (ch. A) | pre-presence buffer |
+| C31 | 10n | PRESENCE feedback cap |
+| R24 | 3.3k | PRESENCE feedback series |
+| VR5 | PRESENCE, B100k | presence control |
+| R26 | 10k | PRESENCE feedback fixed leg (**note: 10k here vs 330k on V1 Early — significantly different feedback ratio, don't copy the V1-Early value**) |
+| C32 | 100p | PRESENCE rolloff |
+| R23 | 10k | series out |
+| C28 | 2.2u | coupling into DRIVE/clip module |
+
+### DRIVE / clip module — `CH34-9 Module` (see Nonlinear devices)
+| Ref | Value | Function |
+|-----|-------|----------|
+| R25 | 22k | module feedback |
+| VR1 | DRIVE, B100k | drive control |
+| C8 | 2.2u | coupling |
+| R17 | 10k | series in |
+| IC100A | TLC2262 (ch. A) | module input stage |
+| R105, R101 | 100k, 220k | module bias network |
+| C1 | 47u | module filter |
+| R100, R104 | "Not used" | populated footprints, unpopulated — confirms module is a shared generic Tech21 board, not custom-designed per pedal |
+| R103 | "Not used" | ditto |
+| D100 | **DZ23C3V3** (3.3 V zener pair) | the clip element — in `IC100B`'s feedback leg |
+| R102 | 220k | zener series/bias |
+| IC100B | TLC2262 (ch. B) | module output stage, contains the zener feedback clip |
+| R106 | 220k | module feedback |
+
+### Recovery stage (post-module)
+| Ref | Value | Function |
+|-----|-------|----------|
+| R48, R49 | 33k, 33k | series |
+| C14 | 10n | coupling |
+| R18 | 10k | bias |
+| C13 | 470p | rolloff |
+| IC2C | TLC2264 (ch. C) | recovery buffer |
+| R35, R34 | 33k, 33k | series |
+| C33, C34 | 2.2n, 1n | filter |
+| IC2D | TLC2264 (ch. D) | further recovery |
+| R36, R9 | 22k, 6.2k | bridged-T mid-cut (bridge R + leg) |
+| C27, C30 | 22n, 47n | bridged-T caps — the gentle ~430 Hz mid-cut (still present on V1 Late; the deep ~800 Hz notch lives in the input twin-T, also present). The ~430 Hz bridged-T is what V2 removes. See two-notch note under V1-Early recovery + `docs/reference-fr-targets.md` §0. |
+| IC3B | TLC2264 (ch. B) | final wet-path buffer |
+| C42, C0 | 4.7n, 2.2u | output filter — **C0 here is the optional/variant electrolytic, see Validation notes; unlike V1 Early's unpopulated C0, this position is a different network role** |
+| C12 | 47n | output coupling |
+
+*Sim (`fr_tubeamp_emulation.png`, compared against V1 Early): near-identical shape, but the notch
+frequency is slightly lower and the top end is a bit more rolled-off on V1 Late — attributed by the
+author to the added zener module's junction capacitance plus the retuned notch legs.*
+
+### BLEND / LEVEL (same role as V1 Early, same values)
+| Ref | Value | Function |
+|-----|-------|----------|
+| VR6 | BLEND, B100k | |
+| IC3A | TLC2264 (ch. A) | LEVEL buffer |
+| VR4 | LEVEL, B100k | |
+| R50, R4 | 1k, 100k | |
+| R30 | 220k (vs V1 Early's 22k feedback network — retuned) | |
+
+### BASS / TREBLE tone stack — **retuned from shelving to PEAKING type**
+| Ref | Value | Function |
+|-----|-------|----------|
+| C21, C7 | 4.7n, 22n | TREBLE network (values changed from V1 Early's 10n/10n) |
+| R51, R55 | 3.3k, 3.3k | TREBLE network legs (vs V1 Early's single 10k — now split symmetric) |
+| VR2 | TREBLE, B100k | treble control |
+| C20 | 1n | new — parallel cap across part of the treble network, this is what converts the response from shelving to peaking and adds the high-end rolloff the author describes ("a cap in parallel with the pot's pin-1-side resistor, so treble now falls off at the top of the range") |
+| R28 | 1M | fixed feedback |
+| C29 | 22p | rolloff |
+| R29 | 1M | new bias leg |
+| R53 | 100k (vs V1 Early's 10k) | bias leg — retuned |
+| C16 | 10n (vs V1 Early's 22n) | BASS network |
+| VR3 | BASS, B100k | bass control |
+| R52, R54 | 3.3k, 3.3k (vs V1 Early's 10k/10k) | BASS network legs — retuned |
+| IC3C | TLC2264 (ch. C) | tone-stack op-amp |
+
+*Sim (`fr_bass_treble.png`): both BASS and TREBLE are now **peaking** (boost/cut around a center
+frequency, returning toward 0 dB at the extremes) rather than **shelving** — this is described by
+the author as "changed to a type that adjusts around a certain frequency" and is a genuinely
+different filter topology from V1 Early, not just a value tweak. TREBLE especially shows a
+pronounced peak (~+17 dB at max) around 3–5 kHz rather than a flat shelf.*
+
+### JFET mute + output / INST-LINE switch
+| Ref | Value | Function |
+|-----|-------|----------|
+| R33 | 4.7k | series into mute |
+| T1 | MMBF4393 | mute JFET |
+| D3 | — | gate |
+| SW4A, SW4B | 2-position switch, "OUTPUT INST / LINE" | **model the INST throw for our instrument-level-only scope** |
+| R56 | 10k | INST-throw feedback leg |
+| R60 | 22k | LINE-throw feedback leg (not modelled) |
+| C43 | 2.2u | INST-throw feedback cap |
+| C44 | 100p | LINE-throw feedback cap (not modelled) |
+| IC3D | TLC2264 (ch. D) | 1/4" output buffer, gain set by SW4A/SW4B |
+| D9, D10 | — | output protection |
+| C9 | 2.2u | output coupling |
+| R13 | 1k | series to jack |
+| R1 | 100k | pulldown |
+
+*(IC4A/IC4B TL072 XLR driver, SW3A/SW3B XLR INST/LINE, R5–R8/R15/R19–R21/R57/R58/D6/C2–C3/C24/C45
+— all XLR-only, out of scope.)*
+
+### Power / bias / effect-on-off logic
+| Ref | Value | Function |
+|-----|-------|----------|
+| R59, R62 | 68R, 68R (parallel pair, vs V1 Early's single 33R — same effective ~34R) | current limit |
+| R61, R37 | 470R, 470R (this traced unit) — **production variant, see Power section** | |
+| D1 | 10V Zener | rail regulation |
+| C6, C11, C38, C5 | 220u, 220u, 47u, 47n | filtering |
+| IC5A, IC5B, IC5C | HEF4013B (2 flip-flops used, 1 spare power-only, same as V1 Early) | effect on/off debounce + toggle |
+| — | note added: "Added C5 at VCC (Apr. 2nd, 2022)" per schematic revision history — a supply-filter addition made during the *tracing* process (measurement fix), not a pedal hardware variant |
+
+---
+
+## Component values — V2 (from `schematics/v2/schematic.png`)
+
+*All op-amps on V2 are **TLC2262 (dual)** — the author notes this explicitly as unusual (a quad
+would be lower part-count/cost) and it holds with no exceptions anywhere in the traced signal path.*
+
+### Input buffer
+| Ref | Value | Function |
+|-----|-------|----------|
+| C24 | 47n | input coupling |
+| R45 | 10k | series |
+| D5, D6 | — | input protection |
+| R2 | 1M | pulldown/bias |
+| U1B | TLC2262 (ch. B) | input buffer |
+
+### PRESENCE stage
+| Ref | Value | Function |
+|-----|-------|----------|
+| C5, C6, C7 | 22n, 22n, 22n | notch network |
+| R5, R6, R7 | 100k, 2.2k, 22k | notch network |
+| R8 | 100k | bias |
+| U1A | TLC2262 (ch. A) | pre-presence buffer |
+| C34 | 10n | PRESENCE feedback cap |
+| R10 | 3.3k | PRESENCE feedback series |
+| VR58 | PRESENCE, B100k | presence control |
+| C10 | 100p | PRESENCE rolloff |
+| R12 | 10k | series out |
+| C22 | 1u | coupling |
+
+### DRIVE / clip module — `U5 CH40 Module` (see Nonlinear devices)
+| Ref | Value | Function |
+|-----|-------|----------|
+| R14 | 22k | series in |
+| VR13 | DRIVE, B100k | drive control |
+| C4 | 1u | coupling |
+| R15 | 10k | series into module |
+| U901A | TLC2262 (ch. A) | module input stage |
+| R901, R902 | 220k, 100k | module bias network |
+| D901 | **BZB984-C3V3** (3.3 V zener pair, SOT-663) | the clip element, in `U901B`'s feedback leg |
+| R903 | 220k | zener series/bias |
+| U901B | TLC2262 (ch. B) | module output stage, contains the zener feedback clip |
+| Q2 | MMBF4393 | JFET, tied to FX_OFF net — module-local mute, part of the bypass-gain-kill scheme (author: "a FET switch in the DRIVE section lowers gain during bypass, preventing effect-sound bleed") |
+| R38, D2, C40 | 1M, —, 47n | FX_OFF gate bias network for Q2 |
+
+### Recovery stage (post-module) — **mid-scoop notch REMOVED on this revision**
+| Ref | Value | Function |
+|-----|-------|----------|
+| R47 | 10k | series |
+| C42 | 10n | coupling |
+| R16, R17 | 22k, 10k | bias |
+| C15 | 10n | filter |
+| R18 | 33k | series |
+| C16 | 470p | rolloff |
+| U2B | TLC2262 (ch. B) | recovery buffer |
+| C41 | 22n | coupling |
+| R19, R20 | 33k, 33k | series |
+| R46 | 100k | bias |
+| C18 | 1n | filter |
+| U2A | TLC2262 (ch. A) | final wet-path buffer |
+| C17 | 2.2n | coupling |
+| C2 | 1u | output coupling of wet path |
+
+*Sim (`fr_tubeamp_emulation.png`, V2 vs V1 Late): the **gentle ~430 Hz bridged-T mid-cut** present in
+both V1 revisions is **gone** on V2 — replaced in function by the new explicit MID control (below).
+**The deep ~750–800 Hz character notch REMAINS on V2** (it comes from the input twin-T, not the
+bridged-T) — V2's full-path curve still shows a ~−36 dB notch there. Both low-end and high-end are
+also lower than V1 Late — the HF loss specifically from `R47`+`C42` forming a new low-pass corner
+V1 didn't have (high bump falls from ~−0.5 dB to ~−10 dB; −40 dB point moves from ~11 kHz to ~8 kHz;
+see `docs/reference-fr-targets.md` §1). The inset schematic in `fr_midcut_circuit_ref.png` (R76 22k /
+C55 22n / C54 47n / R77 6.2k) is the author's isolated redraw of the **V1 bridged-T** (= V1's
+`R36`/`C27`/`C30`/`R9`) for reference — it does NOT appear in the V2 signal path; don't implement it
+for V2.*
+
+### BLEND / LEVEL / MID (V2 adds a dedicated MID control here, ahead of BASS/TREBLE)
+| Ref | Value | Function |
+|-----|-------|----------|
+| VR50 | BLEND, B100k | |
+| R67, R63 | 10k, 22k | LEVEL buffer feedback |
+| U3B | TLC2262 (ch. B) | LEVEL buffer |
+| VR51 | LEVEL, B100k | |
+| R36, R39, R48(empty) | 10k, 1k, — | LEVEL pot legs |
+| R23 | 100k | series into MID stage |
+| U3A | TLC2262 (ch. A) | MID stage op-amp |
+| C19, C21 | 10n, 10n | MID shift network caps |
+| R27 | 1M | MID shift network |
+| SW5A, SW5B | 2-position switch, "MID SHIFT 500/1000Hz" (author measured actual shift points as ~400–450 Hz and ~800–900 Hz, not the silkscreened 500/1000) | DPDT toggling caps in the MID wiper leg — **wiring RESOLVED, see Validation notes**. Baxandall peaking stage: `R23` 100k in, `C11` 100p stability, pot rail `R21` 3.3k / `VR1` B100k / `R62` 3.3k, wiper leg `C19`+`C21` 10n w/ `R27` 1M (SW5B) and `C13`+`C36` 10n w/ `R13` 1M (SW5A) |
+| C12, C23 | 1u, 1u | coupling into BASS/TREBLE |
+
+*Sim (`fr_mid.png`): ~±18 dB peaking boost/cut at the 500 Hz throw, ~±17 dB at the 1000 Hz throw —
+a real swept-Q-style mid control, not a shelf.*
+
+*Important semantic note from the author, worth carrying into `ui.md`/UX copy: on V1 Early/Late,
+the mid-scoop notch was baked into the WET (tube-emulation) path only, before the BLEND mix — so at
+BLEND=100% wet it was always fully engaged and BLEND-independent. On V2, MID is applied AFTER blend
+(post-mix, on the combined dry+wet signal) — so it behaves differently even at "equivalent" settings
+between revisions, and Tech21's own factory demo settings apparently compensate for this (V2 sample
+setting nudges TREBLE up slightly vs the V1 equivalent, per the author's comparison against a
+third-party "koichizikan" blog's sample-setting chart).*
+
+### BASS / TREBLE tone stack — same peaking topology as V1 Late, PLUS a new BASS-frequency switch
+| Ref | Value | Function |
+|-----|-------|----------|
+| R31, R34 | 3.3k, 3.3k | TREBLE network legs |
+| VR57 | TREBLE, B100k | treble control |
+| C30, C31 | 4.7n, 22n | TREBLE network |
+| C29 | 1n | peaking-conversion cap (same role as V1 Late's C20) |
+| R35 | 1M | fixed feedback |
+| C32 | 22p | rolloff |
+| R30, R32 | 1M, 100k | bias legs |
+| SW4A, SW4B | 2-position switch, "BASS SHIFT 40/80Hz" — **new on V2, no equivalent on either V1 revision** | selects between two RC pairs (`R4` 1M / `C28` 10n / `C20` 47n) setting the BASS control's corner frequency |
+| R29, R33 | 3.3k, 3.3k | BASS network legs |
+| VR48 | BASS, B100k | bass control |
+| C27 | 100n | BASS network |
+| U6B | TLC2262 (ch. B) | tone-stack op-amp |
+
+*Sim (`fr_bass_treble.png`): TREBLE is essentially identical to V1 Late's. BASS at the 80 Hz throw
+matches V1 Late; at the 40 Hz throw the boost/cut magnitude is larger — i.e. V2 added a genuinely
+new low-end-shift option, not present at all on either V1 revision.*
+
+### JFET mute + output / +10dB switch
+| Ref | Value | Function |
+|-----|-------|----------|
+| R24 | 4.7k | series into mute |
+| Q4 | MMBF4393 | mute JFET |
+| D8, R25, C26 | —, 1M, 47n | FX_ON gate bias |
+| SW1A, SW1B | 2-position switch, "+10dB 1/4\" OUTPUT" — **RESOLVED (see Validation notes): closed shorts `R52` → unity (model this); open = 1+22k/10k = +10.1 dB. `SW1A` half unused** | |
+| R52, R53 | 22k, 10k | switched feedback legs |
+| C9, C33 | 100p, 1u | filter |
+| U6A | TLC2262 (ch. A) | 1/4" output buffer |
+| D3, D4 | — | output protection |
+| C35, C38 | 1u, 1u | coupling |
+| R40, R41 | 100k, 1k | pulldown / series to jack |
+| J5 | — | 1/4" OUTPUT jack |
+
+*(U7A/U7B XLR driver, SW2A/SW2B -20dB XLR pad, SW3A/SW3B phantom+ground connect, R1/R26/R28/R42–
+R44/R56/R59/R60/R65–R66/C1/C3/C25/C39/C45/D1/D7/F1 — all XLR-only, out of scope.)*
+
+### Power / bias / effect-on-off logic
+| Ref | Value | Function |
+|-----|-------|----------|
+| V1 | 9 V battery | |
+| J6 | DC_IN | |
+| D12 | — | power-OR diode |
+| R54 | **0805L010** (PTC resettable fuse, not a resistor — see Power section) | current limit into rail |
+| R49 | 220R | |
+| D15 | 10V Zener | rail regulation |
+| C47, C37 | 220u, 220u | filtering |
+| R11, R37 | 10k, 10k | VCOM divider |
+| U4C | HEF4013B (power pins only) | |
+| U4B | HEF4013B (**only 1 of 2 flip-flops used on V2**, vs 2 used on both V1 revisions — simpler debounce/toggle logic) | effect on/off |
+| U4A | HEF4013B (**spare/unused channel**, confirms only 1 flip-flop actually does work on V2) | |
+| S101 | EFFECT_ON/OFF | momentary pushbutton |
+| D101 | 4.7V Zener | LED reference |
+| D102 | LED | effect-on indicator |
+
+---
+
+## Op-amp model (per revision)
+
+All three revisions use **CMOS rail-to-rail op-amps** in the *main instrument-level signal path* —
+`TLC2262` (dual) and, on V1 Early/Late only, `TLC2264` (quad); V2 uses TLC2262 exclusively. Treat
+these as **rail-to-rail** for output saturation modelling (the calibration doc's asymmetric-rail
+note is for *non*-rail-to-rail parts and doesn't apply to the modelled 1/4"-output chain on any of
+the three revisions — it would only matter for the out-of-scope TL072 XLR driver).
+
+- **V1 Early:** `TLC2262` (IC1), `TLC2264` (IC3, IC4). *A documented pre-1997 sub-variant exists*
+  using `NJM064` (quad) + `TL062` (dual) instead — **not** rail-to-rail, higher slew rate, noisier
+  per their datasheets. This sub-variant is a manufacturing-date artifact within "V1 Early" (units
+  made ~1994–1997 before TI's TLC226x family existed), not a user-facing mode — **out of scope for
+  the 3-way UI switch** per the project brief (we're modelling v1-early/v1-late/v2, not a 4th
+  sub-revision), but documented here in case it's ever worth a deeper "vintage" toggle later. If
+  pursued, it would need non-rail-to-rail asymmetric saturation modelling per the generic `dsp.md`
+  guidance.
+- **V1 Late:** `TLC2264` (IC2, IC3), `TLC2262` (IC100 inside the clip module, IC4 XLR-only).
+- **V2:** `TLC2262` exclusively (U1, U2, U3, U6, U7, U901).
+
+Use the **ideal op-amp decomposition** pattern from `dsp.md` for every stage; only the clip-module's
+zener leg (V1 Late/V2) and the final output rails need explicit nonlinear/saturation treatment.
+
+---
 
 ## Interactive / coupled controls
 
-List any controls that share a network and MUST be modelled coupled (not independent), e.g. a tone
-control inside a feedback web. Note `ScopedDeferImpedancePropagation` when updating them together.
+- **BASS + TREBLE share a single op-amp stage** (`IC4C` V1e / `IC3C` V1l / `U6B` V2) — model as one
+  coupled WDF network per `dsp.md`, not two independent filters. Use
+  `wdft::ScopedDeferImpedancePropagation` when both move together (e.g. a preset recall).
+- **V2's MID sits in its own op-amp stage** (`U3A`) *ahead of* BASS/TREBLE, not sharing their
+  feedback web — can be modelled as an independent stage from BASS/TREBLE, but MID's own two
+  switched RC pairs (`SW5A`/`SW5B`) are coupled to the MID pot within that stage.
+- **PRESENCE and DRIVE share the tube-amp-emulation stage's feedback path on V1 Early/Late only in
+  the sense of being cascaded sub-stages (PRESENCE stage feeds DRIVE stage), not a shared feedback
+  node** — they can be modelled as two independent, cascaded stages, each with its own single-pot
+  feedback divider. Same is true on V2 (PRESENCE stage → DRIVE/clip module, cascaded not shared).
+- **`SW4A`/`SW4B` (V1 Late INST/LINE) and `SW1A`/`SW1B` (V2 +10dB) are output-buffer feedback-ratio
+  switches** — fix at construction/parameter time to the instrument-level throw per the scope
+  decision; do not expose as a runtime mode given the "treat all as instrument level" brief, unless
+  product requirements change.
+- **`SW5B`+`SW5A` (V2 MID SHIFT) and `SW4B` (V2 BASS SHIFT)** ARE in-scope runtime switches
+  (genuine tone-shaping controls, not DI/line-level options) — wiring resolved (see Validation
+  notes). Model as precomputed scattering-matrix swaps per `dsp.md`'s switched-topology guidance,
+  coupled to their respective MID / BASS+TREBLE stage networks.
 
-## Multi-stage / multi-channel series pedals
+## Circuit revision variants (V1 Early / V1 Late / V2)
 
-If the unit is actually two (or more) complete, otherwise-independent gain circuits in series —
-each with its own controls and its own bypass — model each as its own instance of the same
-per-channel DSP class, instantiated once per stage, NOT as a single wider circuit. Each instance
-needs its own independent bypass/crossfade so the hardware's independent footswitches are honoured.
+This is **not** a multi-stage/series pedal (`architecture.md`'s multi-channel-series section
+doesn't apply) — it's **one signal path with three alternate whole-circuit topologies**, selected
+by the user (like a very large "mode switch" spanning the entire pedal, not a small sub-network).
+Given the scale of the differences (different clip element or its total absence, different tone-
+stack topology, an entire added control on V2), per `dsp.md`'s general fixed/switched-variant
+guidance this likely warrants **three separate DSP graph classes** sharing reusable primitives
+(a generic op-amp-stage helper, a generic Baxandall/peaking-tone-stack helper, a generic
+zener-clip-module helper reused between V1-Late and V2) rather than one parametrised graph with
+runtime topology swaps — but this is an **architecture decision for the planning phase**, not
+finalized here. Record the final decision in `architecture.md` once made.
 
-A fixed factory/kit modification present on only ONE of the otherwise-identical stages (not a
-runtime-switchable mode) belongs at **construction time**, not as an APVTS parameter — see
-`dsp.md` "Fixed (non-runtime) circuit variants".
+---
 
-Document the verified real processing order explicitly here (see the gotcha above) and keep it
-separate from whatever names/labels the UI uses for each stage — naming and signal order are
-independent facts and don't have to agree (see `architecture.md` / `ui.md` if the two diverge).
+## Validation notes / open items
 
-## Validation notes
-
-Record anything that differs between schematic versions, any component absent from some traces, and
-any value you had to resolve by measurement/judgement (with the reasoning).
+- **Corrections applied during the 2nd-pass verification (were wrong in the first draft):**
+  1. **LEVEL is a post-BLEND master level, not a dry-path level** — fixed in the signal-path summary
+     and the BLEND/LEVEL table after a node-level trace. Signal order is
+     PRESENCE→DRIVE→…→BLEND→LEVEL→[V2 MID]→BASS→TREBLE→out.
+  2. **The "notch" was conflated** — there are TWO distinct features: the deep ~800 Hz character
+     notch (input twin-T, ALL revisions) and the gentle ~430 Hz bridged-T mid-cut (`R36/C27/C30/R9`,
+     V1e/V1l only, removed on V2). See the two-notch note under V1-Early recovery and
+     `docs/reference-fr-targets.md` §0.
+- **Quantitative FR targets for every stage/control now live in `docs/reference-fr-targets.md`** —
+  read off the author's SPICE sims. Notable numbers for downstream DSP: DRIVE max linear gain is
+  ~+40 dB (V1e) vs ~+48 dB (V1l/V2); PRESENCE peak migrates in frequency with the knob (won't match
+  a fixed-shape filter + gain); tone-control topology is shelf (V1e) vs peaking (V1l/V2).
+- **RESOLVED — V1 Early `IC3A` `?` mark:** the `?` sits under the part-number label, not the wiring —
+  it is the author flagging that V1-Early's IC surfaces were sanded/molded so the part number could
+  not be read, and "TLC2264" is their (well-reasoned) inference. The circuit wiring around IC3A is
+  unambiguous: **non-inverting variable-gain stage, gain = 1 + R25/(R23 + VR1·leg)** = 1 +
+  330k/3.3k ≈ 101× (**+40.1 dB**) at max, ≈ +12.4 dB at min — which matches the author's DRIVE FR
+  sim (+40 dB / +12.5 dB, `docs/reference-fr-targets.md` §4) **exactly**, numerically confirming
+  both the transcription and the FR reading. No further action; the IC-identity caveat only matters
+  for the already-out-of-scope NJM064/TL062 pre-1997 sub-variant.
+- **V1 Early has a rare populated-C0 variant**: an unpopulated footprint near IC1B that the author
+  found populated with a capacitor on at least one auction-listed unit. Not modelled (treat V1
+  Early's C0 as absent, matching the traced reference unit) — note only for completeness.
+- **V1 Late has an optional electrolytic cap at C0** (a *different* C0 position than V1 Early's,
+  in the output-filter network, see the V1-Late recovery-stage table) that the author found
+  **absent on 2 of 3 physical units** they examined, and dates the change to "added by Tech21 from
+  around 2010." Sim comparison (`fr_electrolytic_cap_addition.png`) shows it **boosts low end**
+  when present. Since it's a running production change *within* "V1 Late" rather than a clean
+  before/after boundary, and the project is already scoped to 3 revisions (not 4): **default to
+  modelling V1 Late WITHOUT C0** (matches the majority-observed / earlier-production state), and
+  treat "V1 Late + C0" as a documented-but-out-of-scope sub-variant unless the user wants a 4th
+  toggle later.
+- **RESOLVED — V2 MID SHIFT / BASS SHIFT wiring** (from `schematics/crops/v2_midshift_zoom.png`):
+  both are **Baxandall-style peaking cut/boost stages** — inverting op-amp, pot ends tied via 3.3k
+  resistors to the stage's input and output rails, wiper into a frequency-selective leg to VCOM:
+  - **MID (`U3A`):** input `R23` 100k from U3B out; stability feedback `C11` 100p; pot rail
+    `R21` 3.3k — `VR1` B100k — `R62` 3.3k. Wiper leg: upper T = `C19` 10n + `C21` 10n with `R27` 1M
+    bridging, switched by `SW5B` (pins 4–5, pin 6 ✗); lower T = `C13` 10n + `C36` 10n with `R13` 1M,
+    switched by `SW5A` (pins 1–2, pin 3 ✗). The DPDT toggles caps in/out of the wiper leg — a 10n vs
+    ~20n effective change, giving the ~2× centre-frequency ratio (~430 vs ~850 Hz) the FR sims show.
+    The residual series/shunt micro-detail **self-validates during the transfer-function derivation**:
+    if the derived centres/depths don't land on ~430/850 Hz and ±18 dB (`reference-fr-targets.md` §7),
+    the throw interpretation is inverted — flip it, don't hunt elsewhere.
+  - **BASS SHIFT (`U6B` shared with TREBLE):** pot rail `R29` 3.3k — `VR48` B100k — `R33` 3.3k with
+    `C27` 100n across; wiper leg `C28` 10n / `R4` 1M / `C20` 47n, switched by `SW4B` (pins 4–5,
+    pin 6 ✗) through `R32` 100k up to the − input node. **`SW4A` is the unused half of the DPDT**
+    (all pins ✗) — do not go looking for a second switched network. Same self-validation rule:
+    derived corners must land on ~45/~80 Hz per `reference-fr-targets.md` §5.
+- **RESOLVED — output-switch throw mapping (both revisions, numerically cross-checked):** V2 `SW1B`
+  (+10dB) and V1L `SW4A`/`SW4B` (INST/LINE) both short a **22k feedback resistor** on the output
+  buffer (V2: `R52` over `U6A`; V1L: `R60` over `IC3D`), with a 10k+bigC leg to VCOM (V2 `R53`/`C33`;
+  V1L `R56`/`C43`). **Closed = feedback shorted = unity gain = INST / 0 dB — this is the throw we
+  model.** Open = 1 + 22k/10k = 3.2× = **+10.1 dB** = LINE / "+10dB", matching the panel labels
+  exactly (a strong consistency check on the transcription). V1L's DPDT uses both halves in parallel
+  as contacts; V2's `SW1A` half is unused (✗). For our unity-throw model the whole network reduces
+  to a unity buffer — no residual filter to model (the 10k/C leg only shapes gain in the boost throw).
+- **Zener part numbers (`DZ23C3V3`, `BZB984-C3V3`) are well-verified** (V2's via direct measurement
+  + breadboard reconstruction by the source author) but **their WDF treatment is an open research
+  item** — see the DSP-modelling flag under Nonlinear devices. Do not proceed to that build step
+  without resolving how to model reverse zener breakdown in the chowdsp_wdf framework.
+- **Op-amp non-rail-to-rail sub-variant (NJM064/TL062, pre-1997 V1 Early units) is documented but
+  out of scope** for the initial 3-way build — see Op-amp model section.
+- **Power resistor tolerance variants (R37/R59/R61/R62 class) and V2's R54 resistor→PTC-fuse running
+  change are supply-side production variance, excluded from the DSP model** per the standard
+  power-section gotcha.
+- **License reminder:** the source schematics are explicitly marked non-commercial, unofficial, and
+  "may contain inaccuracies" by the reverse-engineering author. If this project or its assets are
+  ever distributed commercially, the redrawn schematic images themselves should not be included/
+  redistributed — component values transcribed into this document (facts, not the author's
+  copyrightable expression/drawing) are the reusable artifact; the PNG schematic files in
+  `schematics/` are reference-only working material.
