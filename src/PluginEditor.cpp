@@ -7,32 +7,82 @@ namespace
     constexpr float kRotaryStart = juce::MathConstants<float>::pi * -0.75f;
     constexpr float kRotaryEnd   = juce::MathConstants<float>::pi * 0.75f;
 
-    // Positions a knob + its label as fractions of the pedal-face rect. Label sits centred above
-    // the knob, sized off the face width so it scales cleanly with the window.
-    void placeKnob(juce::Rectangle<float> face, juce::Slider& slider, juce::Label& label,
-                    float fx, float fy, float diamFrac, float labelHFrac, PedalLookAndFeel& laf)
+    // Every position/size below comes from ui/positions.csv — the user's exact centre-pixel
+    // measurements against the 1900x1450 texture canvas (docs/ui-noamp-assets.md), not estimates.
+    // Positions: fx = x/1900 (used with face.getWidth()), fy = y/1450 (used with face.getHeight()).
+    // Sizes (diameters/widths/heights): ALL expressed as pixels/1900 and applied via
+    // face.getWidth() for both axes of an element — valid because the face rect's aspect ratio is
+    // locked to the texture's (kBaseH derivation in PluginEditor.h), so face.getWidth()/1900 ==
+    // face.getHeight()/1450 as a scale factor; using one fraction for both axes keeps square
+    // elements (knobs, LED, footswitch, pushbuttons) actually square.
+    constexpr float kTexW = 1900.0f, kTexH = 1450.0f;
+
+    constexpr float kKnobDiam = 250.0f / kTexW;
+    constexpr float kBtnDiam  = 120.0f / kTexW;
+    constexpr float kFsDiam   = 260.0f / kTexW;
+    constexpr float kLedDiam  = 115.0f / kTexW;
+    // The CSV's 70x210 measures the switch-track GRAPHIC only. ThreePositionSwitch draws its
+    // adjacent "V1 EARLY"/"V1 LATE"/"V2" text labels within the SAME component bounds (scaled off
+    // the component's own height), so the component itself must stay wider than the bare graphic
+    // or those labels clip. Ratio = (bodyW 20 + gap 4 + labelW 145) / refHeight 65 ≈ 2.6, with a
+    // small safety margin, matching ThreePositionSwitch's internal proportions at its label font.
+    constexpr float kSwitchH  = 210.0f / kTexW;
+    constexpr float kSwitchW  = kSwitchH * 2.7f;
+
+    // Knobs shared by both revisions (same position either way).
+    constexpr float kLevelX  =  253.0f / kTexW, kLevelY  = 287.0f / kTexH;
+    constexpr float kBlendX  =  599.0f / kTexW, kBlendY  = 287.0f / kTexH;
+    constexpr float kTrebleX =  946.0f / kTexW, kTrebleY = 287.0f / kTexH;
+    constexpr float kDriveX  = 1639.0f / kTexW, kDriveY  = 287.0f / kTexH;
+
+    // V1-only positions (BASS sits in the top row; PRESENCE sits lower, on the diagonal swoop).
+    constexpr float kV1BassX     = 1292.0f / kTexW, kV1BassY     = 287.0f / kTexH;
+    constexpr float kV1PresenceX = 1116.0f / kTexW, kV1PresenceY = 587.0f / kTexH;
+
+    // V2-only positions (PRESENCE moves into the top row where V1's BASS was; BASS drops to the
+    // second row alongside the new MID knob).
+    constexpr float kV2PresenceX = 1292.0f / kTexW, kV2PresenceY = 287.0f / kTexH;
+    constexpr float kV2BassX     = 1136.0f / kTexW, kV2BassY     = 596.0f / kTexH;
+    constexpr float kMidX        =  786.0f / kTexW, kMidY        = 596.0f / kTexH;
+
+    // Shared peripherals (same position both revisions).
+    constexpr float kSwitchX     = 175.0f  / kTexW, kSwitchY     = 725.0f  / kTexH;
+    constexpr float kFootswitchX = 1680.0f / kTexW, kFootswitchY = 1255.0f / kTexH;
+
+    // LED shifts very slightly between revisions (per the user's measurements).
+    constexpr float kV1LedX = 1397.0f / kTexW, kV1LedY = 782.0f / kTexH;
+    constexpr float kV2LedX = 1408.0f / kTexW, kV2LedY = 790.0f / kTexH;
+
+    // V2-only SHIFT pushbuttons + their dynamic value-label boxes (SHIFT/Hz captions are baked).
+    constexpr float kMidShiftBtnX  = 622.0f / kTexW, kMidShiftBtnY  = 863.0f / kTexH;
+    constexpr float kBassShiftBtnX = 787.0f / kTexW, kBassShiftBtnY = 863.0f / kTexH;
+
+    // Box scaled 1.5x from the measured CSV size (grows with the text so it doesn't clip against
+    // its own component bounds — JUCE clips child painting to the component rect).
+    constexpr float kShiftValueScale = 1.5f;
+    // Split the difference between the original 992 and the (too-high) 980, erring closer to 992.
+    constexpr float kMidValueX = 633.5f / kTexW, kMidValueY = 989.0f / kTexH;
+    constexpr float kMidValueW = 196.0f / kTexW * kShiftValueScale, kMidValueH = 38.0f / kTexW * kShiftValueScale;
+    constexpr float kBassValueX = 801.0f / kTexW, kBassValueY = 989.0f / kTexH;
+    constexpr float kBassValueW = 117.0f / kTexW * kShiftValueScale, kBassValueH = 38.0f / kTexW * kShiftValueScale;
+    // Negative = right side up (positive rotated the wrong way — right side down).
+    constexpr float kShiftValueRotationDeg = -14.5f;
+
+    // Centres any component at a face-relative fraction with the given width/height fractions
+    // (also face-width-relative — see the size-fraction note above).
+    void placeAt(juce::Rectangle<float> face, juce::Component& c, float fx, float fy, float wFrac, float hFrac)
     {
-        const float diam = face.getWidth() * diamFrac;
+        const float w = face.getWidth() * wFrac;
+        const float h = face.getWidth() * hFrac;
         const float cx = face.getX() + face.getWidth() * fx;
         const float cy = face.getY() + face.getHeight() * fy;
-        slider.setBounds(juce::Rectangle<float>(cx - diam * 0.5f, cy - diam * 0.5f, diam, diam).toNearestInt());
-
-        const float labelH = face.getWidth() * labelHFrac;
-        const float labelW = diam * 2.1f;
-        label.setJustificationType(juce::Justification::centred);
-        label.setBounds(juce::Rectangle<float>(cx - labelW * 0.5f, cy - diam * 0.5f - labelH * 1.15f,
-                                                 labelW, labelH).toNearestInt());
-        label.setFont(laf.getDisplayFont(labelH * 0.62f));
+        c.setBounds(juce::Rectangle<float>(cx - w * 0.5f, cy - h * 0.5f, w, h).toNearestInt());
     }
 
-    // Sizes a label's font from its OWN (already-set) bounds height, as a fraction of the
-    // pedal-face rect (via placeKnob-style bounds) — not from the outer `sc` window-scale factor.
-    // Needed because these labels live on the FACE, whose size is independent of kBaseW/kPanelW
-    // (the peripheral shell's own constants), so tying their font to `sc` alone breaks whenever
-    // the base window size changes for peripheral-shell reasons unrelated to the face.
-    void setFontFromHeight(juce::Label& label, float fillFactor, PedalLookAndFeel& laf)
+    // Square sprite convenience (knobs, LED, footswitch, pushbuttons all use one diameter fraction).
+    void placeSquare(juce::Rectangle<float> face, juce::Component& c, float fx, float fy, float diamFrac)
     {
-        label.setFont(laf.getDisplayFont((float) label.getHeight() * fillFactor));
+        placeAt(face, c, fx, fy, diamFrac, diamFrac);
     }
 }
 
@@ -154,54 +204,47 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
     };
     addAndMakeVisible(scaleButton);
 
-    // ── Bypass + LED ─────────────────────────────────────────────────────────
+    // ── Bypass + LED (ACTIVE caption is baked into the texture) ─────────────
     bypassButton.setComponentID("bypass");
     bypassButton.setClickingTogglesState(true);
     addAndMakeVisible(bypassButton);
     bypassAttach = std::make_unique<juce::ButtonParameterAttachment>(*apvts.getParameter(Proc::idBypass), bypassButton);
 
     bypassLabel.setJustificationType(juce::Justification::centred);
-    bypassLabel.setColour(juce::Label::textColourId, juce::Colour(PedalLookAndFeel::cBypassLabel));
+    bypassLabel.setColour(juce::Label::textColourId, juce::Colour(PedalLookAndFeel::cShiftHighlight));
     addAndMakeVisible(bypassLabel);
 
     ledIndicator.setImages(nalr::assets::redLed(false), nalr::assets::redLed(true));
     addAndMakeVisible(ledIndicator);
-    ledCaptionLabel.setJustificationType(juce::Justification::centredLeft);
-    ledCaptionLabel.setColour(juce::Label::textColourId, juce::Colour(PedalLookAndFeel::cPedalFaceText));
-    addAndMakeVisible(ledCaptionLabel);
 
-    // ── Revision selector ────────────────────────────────────────────────────
+    // ── Revision selector (V1 EARLY/V1 LATE/V2 labels are code-drawn; positions/size are exact) ──
     revisionSwitch.setBodyImages(nalr::assets::selector(0), nalr::assets::selector(1), nalr::assets::selector(2));
     revisionSwitch.setLabels("V1 EARLY", "V1 LATE", "V2");
+    revisionSwitch.setLabelTypeface(nalr::assets::displayTypeface());
     addAndMakeVisible(revisionSwitch);
     revisionAttach = std::make_unique<juce::ParameterAttachment>(*apvts.getParameter(Proc::idRevision),
         [this](float newValue) { applyRevision((int) std::lround(newValue), false); });
     revisionSwitch.onChange = [this](int pos) { revisionAttach->setValueAsCompleteGesture((float) pos); };
 
-    // ── Knobs (all revisions; MID hidden outside V2 by applyRevision) ───────
-    auto setupKnob = [this, &apvts](juce::Slider& s, juce::Label& l, const char* paramId,
-                                     std::unique_ptr<juce::SliderParameterAttachment>& attach,
-                                     const juce::String& text)
+    // ── Knobs (all revisions; names are baked into the texture; MID hidden outside V2) ─────────
+    auto setupKnob = [this, &apvts](juce::Slider& s, const char* paramId,
+                                     std::unique_ptr<juce::SliderParameterAttachment>& attach)
     {
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         s.setRotaryParameters(kRotaryStart, kRotaryEnd, true);
         addAndMakeVisible(s);
         attach = std::make_unique<juce::SliderParameterAttachment>(*apvts.getParameter(paramId), s);
-
-        l.setText(text, juce::dontSendNotification);
-        l.setColour(juce::Label::textColourId, juce::Colour(PedalLookAndFeel::cPedalFaceText));
-        addAndMakeVisible(l);
     };
-    setupKnob(levelSlider, levelLabel, Proc::idLevel, levelAttach, "LEVEL");
-    setupKnob(blendSlider, blendLabel, Proc::idBlend, blendAttach, "BLEND");
-    setupKnob(trebleSlider, trebleLabel, Proc::idTreble, trebleAttach, "TREBLE");
-    setupKnob(bassSlider, bassLabel, Proc::idBass, bassAttach, "BASS");
-    setupKnob(driveSlider, driveLabel, Proc::idDrive, driveAttach, "DRIVE");
-    setupKnob(presenceSlider, presenceLabel, Proc::idPresence, presenceAttach, "PRESENCE");
-    setupKnob(midSlider, midLabel, Proc::idMid, midAttach, "MID");
+    setupKnob(levelSlider, Proc::idLevel, levelAttach);
+    setupKnob(blendSlider, Proc::idBlend, blendAttach);
+    setupKnob(trebleSlider, Proc::idTreble, trebleAttach);
+    setupKnob(bassSlider, Proc::idBass, bassAttach);
+    setupKnob(driveSlider, Proc::idDrive, driveAttach);
+    setupKnob(presenceSlider, Proc::idPresence, presenceAttach);
+    setupKnob(midSlider, Proc::idMid, midAttach);
 
-    // ── V2-only SHIFT pushbuttons ────────────────────────────────────────────
+    // ── V2-only SHIFT pushbuttons + dynamic value readouts (SHIFT/Hz captions are baked) ───────
     auto setupShiftButton = [this, &apvts](juce::TextButton& b, const char* paramId,
                                             std::unique_ptr<juce::ButtonParameterAttachment>& attach)
     {
@@ -213,26 +256,15 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
     setupShiftButton(midShiftButton, Proc::idMidShift, midShiftAttach);
     setupShiftButton(bassShiftButton, Proc::idBassShift, bassShiftAttach);
 
-    auto setupShiftLabel = [this](juce::Label& l, juce::uint32 colour)
+    auto setupShiftValue = [this](DualValueLabel& l, const juce::String& a, const juce::String& b)
     {
-        l.setJustificationType(juce::Justification::centred);
-        l.setColour(juce::Label::textColourId, juce::Colour(colour));
+        l.setValues(a, b);
+        l.setColours(juce::Colour(PedalLookAndFeel::cShiftHighlight),
+                     juce::Colour(PedalLookAndFeel::cShiftHighlight).withAlpha(0.45f));
         addAndMakeVisible(l);
     };
-    setupShiftLabel(midShiftCaption, PedalLookAndFeel::cPedalFaceText);
-    setupShiftLabel(bassShiftCaption, PedalLookAndFeel::cPedalFaceText);
-    setupShiftLabel(midShiftRange, PedalLookAndFeel::cPedalFaceText);
-    setupShiftLabel(bassShiftRange, PedalLookAndFeel::cPedalFaceText);
-    setupShiftLabel(midShiftValue, PedalLookAndFeel::cSWLabelActive);
-    setupShiftLabel(bassShiftValue, PedalLookAndFeel::cSWLabelActive);
-
-    // ── Wordmark ─────────────────────────────────────────────────────────────
-    for (auto* l : { &wordmarkTop, &wordmarkBottom })
-    {
-        l->setJustificationType(juce::Justification::centred);
-        l->setColour(juce::Label::textColourId, juce::Colour(PedalLookAndFeel::cPedalFaceText));
-        addAndMakeVisible(*l);
-    }
+    setupShiftValue(midShiftValue, "500", "1000");
+    setupShiftValue(bassShiftValue, "40", "80");
 
     setResizable(true, true);
     if (auto* c = getConstrainer())
@@ -280,9 +312,8 @@ void NoAmpLowRiderDIAudioProcessorEditor::refreshFonts(float sc)
     versionLabel.setFont(juce::Font(juce::FontOptions(7.0f * sc)).withExtraKerningFactor(0.1f));
 
     bypassLabel.setFont(bold(7.0f * sc).withExtraKerningFactor(0.20f));
-    // ledCaptionLabel, wordmarkTop/Bottom, and the SHIFT captions/range/value labels all live on
-    // the pedal face, not the peripheral shell — their fonts are sized from their own face-relative
-    // bounds in layoutV1()/layoutV2() (setFontFromHeight()), not from `sc` here.
+    // midShiftValue/bassShiftValue live on the pedal face, not the peripheral shell — their fonts
+    // are sized from their own face-relative bounds in layoutV2(), not from `sc` here.
 }
 
 void NoAmpLowRiderDIAudioProcessorEditor::resized()
@@ -329,7 +360,7 @@ void NoAmpLowRiderDIAudioProcessorEditor::resized()
     {
         title.setBounds(panel.removeFromTop(14.0f * sc).toNearestInt());
         panel.removeFromTop(2.0f * sc);
-        const float knobD = juce::jmin(70.0f * sc, panel.getWidth());
+        const float knobD = juce::jmin(42.0f * sc, panel.getWidth()); // 70px halo knob, reduced 40%
         auto knobArea = panel.removeFromTop(knobD);
         trimSlider.setBounds(knobArea.withSizeKeepingCentre(knobD, knobD).toNearestInt());
         trimLabel.setBounds(panel.removeFromTop(14.0f * sc).toNearestInt());
@@ -363,9 +394,7 @@ void NoAmpLowRiderDIAudioProcessorEditor::applyRevision(int revision, bool force
 
     const bool isV2 = (revision == 2);
     juce::Component* const v2OnlyComponents[] = {
-        &midSlider, &midLabel, &midShiftButton, &midShiftCaption,
-        &midShiftRange, &midShiftValue, &bassShiftButton, &bassShiftCaption,
-        &bassShiftRange, &bassShiftValue
+        &midSlider, &midShiftButton, &midShiftValue, &bassShiftButton, &bassShiftValue
     };
     for (auto* c : v2OnlyComponents)
         c->setVisible(isV2);
@@ -378,131 +407,56 @@ void NoAmpLowRiderDIAudioProcessorEditor::applyRevision(int revision, bool force
 void NoAmpLowRiderDIAudioProcessorEditor::layoutV1(juce::Rectangle<float> face, float sc)
 {
     juce::ignoreUnused(sc);
-    constexpr float kDiam = 0.105f, kLabelH = 0.050f;
-    placeKnob(face, levelSlider,    levelLabel,    0.159f, 0.195f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, blendSlider,    blendLabel,    0.325f, 0.195f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, trebleSlider,   trebleLabel,   0.494f, 0.195f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, bassSlider,     bassLabel,     0.6625f, 0.195f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, driveSlider,    driveLabel,    0.831f, 0.195f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, presenceSlider, presenceLabel, 0.581f, 0.420f, kDiam, kLabelH, lookAndFeel);
+    placeSquare(face, levelSlider, kLevelX, kLevelY, kKnobDiam);
+    placeSquare(face, blendSlider, kBlendX, kBlendY, kKnobDiam);
+    placeSquare(face, trebleSlider, kTrebleX, kTrebleY, kKnobDiam);
+    placeSquare(face, bassSlider, kV1BassX, kV1BassY, kKnobDiam);
+    placeSquare(face, driveSlider, kDriveX, kDriveY, kKnobDiam);
+    placeSquare(face, presenceSlider, kV1PresenceX, kV1PresenceY, kKnobDiam);
 
-    // PRESENCE reads diagonally, following the yellow swoop baked into the V1 textures. First-pass
-    // position/angle estimated off the reference photo — tune once a real render is reviewed.
-    {
-        const float labelW = face.getWidth() * kDiam * 2.4f;
-        const float labelH = face.getWidth() * kLabelH;
-        const float cx = face.getX() + face.getWidth() * 0.70f;
-        const float cy = face.getY() + face.getHeight() * 0.335f;
-        presenceLabel.setFont(lookAndFeel.getDisplayFont(labelH * 0.62f));
-        presenceLabel.setBounds(juce::Rectangle<float>(cx - labelW * 0.5f, cy - labelH * 0.5f, labelW, labelH).toNearestInt());
-        presenceLabel.setTransform(juce::AffineTransform::rotation(juce::degreesToRadians(-28.0f), cx, cy));
-    }
+    placeAt(face, revisionSwitch, kSwitchX, kSwitchY, kSwitchW, kSwitchH);
+    placeSquare(face, ledIndicator, kV1LedX, kV1LedY, kLedDiam);
+    placeSquare(face, bypassButton, kFootswitchX, kFootswitchY, kFsDiam);
 
-    {
-        // ThreePositionSwitch's internal label width scales off ITS OWN component height, so the
-        // bounds here must keep a wide-enough aspect (not the face's) or "V1 EARLY"/"V1 LATE" clip.
-        const float swH = face.getHeight() * 0.155f;
-        const float swW = swH * 1.4f;
-        revisionSwitch.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.06f,
-                                                          face.getY() + face.getHeight() * 0.42f,
-                                                          swW, swH).toNearestInt());
-    }
-
-    const float ledD = face.getWidth() * 0.030f;
-    ledIndicator.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.719f - ledD * 0.5f,
-                                                     face.getY() + face.getHeight() * 0.525f - ledD * 0.5f,
-                                                     ledD, ledD).toNearestInt());
-    ledCaptionLabel.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.745f,
-                                                        face.getY() + face.getHeight() * 0.505f,
-                                                        face.getWidth() * 0.12f, face.getHeight() * 0.040f).toNearestInt());
-    setFontFromHeight(ledCaptionLabel, 0.60f, lookAndFeel);
-
-    const float fsD = face.getWidth() * 0.145f;
-    bypassButton.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.847f - fsD * 0.5f,
-                                                     face.getY() + face.getHeight() * 0.835f - fsD * 0.5f,
-                                                     fsD, fsD).toNearestInt());
-    bypassLabel.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.847f - fsD * 0.6f,
-                                                    face.getY() + face.getHeight() * 0.835f + fsD * 0.55f,
-                                                    fsD * 1.2f, face.getHeight() * 0.035f).toNearestInt());
-
-    wordmarkTop.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.15f,
-                                                    face.getY() + face.getHeight() * 0.72f,
-                                                    face.getWidth() * 0.50f, face.getHeight() * 0.13f).toNearestInt());
-    setFontFromHeight(wordmarkTop, 0.62f, lookAndFeel);
-    wordmarkBottom.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.15f,
-                                                       face.getY() + face.getHeight() * 0.855f,
-                                                       face.getWidth() * 0.42f, face.getHeight() * 0.06f).toNearestInt());
-    setFontFromHeight(wordmarkBottom, 0.55f, lookAndFeel);
+    const float fsD = face.getWidth() * kFsDiam;
+    bypassLabel.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * kFootswitchX - fsD * 0.6f,
+                                                   face.getY() + face.getHeight() * kFootswitchY + fsD * 0.52f,
+                                                   fsD * 1.2f, face.getHeight() * 0.035f).toNearestInt());
 }
 
 void NoAmpLowRiderDIAudioProcessorEditor::layoutV2(juce::Rectangle<float> face, float sc)
 {
     juce::ignoreUnused(sc);
-    constexpr float kDiam = 0.095f, kLabelH = 0.045f;
-    placeKnob(face, levelSlider,    levelLabel,    0.142f, 0.160f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, blendSlider,    blendLabel,    0.330f, 0.160f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, trebleSlider,   trebleLabel,   0.520f, 0.160f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, presenceSlider, presenceLabel, 0.687f, 0.160f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, driveSlider,    driveLabel,    0.872f, 0.160f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, midSlider,      midLabel,      0.411f, 0.408f, kDiam, kLabelH, lookAndFeel);
-    placeKnob(face, bassSlider,     bassLabel,     0.601f, 0.408f, kDiam, kLabelH, lookAndFeel);
+    placeSquare(face, levelSlider, kLevelX, kLevelY, kKnobDiam);
+    placeSquare(face, blendSlider, kBlendX, kBlendY, kKnobDiam);
+    placeSquare(face, trebleSlider, kTrebleX, kTrebleY, kKnobDiam);
+    placeSquare(face, presenceSlider, kV2PresenceX, kV2PresenceY, kKnobDiam);
+    placeSquare(face, driveSlider, kDriveX, kDriveY, kKnobDiam);
+    placeSquare(face, midSlider, kMidX, kMidY, kKnobDiam);
+    placeSquare(face, bassSlider, kV2BassX, kV2BassY, kKnobDiam);
 
-    // PRESENCE sits flat in the V2 top row — no diagonal swoop on this revision (clear V1's transform).
-    presenceLabel.setTransform(juce::AffineTransform());
+    placeSquare(face, midShiftButton, kMidShiftBtnX, kMidShiftBtnY, kBtnDiam);
+    placeSquare(face, bassShiftButton, kBassShiftBtnX, kBassShiftBtnY, kBtnDiam);
 
-    const float btnD = face.getWidth() * 0.05f;
-    auto placeShiftButton = [&face, btnD, this](juce::TextButton& b, juce::Label& caption, juce::Label& range,
-                                                 juce::Label& value, float fx, float fy)
+    auto placeShiftValue = [&face](DualValueLabel& l, float fx, float fy, float wFrac, float hFrac)
     {
-        const float cx = face.getX() + face.getWidth() * fx;
-        const float cy = face.getY() + face.getHeight() * fy;
-        b.setBounds(juce::Rectangle<float>(cx - btnD * 0.5f, cy - btnD * 0.5f, btnD, btnD).toNearestInt());
-        caption.setBounds(juce::Rectangle<float>(cx - btnD * 1.6f, cy + btnD * 0.7f,
-                                                    btnD * 3.2f, face.getHeight() * 0.030f).toNearestInt());
-        setFontFromHeight(caption, 0.60f, lookAndFeel);
-        range.setBounds(juce::Rectangle<float>(cx - btnD * 1.8f, cy + btnD * 0.7f + face.getHeight() * 0.030f,
-                                                 btnD * 3.6f, face.getHeight() * 0.045f).toNearestInt());
-        setFontFromHeight(range, 0.45f, lookAndFeel);
-        value.setBounds(juce::Rectangle<float>(cx - btnD * 1.8f, cy - btnD * 1.15f,
-                                                 btnD * 3.6f, face.getHeight() * 0.030f).toNearestInt());
-        setFontFromHeight(value, 0.60f, lookAndFeel);
+        placeAt(face, l, fx, fy, wFrac, hFrac);
+        l.setFont(juce::Font(juce::FontOptions((float) l.getHeight() * 0.72f, juce::Font::bold)));
+        const auto centre = l.getBounds().toFloat().getCentre();
+        l.setTransform(juce::AffineTransform::rotation(juce::degreesToRadians(kShiftValueRotationDeg),
+                                                         centre.x, centre.y));
     };
-    placeShiftButton(midShiftButton, midShiftCaption, midShiftRange, midShiftValue, 0.330f, 0.551f);
-    placeShiftButton(bassShiftButton, bassShiftCaption, bassShiftRange, bassShiftValue, 0.422f, 0.551f);
+    placeShiftValue(midShiftValue, kMidValueX, kMidValueY, kMidValueW, kMidValueH);
+    placeShiftValue(bassShiftValue, kBassValueX, kBassValueY, kBassValueW, kBassValueH);
 
-    {
-        const float swH = face.getHeight() * 0.145f;
-        const float swW = swH * 1.4f;
-        revisionSwitch.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.045f,
-                                                          face.getY() + face.getHeight() * 0.40f,
-                                                          swW, swH).toNearestInt());
-    }
+    placeAt(face, revisionSwitch, kSwitchX, kSwitchY, kSwitchW, kSwitchH);
+    placeSquare(face, ledIndicator, kV2LedX, kV2LedY, kLedDiam);
+    placeSquare(face, bypassButton, kFootswitchX, kFootswitchY, kFsDiam);
 
-    const float ledD = face.getWidth() * 0.026f;
-    ledIndicator.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.754f - ledD * 0.5f,
-                                                     face.getY() + face.getHeight() * 0.530f - ledD * 0.5f,
-                                                     ledD, ledD).toNearestInt());
-    ledCaptionLabel.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.778f,
-                                                        face.getY() + face.getHeight() * 0.510f,
-                                                        face.getWidth() * 0.12f, face.getHeight() * 0.035f).toNearestInt());
-    setFontFromHeight(ledCaptionLabel, 0.60f, lookAndFeel);
-
-    const float fsD = face.getWidth() * 0.12f;
-    bypassButton.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.872f - fsD * 0.5f,
-                                                     face.getY() + face.getHeight() * 0.900f - fsD * 0.5f,
-                                                     fsD, fsD).toNearestInt());
-    bypassLabel.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.872f - fsD * 0.6f,
-                                                    face.getY() + face.getHeight() * 0.900f + fsD * 0.55f,
-                                                    fsD * 1.2f, face.getHeight() * 0.030f).toNearestInt());
-
-    wordmarkTop.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.10f,
-                                                    face.getY() + face.getHeight() * 0.72f,
-                                                    face.getWidth() * 0.45f, face.getHeight() * 0.11f).toNearestInt());
-    setFontFromHeight(wordmarkTop, 0.62f, lookAndFeel);
-    wordmarkBottom.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * 0.10f,
-                                                       face.getY() + face.getHeight() * 0.845f,
-                                                       face.getWidth() * 0.38f, face.getHeight() * 0.05f).toNearestInt());
-    setFontFromHeight(wordmarkBottom, 0.55f, lookAndFeel);
+    const float fsD = face.getWidth() * kFsDiam;
+    bypassLabel.setBounds(juce::Rectangle<float>(face.getX() + face.getWidth() * kFootswitchX - fsD * 0.6f,
+                                                   face.getY() + face.getHeight() * kFootswitchY + fsD * 0.52f,
+                                                   fsD * 1.2f, face.getHeight() * 0.035f).toNearestInt());
 }
 
 void NoAmpLowRiderDIAudioProcessorEditor::timerCallback()
@@ -521,6 +475,8 @@ void NoAmpLowRiderDIAudioProcessorEditor::timerCallback()
     const auto* pBypass = apvts.getRawParameterValue(Proc::idBypass);
     ledIndicator.setOn(! (pBypass != nullptr && pBypass->load() > 0.5f));
 
-    midShiftValue.setText(apvts.getParameter(Proc::idMidShift)->getCurrentValueAsText(), juce::dontSendNotification);
-    bassShiftValue.setText(apvts.getParameter(Proc::idBassShift)->getCurrentValueAsText(), juce::dontSendNotification);
+    const auto* pMidShift = apvts.getRawParameterValue(Proc::idMidShift);
+    midShiftValue.setSelected(pMidShift != nullptr ? (int) std::lround(pMidShift->load()) : 0);
+    const auto* pBassShift = apvts.getRawParameterValue(Proc::idBassShift);
+    bassShiftValue.setSelected(pBassShift != nullptr ? (int) std::lround(pBassShift->load()) : 0);
 }

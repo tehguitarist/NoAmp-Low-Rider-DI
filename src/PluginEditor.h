@@ -1,6 +1,7 @@
 #pragma once
 
 #include "PluginProcessor.h"
+#include "ui/DualValueLabel.h"
 #include "ui/LEDIndicator.h"
 #include "ui/PedalAssets.h"
 #include "ui/PedalLookAndFeel.h"
@@ -9,9 +10,12 @@
 
 // NoAmp Low Rider DI — pedal-face editor. Three-column layout (input panel / pedal face / output
 // panel) + OS strip, per ui.md + docs/ui-peripheral-spec.md. The centre pedal face is asset-driven
-// (docs/ui-noamp-assets.md): a per-revision faceplate texture with knob/switch/LED/footswitch
-// sprites composited on top, reflowing between the V1 (Early/Late share one layout) and V2 knob
-// arrangements when the `revision` parameter changes.
+// (docs/ui-noamp-assets.md): a per-revision faceplate texture with ALL static text baked in (knob
+// names, wordmark, ACTIVE, SHIFT/Hz captions) by the user, so the editor only composites the
+// interactive sprites (knobs, switch, LED, footswitch, SHIFT pushbuttons) and the two dynamic
+// SHIFT value readouts on top, reflowing between the V1 (Early/Late share one layout) and V2
+// arrangements when the `revision` parameter changes. Element positions/sizes below come from the
+// user's exact texture-pixel measurements (ui/positions.csv, 1900x1450 canvas), not estimates.
 class NoAmpLowRiderDIAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                                    private juce::Timer
 {
@@ -65,33 +69,26 @@ private:
     std::unique_ptr<juce::ComboBoxParameterAttachment> osRealtimeAttach, osRenderAttach;
     juce::ApplicationProperties appProps;
 
-    // ── Bypass + LED ─────────────────────────────────────────────────────────
+    // ── Bypass + LED (BYPASS caption is code-drawn; ACTIVE is baked into the texture) ──────────
     juce::TextButton bypassButton;
     juce::Label bypassLabel { {}, "BYPASS" };
     LEDIndicator ledIndicator;
-    juce::Label ledCaptionLabel { {}, "ACTIVE" };
     std::unique_ptr<juce::ButtonParameterAttachment> bypassAttach;
 
-    // ── Revision selector ────────────────────────────────────────────────────
+    // ── Revision selector (V1 EARLY/V1 LATE/V2 labels are code-drawn by ThreePositionSwitch) ───
     ThreePositionSwitch revisionSwitch;
     std::unique_ptr<juce::ParameterAttachment> revisionAttach;
 
-    // ── Pedal-face knobs (all revisions) ────────────────────────────────────
+    // ── Pedal-face knobs (all revisions; names are baked into the texture) ──────────────────────
     juce::Slider levelSlider, blendSlider, trebleSlider, bassSlider, driveSlider, presenceSlider, midSlider;
-    juce::Label levelLabel, blendLabel, trebleLabel, bassLabel, driveLabel, presenceLabel, midLabel;
     std::unique_ptr<juce::SliderParameterAttachment> levelAttach, blendAttach, trebleAttach,
         bassAttach, driveAttach, presenceAttach, midAttach;
 
-    // ── V2-only SHIFT pushbuttons ────────────────────────────────────────────
+    // ── V2-only SHIFT pushbuttons (SHIFT/Hz captions are baked; these show the live "500/1000"-
+    // style numbers with the active one highlighted) ────────────────────────────────────────────
     juce::TextButton midShiftButton, bassShiftButton;
-    juce::Label midShiftCaption { {}, "SHIFT" }, bassShiftCaption { {}, "SHIFT" };
-    juce::Label midShiftRange { {}, "500/1000 Hz" }, bassShiftRange { {}, "40/80 Hz" };
-    juce::Label midShiftValue, bassShiftValue; // dynamic: current choice text
+    DualValueLabel midShiftValue, bassShiftValue;
     std::unique_ptr<juce::ButtonParameterAttachment> midShiftAttach, bassShiftAttach;
-
-    // ── Wordmark ─────────────────────────────────────────────────────────────
-    juce::Label wordmarkTop { {}, "NoAmp" };
-    juce::Label wordmarkBottom { {}, "LOW RIDER DI" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(NoAmpLowRiderDIAudioProcessorEditor)
 };

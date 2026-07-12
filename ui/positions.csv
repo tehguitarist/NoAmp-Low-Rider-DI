@@ -1,0 +1,22 @@
+﻿Element,v1x,v1y,v2x,v2y,width,height,rotation
+LEVEL knob,253,287,253,287,,,
+BLEND knob,599,287,599,287,,,
+TREBLE knob,946,287,946,287,,,
+BASS knob,1292,287,1136,596,,,
+DRIVE knob,1639,287,1639,287,,,
+PRESENCE knob,1116,587,1292,287,,,
+Revision selector,175,725,175,725,,,
+ACTIVE LED,1397,782,1408,790,,,
+Footswitch,1680,1255,1680,1255,,,
+MID knob,,,786,596,,,
+MID-SHIFT pushbutton,,,622,863,,,
+BASS-SHIFT pushbutton,,,787,863,,,
+Mid Shift 500/1000 label,,,633.5,992,196,38,15.4 degrees (right side up)
+Bass Shift 40/80 Label,,,801,992,117,38,15.4 degrees (right side up)
+,,,,,,,
+,,,,,,,
+Colour:,FFBF2B,,,,,,
+Knob diameter,250,,,,,,
+Button Diameter,120,,,,,,
+Footswitch diameter,260,,,,,,
+LED diameter ,115,,,,,,

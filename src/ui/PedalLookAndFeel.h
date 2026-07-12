@@ -22,8 +22,8 @@ public:
     static constexpr juce::uint32 cTrimLabel       = 0xFF5588AAu;
     static constexpr juce::uint32 cTrimArc         = 0xFF2A5898u;
     static constexpr juce::uint32 cTrimArcTrack    = 0xFF101E30u;
-    static constexpr juce::uint32 cSWLabelActive   = 0xFF90C0E0u;
-    static constexpr juce::uint32 cSWLabelInactive = 0xFF3A5A78u;
+    static constexpr juce::uint32 cSWLabelActive   = 0xFFFFE04Cu;
+    static constexpr juce::uint32 cSWLabelInactive = 0xFF736522u; // ~45% brightness of cSWLabelActive
     static constexpr juce::uint32 cBypassLabel     = 0xFF2E4A60u;
     static constexpr juce::uint32 cMeterLow        = 0xFF44CC44u;
     static constexpr juce::uint32 cMeterMid        = 0xFFCCBA00u;
@@ -38,6 +38,7 @@ public:
     static constexpr juce::uint32 cOSBtnActiveBg   = 0xFF0C2040u;
     static constexpr juce::uint32 cOSBtnActiveBdr  = 0xFF2A5890u;
     static constexpr juce::uint32 cPedalFaceText   = 0xFFE6C846u; // knob labels, wordmark, SHIFT captions
+    static constexpr juce::uint32 cShiftHighlight  = 0xFFFFE04Cu; // DualValueLabel: selected number + slash
 
     PedalLookAndFeel();
 

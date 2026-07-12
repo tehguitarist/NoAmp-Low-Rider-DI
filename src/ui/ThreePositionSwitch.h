@@ -28,6 +28,14 @@ public:
         repaint();
     }
 
+    // Optional label typeface override (e.g. a pedal's embedded display font); unset (nullptr)
+    // leaves the plain system font used below — stays a generic reusable peripheral.
+    void setLabelTypeface(juce::Typeface::Ptr typeface)
+    {
+        labelTypeface = std::move(typeface);
+        repaint();
+    }
+
     void setPosition(int pos)
     {
         pos = juce::jlimit(0, 2, pos);
@@ -44,7 +52,7 @@ public:
         const float sc     = b.getHeight() / 65.0f;
         const float kBodyW = 20.0f * sc;
         const float kGap   =  4.0f * sc;
-        const float kLabelW = 58.0f * sc; // wide enough for "V1 EARLY" at the 7px-scaled font below
+        const float kLabelW = 145.0f * sc; // wide enough for "V1 EARLY" at the ~17.5px-scaled font below
 
         // Body centred in component; labels extend to the right
         const float bodyH  = 60.0f * sc;
@@ -92,7 +100,9 @@ public:
         }
 
         // Labels to the right of the body (configurable via setLabels)
-        g.setFont(juce::Font(juce::FontOptions(7.0f * sc)));
+        g.setFont(labelTypeface != nullptr
+                      ? juce::Font(juce::FontOptions(17.5f * sc).withTypeface(labelTypeface))
+                      : juce::Font(juce::FontOptions(17.5f * sc)));
 
         for (int n = 0; n < 3; ++n)
         {
@@ -101,7 +111,7 @@ public:
             g.setColour(active ? juce::Colour(PedalLookAndFeel::cSWLabelActive)
                                : juce::Colour(PedalLookAndFeel::cSWLabelInactive));
             g.drawText(labelText[n],
-                       juce::Rectangle<float>(labelX, cy - 6.0f * sc, kLabelW, 12.0f * sc),
+                       juce::Rectangle<float>(labelX, cy - 15.0f * sc, kLabelW, 30.0f * sc),
                        juce::Justification::centredLeft, false);
         }
     }
@@ -113,6 +123,7 @@ private:
     int position { 0 };
     juce::String labelText[3] { "Top", "Mid", "Bot" };
     juce::Image bodyImage[3];
+    juce::Typeface::Ptr labelTypeface;
 
     void updateFromMouse(float mouseY)
     {
