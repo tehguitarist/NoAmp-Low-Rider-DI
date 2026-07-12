@@ -366,20 +366,14 @@ interfaces (already exposed via APVTS, so not even code-level detail is needed).
 > `docs/ui-noamp-assets.md`. The editor, LookAndFeel bitmap overrides, per-revision faceplate
 > textures/layout, and the `UIRenderProbe` headless-render tool all exist; what's left here is
 > wiring against the real per-revision DSP behaviour (once Phase 7 lands) + iterating the
-> first-pass eyeballed knob/control positions against user feedback on the renders.
+> Layout can be considered provisionally done and verified pending further plugin testing.
 
 Read: `ui.md`, `docs/ui-peripheral-spec.md`, `docs/ui-noamp-assets.md`, `src/ui/` headers only.
 Peripherals as-is (side panels, VU, trims, OS strip, footswitch, LED). Centre face: knob rows per
 revision (V1e/V1l: PRESENCE DRIVE BASS TREBLE LEVEL BLEND; V2: + MID knob, MID-SHIFT & BASS-SHIFT
 switches via a new pushbutton switch; a 3-way revision selector styled
 as a panel-mounted slide switch; V2-only controls hidden on V1 revisions. Headless-render exe (per
-`build.md`) producing PNGs at 1.0×/1.5×/2.0× scale × 3 revisions.
-We will need to discuss/analyze layout before anything begins, so lets discuss before you actually start work as there are new UI elements specific to this project.
-**Gate:** build + headless renders produced. **Send the 9 PNGs to the user — do NOT self-review
-beyond "it compiled and rendered".** Iterate on user feedback only.
-**Session:** the render→send→wait-for-feedback→iterate loop is naturally its own session per round;
-each iteration round is cheap (layout tweaks, not derivation) so bundling several rounds together if
-feedback comes back quickly in one sitting is fine — no strong reason to force a break between them.
+`build.md`) producing PNGs at 1.0×/1.5×/2.0× scale × 3 revisions. DO NOT analyze the images yourself, the user will evaluate the UI themselves.
 
 ---
 **⏸ BREAK** (build/CI/perf-probe domain — `build.md` only, nothing from UI or DSP needed).
