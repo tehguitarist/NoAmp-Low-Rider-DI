@@ -352,9 +352,10 @@ interfaces (already exposed via APVTS, so not even code-level detail is needed).
 Read: `ui.md`, `docs/ui-peripheral-spec.md`, `src/ui/` headers only.
 Peripherals as-is (side panels, VU, trims, OS strip, footswitch, LED). Centre face: knob rows per
 revision (V1e/V1l: PRESENCE DRIVE BASS TREBLE LEVEL BLEND; V2: + MID knob, MID-SHIFT & BASS-SHIFT
-switches via `ThreePositionSwitch` in 2-pos mode or small toggles); a 3-way revision selector styled
-as a top-mounted slide switch; V2-only controls hidden on V1 revisions. Headless-render exe (per
+switches via a new pushbutton switch; a 3-way revision selector styled
+as a panel-mounted slide switch; V2-only controls hidden on V1 revisions. Headless-render exe (per
 `build.md`) producing PNGs at 1.0×/1.5×/2.0× scale × 3 revisions.
+We will need to discuss/analyze layout before anything begins, so lets discuss before you actually start work as there are new UI elements specific to this project.
 **Gate:** build + headless renders produced. **Send the 9 PNGs to the user — do NOT self-review
 beyond "it compiled and rendered".** Iterate on user feedback only.
 **Session:** the render→send→wait-for-feedback→iterate loop is naturally its own session per round;
