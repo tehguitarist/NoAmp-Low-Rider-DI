@@ -258,19 +258,27 @@ Same net gain/polarity as E6 in ONE op-amp — but the LEVEL wiper is **loaded b
 virtual ground**, so the effective level taper ≠ V1e's buffered-pot taper. Model the loading.
 (circuit.md's LEVEL-buffer row implied a follower — corrected.)
 
-## L7. BASS/TREBLE tone stack (IC3C, inverting PEAKING Baxandall) — one coupled network [◐ §5 §6]
+## L7. BASS/TREBLE tone stack (IC3C, inverting PEAKING Baxandall) — one coupled network [✓ §5 §6]
+
+**⚠ CORRECTED 2026-07-12 (Phase 5.2, re-cropped `v1-late_BL_2x.png`): the 4th-pass read of the
+treble caps and C15 was wrong — the [◐] flag correctly anticipated it. The pot wipers couple to nV;
+the top-rail caps bridge pot ENDS, not the wiper. Verified against FR §5/§6 (`tests/V1LateStagesTest`
+nails BASS +12/−14 @ ~80 Hz, TREBLE +16 @ 3.1 kHz).**
 
 ```
 T_IN ; OUT = IC3C.out ; nV = IC3C(−) ; IC3C(+) = VCOM
 direct arm : T_IN —R29 1M— nV          feedback : R28 1M ∥ C29 22p : nV—OUT   (flat gain ≈ −1)
 TREBLE rail : T_IN —R51 3.3k— t1 —VR2— t2 —R55 3.3k— OUT
-   C21 4.7n : t1—VR2.w   ;   C7 22n : t2—VR2.w   ;   VR2.w —C20 1n— nV
+   C21 4.7n : t1—t2 (across the pot)  ;  C7 22n : t2—OUT (across R55)  ;  VR2.w —C20 1n— nV
 BASS rail   : T_IN —R52 3.3k— b1 —VR3— b2 —R54 3.3k— OUT
-   wiper leg : VR3.w —C16 10n— R53 100k— nV      (series order b/w them irrelevant)
+   C15 100n : b1—b2 (across the pot)  ;  wiper leg : VR3.w —C16 10n— R53 100k— nV
 ```
 Peaking (returns to 0 dB at extremes) because the wiper legs are capacitor-coupled into nV and
-the rails carry the DC/flat path — TREBLE peak ~+17 dB @ 3–5 kHz per FR §6. Model as ONE
-R-type network. V2's stack (V7) is this cell plus the BASS-SHIFT switched leg.
+the rails carry the DC/flat path — TREBLE peak ~+17 dB @ 3–4 kHz per FR §6; BASS peaks ~+12/−14 dB
+@ ~75 Hz with a small opposite-sign ~2–4 kHz bump. **C29 22p ∥ R28 1M is a ~7.2 kHz feedback pole**
+that rolls off the whole stage's top octave even at centre detent (tone-control §-targets are
+normalised to that centre curve). Model as ONE coupled network. V2's stack (V7) is this cell (same
+C21/C7/C20/C15/C16 topology) plus the BASS-SHIFT switched leg.
 
 ## L8. FET mute + output buffer (IC3D) [✓]
 
@@ -367,11 +375,13 @@ and U6B — see polarity table below).
 ## V7. BASS/TREBLE stack (U6B, inverting peaking Baxandall + BASS SHIFT) [◐ §5 §6]
 
 Same cell as L7 with redesignated parts and the switched bass leg (wiring resolved in
-circuit.md Validation notes):
+circuit.md Validation notes). **Treble caps corrected 2026-07-12 to match L7's verified topology
+(caps bridge pot ENDS, wiper→nV) — re-confirm against the V2 schematic crop when building 6.2 if the
+§5/§6 gates miss; V2's bass rail already had C27 across the pot, consistent with L7's C15 fix:**
 ```
 T_IN —R30 1M— nV ;  feedback R35 1M ∥ C32 22p : nV—OUT ;  U6B(+) = VCOM
 TREBLE rail : T_IN —R31 3.3k— t1 —VR57— t2 —R34 3.3k— OUT
-   C30 4.7n : t1—VR57.w ;  C31 22n : t2—VR57.w ;  VR57.w —C29 1n— nV
+   C30 4.7n : t1—t2 (across pot) ;  C31 22n : t2—OUT (across R34) ;  VR57.w —C29 1n— nV
 BASS rail : T_IN —R29 3.3k— b1 —VR48— b2 —R33 3.3k— OUT ;  C27 100n across b1—b2
    wiper leg : VR48.w —{C28 10n / R4 1M / C20 47n, SW4B selects}— R32 100k— nV
    (SW4A = unused half; corners ~45/~80 Hz per FR §5)
@@ -435,3 +445,7 @@ test anyway (`dsp.md`).
    the mid-node to the output) — E5/L5/V5.
 8. **Clip-module internal bias** ≈ 0.69·VCC on V1L (self-biased, C1 47u) vs ≈ VCC/2 on V2
    (pin 4 tied to main VCOM) — DC-only, flagged for headroom calibration — L4/V4.
+9. **(Phase 5.2, 2026-07-12) V1L/V2 peaking-treble caps bridge pot ENDS, not the wiper, and V1L's
+   bass cap C15 100n (across the pot) was missed entirely** — the wipers couple to nV (VR2.w→C20→nV,
+   VR3.w→C16→R53→nV); C21/C30 go t1—t2, C7/C31 go t2—OUT, C15/C27 go b1—b2. Verified vs FR §5/§6 in
+   `tests/V1LateStagesTest` — L7/V7. (The 4th-pass [◐] flag on this cell called it correctly.)

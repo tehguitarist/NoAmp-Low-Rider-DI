@@ -3,8 +3,9 @@
 // V1 Late linear DSP stages (NoAmp Low Rider DI). Phase 5.1 builds the deltas from V1 Early on the
 // SHARED linear stages (input buffer + twin-T notch reused verbatim from TwinTNotch.h; PRESENCE is a
 // genuinely different topology; recovery is retuned + gains a new wet make-up buffer; BLEND/LEVEL
-// collapses to one loaded inverting stage). The DRIVE/clip module (CH34-9, Phase 5.3) and the peaking
-// BASS/TREBLE tone stack (Phase 5.2) are NOT in this file. Values + topology: circuit.md V1-Late
+// collapses to one loaded inverting stage). Phase 5.2 adds the peaking BASS/TREBLE tone stack
+// (V1LatePeakingToneStage, a new topology vs V1e's shelving cell). The DRIVE/clip module (CH34-9,
+// Phase 5.3) is NOT in this file. Values + topology: circuit.md V1-Late
 // tables, netlists.md L1-L6 (wins on conflict). VREF (VCOM) = signal ground (bipolar model, dsp.md).
 //
 // Signal flow covered here:
@@ -16,7 +17,7 @@
 //           -> wet make-up buffer (NEW, +10.1 dB, C42 HF rolloff)
 //        -> V1LateBlendLevelStage: BLEND (dry direct, wet via C12) -> LEVEL, single inverting stage
 //           with a 100k-loaded wiper (L6) -- not V1e's buffered follower+inverter
-//   [Phase 5.2 peaking tone stack runs here -- not built yet]
+//        -> V1LatePeakingToneStage: BASS/TREBLE peaking Baxandall (L7, new topology vs V1e shelving)
 //        -> V1LateOutputStage: unity buffer path (INST throw modelled per netlists.md L8)
 
 #include <chowdsp_wdf/chowdsp_wdf.h>
@@ -248,6 +249,89 @@ private:
     NodalCircuit net;
     int rBlendA = 0, rBlendB = 0, rLevelA = 0, rLevelB = 0;
     double blend01 = 0.5, level01 = 0.7;
+};
+
+// -------------------------------------------------------------------------------------------------
+// BASS/TREBLE tone stack (IC3C): inverting PEAKING Baxandall network (netlists.md L7). Different
+// TOPOLOGY from V1 Early's shelving cell (E7), not just retuned values: the flat/DC path is a fixed
+// R29 1M -> nV direct arm (giving the -R28/R29 = -1 centre gain), while the BASS/TREBLE rails carry
+// the frequency-selective boost/cut and return toward 0 dB at the extremes (peaking, not shelving).
+// BASS and TREBLE share the virtual-ground node nV, so it is one coupled circuit solved together.
+// Includes the C25 2.2u input coupling from the BLEND/LEVEL stage. Inverting (one polarity flip).
+// Reused verbatim as the V2 stack (V7) on the 80 Hz BASS-SHIFT throw -- V2 adds the switched bass leg.
+//
+// Wiring VERIFIED against the schematic (schematics/crops/v1-late_BL_2x.png) -- netlists.md L7's
+// [◐ §5 §6] flag on the cap-to-wiper attachment was the tell: L7 mis-traced the treble caps as
+// bridging the wiper, and OMITTED C15 100n. Correct topology (both pot ends couple ends-to-ends, the
+// wiper couples to nV):
+// TREBLE rail: T_IN -R51 3.3k- t1 -VR2- t2 -R55 3.3k- OUT ; C21 4.7n across the pot (t1-t2), C7 22n
+//   across R55 (t2-OUT), wiper -C20 1n- nV. Peaks ~+17 dB @ 3-4 kHz (FR §6), asymmetric (less cut).
+// BASS rail: T_IN -R52 3.3k- b1 -VR3- b2 -R54 3.3k- OUT ; C15 100n across the pot (b1-b2), wiper -C16
+//   10n- R53 100k- nV. (FR §5: peaking +12/-14 dB @ ~75 Hz, with the small opposite-sign 2-4 kHz bump.)
+class V1LatePeakingToneStage
+{
+public:
+    V1LatePeakingToneStage() { build(); }
+
+    void prepare(double fs)
+    {
+        net.prepare(fs);
+        setTone(bass01, treble01);
+    }
+
+    void reset() noexcept { net.reset(); }
+
+    // bass/treble in [0,1]; 0.5 = flat centre detent. Higher = boost (orientation validated vs §5/§6).
+    void setTone(double bass, double treble) noexcept
+    {
+        bass01 = bass;
+        treble01 = treble;
+        const double kPot = 100.0e3, kMin = 0.5;
+        auto clamp = [&](double r) { return r < kMin ? kMin : r; };
+        // VR2.a = t1 (input side), VR2.b = t2 (output side). Toward output side (higher treble) = boost.
+        net.setResistorValue(rTrebA, clamp((1.0 - treble) * kPot)); // VR2 a(t1)->wiper
+        net.setResistorValue(rTrebB, clamp(treble * kPot));         // VR2 wiper->b(t2)
+        net.setResistorValue(rBassA, clamp((1.0 - bass) * kPot));   // VR3 a(b1)->wiper
+        net.setResistorValue(rBassB, clamp(bass * kPot));           // VR3 wiper->b(b2)
+        net.rebuild();
+    }
+
+    inline double process(double vin) noexcept { return net.process(vin); }
+
+private:
+    void build()
+    {
+        using NC = NodalCircuit;
+        // nodes: nV=0 OUT=1 T_IN=2 t1=3 tw=4 t2=5 b1=6 bw=7 b2=8 bwc=9 (C16/R53 junction).
+        net.setNumNodes(10);
+        net.addCapacitor(NC::kInput, 2, 2.2e-6); // C25 input coupling from BLEND/LEVEL
+        // Direct (flat) arm + inverting feedback -> centre gain -R28/R29 = -1.
+        net.addResistor(2, 0, 1.0e6);            // R29 T_IN -> nV
+        net.addResistor(0, 1, 1.0e6);            // R28 feedback nV -> OUT
+        net.addCapacitor(0, 1, 22.0e-12);        // C29 feedback rolloff
+        // TREBLE rail (peaking): series caps across the pot legs + a small C20 wiper->nV coupling.
+        net.addResistor(2, 3, 3.3e3);            // R51 T_IN -> t1
+        rTrebA = net.addResistor(3, 4, 50.0e3);  // VR2 t1 -> wiper
+        rTrebB = net.addResistor(4, 5, 50.0e3);  // VR2 wiper -> t2
+        net.addResistor(5, 1, 3.3e3);            // R55 t2 -> OUT
+        net.addCapacitor(3, 5, 4.7e-9);          // C21 across VR2 (t1 -> t2)
+        net.addCapacitor(5, 1, 22.0e-9);         // C7  across R55 (t2 -> OUT)
+        net.addCapacitor(4, 0, 1.0e-9);          // C20 wiper -> nV
+        // BASS rail (peaking): C15 across the pot + a C16/R53 wiper leg to nV.
+        net.addResistor(2, 6, 3.3e3);            // R52 T_IN -> b1
+        rBassA = net.addResistor(6, 7, 50.0e3);  // VR3 b1 -> wiper
+        rBassB = net.addResistor(7, 8, 50.0e3);  // VR3 wiper -> b2
+        net.addResistor(8, 1, 3.3e3);            // R54 b2 -> OUT
+        net.addCapacitor(6, 8, 100.0e-9);        // C15 across VR3 (b1 -> b2)
+        net.addCapacitor(7, 9, 10.0e-9);         // C16 wiper -> bwc
+        net.addResistor(9, 0, 100.0e3);          // R53 bwc -> nV
+        net.addOpAmp(NC::kDatum, 0, 1);          // IC3C inverting (+ = VCOM, - = nV, out = OUT)
+        net.setOutputNode(1);
+    }
+
+    NodalCircuit net;
+    int rTrebA = 0, rTrebB = 0, rBassA = 0, rBassB = 0;
+    double bass01 = 0.5, treble01 = 0.5;
 };
 
 // -------------------------------------------------------------------------------------------------

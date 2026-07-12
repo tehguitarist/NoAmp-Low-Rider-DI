@@ -18,12 +18,111 @@
 #include <cmath>
 #include <complex>
 #include <cstdio>
+#include <vector>
 
 using cd = std::complex<double>;
 
 namespace
 {
 constexpr double kPi = 3.14159265358979323846;
+
+// --- V1 Late peaking tone stack: independent complex-MNA reference (exact s = jw) ----------------
+// Mirrors netlists.md L7's topology but with exact 1/(jwC) impedances instead of the WDF's bilinear
+// trapezoidal companion. Agreement WDF<->this validates the discretisation; the §5/§6 SPICE targets
+// (separately) validate the topology. Node map matches V1LatePeakingToneStage::build():
+//   nV=0 OUT=1 T_IN=2 t1=3 tw=4 t2=5 b1=6 bw=7 b2=8 bwc=9 ; op-amp current unknown = index 10.
+struct CElem { int a, b; cd Y; };
+
+cd hTone(double f, double bass01, double treble01)
+{
+    const double w = 2.0 * kPi * f;
+    auto R = [](double r) { return cd(1.0 / r, 0.0); };
+    auto Cc = [&](double c) { return cd(0.0, w * c); };
+    const double kPot = 100.0e3, kMin = 0.5;
+    auto cl = [&](double r) { return r < kMin ? kMin : r; };
+    const std::vector<CElem> e = {
+        { -2, 2, Cc(2.2e-6) },                     // C25 (kInput -> T_IN)
+        { 2, 0, R(1.0e6) },                        // R29 direct arm
+        { 0, 1, R(1.0e6) },                        // R28 feedback
+        { 0, 1, Cc(22.0e-12) },                    // C29 feedback rolloff
+        { 2, 3, R(3.3e3) },                        // R51
+        { 3, 4, R(cl((1.0 - treble01) * kPot)) },  // VR2 t1->wiper
+        { 4, 5, R(cl(treble01 * kPot)) },          // VR2 wiper->t2
+        { 5, 1, R(3.3e3) },                        // R55
+        { 3, 5, Cc(4.7e-9) },                      // C21 across VR2 (t1-t2)
+        { 5, 1, Cc(22.0e-9) },                     // C7 across R55 (t2-OUT)
+        { 4, 0, Cc(1.0e-9) },                      // C20 wiper->nV
+        { 2, 6, R(3.3e3) },                        // R52
+        { 6, 7, R(cl((1.0 - bass01) * kPot)) },    // VR3 b1->wiper
+        { 7, 8, R(cl(bass01 * kPot)) },            // VR3 wiper->b2
+        { 8, 1, R(3.3e3) },                        // R54
+        { 6, 8, Cc(100.0e-9) },                    // C15 across VR3 (b1-b2)
+        { 7, 9, Cc(10.0e-9) },                     // C16 wiper->bwc
+        { 9, 0, R(100.0e3) },                      // R53 bwc->nV
+    };
+    const int n = 11;
+    std::vector<cd> M((size_t) n * n, cd(0, 0)), rhs((size_t) n, cd(0, 0));
+    auto Vk = [](int node) -> cd { return node == -2 ? cd(1, 0) : cd(0, 0); }; // input=1, datum=0
+    for (const auto& el : e)
+    {
+        const int a = el.a, b = el.b;
+        const cd Y = el.Y;
+        if (a >= 0) M[(size_t) (a * n + a)] += Y;
+        if (b >= 0) M[(size_t) (b * n + b)] += Y;
+        if (a >= 0 && b >= 0) { M[(size_t) (a * n + b)] -= Y; M[(size_t) (b * n + a)] -= Y; }
+        if (a < 0 && b >= 0) rhs[(size_t) b] += Y * Vk(a);
+        if (b < 0 && a >= 0) rhs[(size_t) a] += Y * Vk(b);
+    }
+    // Ideal op-amp (p = datum, n = nV(0), out = OUT(1)); current unknown at index 10.
+    M[(size_t) (1 * n + 10)] += cd(1, 0); // op-amp output current enters KCL(OUT)
+    M[(size_t) (10 * n + 0)] -= cd(1, 0); // constraint: V(p) - V(nV) = -V(nV) = 0
+    // Complex Gaussian elimination with partial pivoting.
+    for (int col = 0; col < n; ++col)
+    {
+        int piv = col;
+        double best = std::abs(M[(size_t) (col * n + col)]);
+        for (int r = col + 1; r < n; ++r)
+        {
+            const double v = std::abs(M[(size_t) (r * n + col)]);
+            if (v > best) { best = v; piv = r; }
+        }
+        if (piv != col)
+        {
+            for (int j = 0; j < n; ++j) std::swap(M[(size_t) (col * n + j)], M[(size_t) (piv * n + j)]);
+            std::swap(rhs[(size_t) col], rhs[(size_t) piv]);
+        }
+        const cd d = M[(size_t) (col * n + col)];
+        for (int r = 0; r < n; ++r)
+        {
+            if (r == col) continue;
+            const cd fct = M[(size_t) (r * n + col)] / d;
+            if (fct == cd(0, 0)) continue;
+            for (int j = 0; j < n; ++j) M[(size_t) (r * n + j)] -= fct * M[(size_t) (col * n + j)];
+            rhs[(size_t) r] -= fct * rhs[(size_t) col];
+        }
+    }
+    return rhs[1] / M[(size_t) (1 * n + 1)]; // V(OUT), = transfer since Vin = 1
+}
+
+double toneDb(double f, double bass01, double treble01) { return 20.0 * std::log10(std::abs(hTone(f, bass01, treble01))); }
+
+// A tone control's EFFECT is measured relative to the flat/centre-detent curve -- the SPICE graphs in
+// reference-fr-targets.md §5/§6 are normalised so 0 dB = centre knob (their stated reading convention).
+// Measuring absolute dB is wrong for the treble region (the centre curve itself is not 0 dB there, due
+// to the C29 22p feedback pole ~7.2 kHz), and would hide the small opposite-sign bump §5 calls for.
+double effectDb(double f, double bass01, double treble01) { return toneDb(f, bass01, treble01) - toneDb(f, 0.5, 0.5); }
+
+double findEffectExtreme(double bass01, double treble01, double f0, double f1, bool wantMax, double& atF)
+{
+    double best = wantMax ? -1e9 : 1e9;
+    atF = f0;
+    for (double f = f0; f <= f1; f *= 1.01)
+    {
+        const double d = effectDb(f, bass01, treble01);
+        if ((wantMax && d > best) || (!wantMax && d < best)) { best = d; atF = f; }
+    }
+    return best;
+}
 
 // --- PRESENCE analytic reference (continuous s = j*w) --------------------------------------------
 // Zg = Rvr5wb + R24 + 1/(jwC31) ; Zf = Rvr5aw || 1/(jwC32) ; H = 1 + Zf/Zg.
@@ -227,6 +326,86 @@ int main()
         std::printf("      blend=0 (full dry), wet-only excitation residual: %.1f dBFS\n",
                     20.0 * std::log10(dryOnlyPeak + 1e-12));
         check(dryOnlyPeak < 0.1, "BLEND=full-dry substantially attenuates the wet path");
+    }
+
+    // -------------------------------------------------------------------------------------------
+    std::printf("Peaking tone stack (IC3C, netlists.md L7): analytic reference (FR §5/§6 V1-Late)\n");
+    {
+        // Centre-detent passband: flat within ~1.5 dB to ~4 kHz about the -R28/R29 = -1 (0 dB) gain.
+        // Above ~5 kHz the centre curve rolls off from the C29 22p feedback pole (~7.2 kHz) -- a real
+        // voicing feature, so this is a passband check, not a full-band one (the SPICE tone graphs are
+        // NORMALISED to this centre curve, i.e. it IS their 0 dB line).
+        double worstFlat = 0.0, worstFlatF = 0.0;
+        for (double f = 20.0; f <= 4000.0; f *= 1.02)
+        {
+            const double d = toneDb(f, 0.5, 0.5);
+            if (std::abs(d) > std::abs(worstFlat)) { worstFlat = d; worstFlatF = f; }
+        }
+        std::printf("      centre-detent passband flatness: worst %.2f dB @ %.0f Hz (HF rolls off above, C29)\n",
+                    worstFlat, worstFlatF);
+        check(std::abs(worstFlat) < 1.5, "centre detent flat within 1.5 dB, 20 Hz-4 kHz");
+
+        // BASS: peaking, boost/cut centred ~75 Hz (FR §5 V1-Late: +12 / -14 dB, relative to centre).
+        double fBoost, fCut;
+        const double bBoost = findEffectExtreme(1.0, 0.5, 30.0, 400.0, true, fBoost);
+        const double bCut = findEffectExtreme(0.0, 0.5, 30.0, 400.0, false, fCut);
+        std::printf("      BASS boost +%.1f dB @ %.0f Hz ; cut %.1f dB @ %.0f Hz\n", bBoost, fBoost, bCut, fCut);
+        check(bBoost > 9.0 && bBoost < 15.0, "BASS max boost ~ +12 dB (9..15)");
+        check(bCut < -11.0 && bCut > -17.0, "BASS max cut ~ -14 dB (-11..-17)");
+        check(fBoost > 50.0 && fBoost < 120.0, "BASS boost centre ~ 75 Hz (50..120)");
+        check(fCut > 50.0 && fCut < 120.0, "BASS cut centre ~ 75 Hz (50..120)");
+        // Peaking (not shelf): the boost must return toward 0 dB below its centre frequency.
+        check(effectDb(20.0, 1.0, 0.5) < bBoost - 2.0, "BASS boost returns toward 0 dB at LF extreme (peaking, not shelf)");
+        // The characteristic small opposite-sign bump ~2-4 kHz (FR §5; absence => topology error).
+        double fOpp;
+        const double oppBump = findEffectExtreme(1.0, 0.5, 1500.0, 5000.0, false, fOpp);
+        std::printf("      BASS-boost opposite-sign HF feature: %.2f dB @ %.0f Hz\n", oppBump, fOpp);
+        check(oppBump < -0.2, "small opposite-sign (cut) bump ~2-4 kHz present when BASS boosted");
+
+        // TREBLE: peaking, asymmetric, peak ~3-4 kHz (FR §6 V1-Late: +17 dB boost, ~-13 dB HF cut).
+        double fTBoost, fTCut;
+        const double tBoost = findEffectExtreme(0.5, 1.0, 1000.0, 12000.0, true, fTBoost);
+        const double tCut = findEffectExtreme(0.5, 0.0, 1000.0, 20000.0, false, fTCut);
+        std::printf("      TREBLE boost +%.1f dB @ %.0f Hz ; cut %.1f dB @ %.0f Hz\n", tBoost, fTBoost, tCut, fTCut);
+        check(tBoost > 13.0 && tBoost < 20.0, "TREBLE max boost ~ +17 dB (13..20)");
+        check(fTBoost > 2500.0 && fTBoost < 5000.0, "TREBLE boost peak at ~3-4 kHz (2.5..5k)");
+        check(tCut < -9.0 && tCut > -16.0, "TREBLE HF cut ~ -13 dB (-9..-16), asymmetric vs boost");
+    }
+
+    // -------------------------------------------------------------------------------------------
+    std::printf("Peaking tone stack: WDF vs analytic (fs=%.0f)\n", fs);
+    {
+        nalr::V1LatePeakingToneStage tone;
+        tone.prepare(fs);
+        double worst = 0.0, worstF = 0.0;
+        for (double f = 40.0; f <= 12000.0; f *= std::pow(10.0, 1.0 / 12.0))
+        {
+            for (auto bt : { std::pair<double, double> { 0.5, 0.5 }, { 1.0, 0.5 }, { 0.0, 0.5 },
+                             { 0.5, 1.0 }, { 0.5, 0.0 } })
+            {
+                tone.setTone(bt.first, bt.second);
+                const int total = (int) (fs * 0.2), settle = total / 2;
+                double peak = 0.0;
+                for (int n = 0; n < total; ++n)
+                {
+                    const double y = tone.process(0.3 * std::sin(2.0 * kPi * f * (double) n / fs));
+                    if (n > settle) peak = std::max(peak, std::abs(y));
+                }
+                const double wdfDb = 20.0 * std::log10(peak / 0.3);
+                const double aDb = toneDb(f, bt.first, bt.second);
+                const double d = wdfDb - aDb;
+                const double tol = (f < 8000.0) ? 0.7 : 1.6;
+                if (std::abs(d) > std::abs(worst)) { worst = d; worstF = f; }
+                if (std::abs(d) > tol)
+                {
+                    std::printf("      mismatch @ %.0f Hz b=%.1f t=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n",
+                                f, bt.first, bt.second, wdfDb, aDb, tol);
+                    pass = false;
+                }
+            }
+        }
+        std::printf("      worst delta = %.2f dB @ %.0f Hz\n", worst, worstF);
+        check(std::abs(worst) < 1.6, "WDF peaking tone stack matches analytic within tolerance");
     }
 
     // -------------------------------------------------------------------------------------------

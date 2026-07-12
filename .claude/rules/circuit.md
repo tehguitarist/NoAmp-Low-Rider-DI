@@ -474,20 +474,24 @@ author to the added zener module's junction capacitance plus the retuned notch l
 | R30 | 220k (vs V1 Early's 22k feedback network — retuned) | IC3A feedback |
 
 ### BASS / TREBLE tone stack — **retuned from shelving to PEAKING type**
+> **Topology VERIFIED 2026-07-12 (Phase 5.2, netlists.md L7 — wins on conflict).** Both pot wipers
+> couple to the virtual-ground nV; the top-rail caps bridge pot ENDS. A fixed R29 1M direct arm sets
+> the −R28/R29 = −1 flat gain; the BASS/TREBLE rails add the frequency-selective peaking.
 | Ref | Value | Function |
 |-----|-------|----------|
-| C21, C7 | 4.7n, 22n | TREBLE network (values changed from V1 Early's 10n/10n) |
-| R51, R55 | 3.3k, 3.3k | TREBLE network legs (vs V1 Early's single 10k — now split symmetric) |
-| VR2 | TREBLE, B100k | treble control |
-| C20 | 1n | new — parallel cap across part of the treble network, this is what converts the response from shelving to peaking and adds the high-end rolloff the author describes ("a cap in parallel with the pot's pin-1-side resistor, so treble now falls off at the top of the range") |
-| R28 | 1M | fixed feedback |
-| C29 | 22p | rolloff |
-| R29 | 1M | new bias leg |
-| R53 | 100k (vs V1 Early's 10k) | bias leg — retuned |
-| C16 | 10n (vs V1 Early's 22n) | BASS network |
+| C21, C7 | 4.7n, 22n | TREBLE caps — **CORRECTED (5.2):** C21 across the pot (t1—t2), C7 across R55 (t2—OUT). NOT cap-to-wiper |
+| R51, R55 | 3.3k, 3.3k | TREBLE pot-rail series legs (vs V1 Early's single 10k) |
+| VR2 | TREBLE, B100k | treble control; **wiper → C20 → nV** |
+| C20 | 1n | **CORRECTED (5.2):** wiper→nV coupling cap (the small series cap that makes the treble PEAK ~+17 dB @ 3–4 kHz vs V1e's shelf). NOT "across the pin-1 resistor" |
+| R28 | 1M | fixed feedback (∥ C29) |
+| C29 | 22p | feedback rolloff — R28∥C29 = **~7.2 kHz pole**, rolls off the whole stage's top octave even at centre |
+| R29 | 1M | **direct/flat arm** T_IN→nV (sets the −1 centre gain), NOT a bias leg |
+| R53 | 100k | BASS wiper-leg series R into nV |
+| C16 | 10n | BASS wiper-leg cap: VR3.w —C16— R53 —nV |
+| **C15** | **100n** | **ADDED (5.2, was missing): across the BASS pot (b1—b2)** — the analog of V2's C27 100n; sets the ~75 Hz peaking centre |
 | VR3 | BASS, B100k | bass control |
-| R52, R54 | 3.3k, 3.3k (vs V1 Early's 10k/10k) | BASS network legs — retuned |
-| IC3C | TLC2264 (ch. C) | tone-stack op-amp |
+| R52, R54 | 3.3k, 3.3k | BASS pot-rail series legs (vs V1 Early's 10k/10k) |
+| IC3C | TLC2264 (ch. C) | tone-stack op-amp (inverting) |
 
 *Sim (`fr_bass_treble.png`): both BASS and TREBLE are now **peaking** (boost/cut around a center
 frequency, returning toward 0 dB at the extremes) rather than **shelving** — this is described by
