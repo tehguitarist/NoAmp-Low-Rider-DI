@@ -164,6 +164,14 @@ target_link_libraries(V1LateStagesTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(V1LateStagesTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V1LateStagesTest COMMAND V1LateStagesTest)
 
+# 5.3 — V1 Late CH34-9 DRIVE module: coupled-pot two-op-amp stage clipped by the Phase-4 zener pair.
+# Gates FR §4 small-signal gain (min/max), the +-3.9 V zener clamp, HF rolloff > V1E, polarity, and
+# solver stability across sample rates.
+add_executable(V1LateDriveTest tests/V1LateDriveTest.cpp)
+target_link_libraries(V1LateDriveTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1LateDriveTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1LateDriveTest COMMAND V1LateDriveTest)
+
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
 # region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
 juce_add_console_app(V1EarlyNonlinearTest PRODUCT_NAME "V1EarlyNonlinearTest")

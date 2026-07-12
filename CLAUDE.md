@@ -103,31 +103,37 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 5.2 COMPLETE — V1-Late peaking BASS/TREBLE tone stack built & validated (ctest
-> 12/12).** New class `V1LatePeakingToneStage` in `src/dsp/V1LateStages.h` (NodalCircuit MNA, one
-> coupled network): fixed R29 1M direct arm → −R28/R29 = −1 flat gain; BASS/TREBLE peaking rails.
-> `tests/V1LateStagesTest.cpp` gained an independent complex-MNA reference (exact s=jω) + §5/§6 gates.
-> Results: BASS +12.6/−13.6 dB @ ~80 Hz, TREBLE +15.7 dB @ 3.1 kHz, opposite-sign bump present,
-> WDF-vs-analytic worst 0.45 dB. Full §1 end-to-end still needs the DRIVE module (5.3), deferred to 5.4.
-> **⚠ netlists.md L7 had a real topology error — CORRECTED (docs updated, verified vs the schematic
-> crop):** the peaking-tone caps bridge pot ENDS (not the wiper), and V1L's **C15 100n across the BASS
-> pot (b1—b2) was missing entirely** from both netlists.md AND circuit.md. Correct cell: wipers→nV
-> (VR2.w→C20 1n→nV ; VR3.w→C16 10n→R53 100k→nV); C21 4.7n=t1—t2, C7 22n=t2—OUT, C15 100n=b1—b2. The
-> same fix was pre-applied to V2's V7 (flagged to re-confirm in 6.2). **Two methodology facts worth
-> keeping:** (1) tone-control §-targets are normalised to the CENTRE-detent curve (0 dB = flat knob),
-> so measure boost/cut as `H(setting) − H(centre)`, NOT absolute dB — the treble region's centre curve
-> is not 0 dB. (2) The centre curve itself rolls off above ~5 kHz from the **C29 22p ∥ R28 1M ≈ 7.2 kHz
-> feedback pole** — real voicing, not warp; keep the flat-gate to the ≤4 kHz passband.
+> **CURRENT: Phase 5.3 COMPLETE — V1-Late CH34-9 DRIVE module built & validated (ctest 13/13).** New
+> reusable `src/dsp/ZenerDriveModule.h` (`ZenerDriveModule` + `ZenerDriveParams`, shared by V2's CH40
+> later — differ only in constants): the coupled-pot two-op-amp stage clipped by Phase-4's
+> `ZenerFeedbackClipper`. **Key structural insight (not obvious from L4): the two stages are CASCADED,
+> not a simultaneous solve** — IC100A is an ideal op-amp so the wiper V_w it drives is a stiff source;
+> stage-B's load doesn't shift it. So V_w = −gainA·vIn (stage A), then feeds stage B; one DRIVE pot
+> sets R_wa (stage-A fb) and R_wb (stage-B input) complementarily. `tests/V1LateDriveTest.cpp`:
+> §4 min +12.8 / max +48.5 dB ✓, zener clamp 3.89 V ✓, HF rolloff 14.1 dB > V1E 11.0 dB ✓, net
+> non-inverting ✓, THD stable 44.1/96 k ✓. Added `setInputResistance()` to `ZenerFeedbackClipper`
+> (drive changes only Rin — a scalar, no WDF re-propagation). netlists L4 needed NO correction (built
+> as-written, numerically validated). **Cj = 220 pF for V1L** (pair series-caps ≈ half a DZ23 device;
+> ~3.3 kHz corner < V1E's C28 ~4.8 kHz → the §4/§1 "V1L rolls off more" difference); Phase-10 fit.
+> Stage-A op-amp RAIL clip (±4.2 V on V_w) deferred to Phase 6 (zener clamps first; both hard clips get
+> OS/ADAA together there). §8 voiced checkpoints deferred to 5.4 (need the full chain).
+> **Carry-forward from 5.2 (still relevant):** peaking tone-control §-targets are normalised to the
+> CENTRE-detent curve — measure boost/cut as `H(setting)−H(centre)`, not absolute dB; the centre curve
+> itself rolls off above ~5 kHz from the C29 22p ∥ R28 1M ≈ 7.2 kHz feedback pole (real, not warp).
+> netlists.md L7/V7 + circuit.md V1L tone table were CORRECTED in 5.2 (peaking caps bridge pot ENDS
+> not the wiper; C15 100n across the BASS pot was missing) — V7's treble fix still needs re-confirming
+> vs the V2 crop in 6.2.
 > **Two earlier gotchas still relevant:** (1) `WDFParallelT`/pot legs at a literal 0 Ω → NaN; floor
 > parallel-adaptor pot legs at 0.5 Ω. (2) `NodalCircuit::addOpAmp` does NOT support `kInput` as the (+)
 > node (silently drops the input term → floating output); route input via a component into an internal
 > node first, or wire the next component straight to `kInput` if nothing drops voltage before it.
 > **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed the V1-Early DAW listen** — carried
-> forward from Phase 3/4; gates nothing right now (5.1/5.2 were linear-stage work) but resolve before
-> more V1-Early-touching work.
-> **⏸ Continue-optional → NEXT is Phase 5.3 (CH34-9 drive module: coupled-pot two-op-amp stage +
-> `ZenerFeedbackClipper` from Phase 4).** Read `circuit.md` V1-Late drive-module table, `netlists.md`
-> L4, `reference-fr-targets.md` §4 (+ §8 voiced checkpoints), `dsp.md`. Model per build-plan Phase 5.
+> forward from Phase 3/4; gates nothing right now but resolve before more V1-Early-touching work.
+> **⏸ BREAK — model switch to Sonnet 5 next: NEXT is Phase 5.4 (integrate `V1LateDSP` into
+> processBlock, same shape as 3.1's V1EarlyDSP).** Wire input buffer → twin-T → PRESENCE → DRIVE
+> module → recovery → BLEND/LEVEL → peaking tone → output. Read `architecture.md`, the V1-Early
+> processor/OfflineRender code, `netlists.md` L-sections, `reference-fr-targets.md` §1/§8. Gate:
+> 3.1-style sweeps + §1 V1-Late column end-to-end + §8 voiced checkpoints. Model per build-plan Phase 5.
 
 ## Project-specific carry-forwards
 

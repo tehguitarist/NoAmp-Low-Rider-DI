@@ -141,6 +141,11 @@ public:
         zener.setZenerParameters(Vz, Vf, Vzt, Iref);
     }
 
+    // Cheap update for a stage whose input resistance is set by a pot (the V1L/V2 DRIVE module's
+    // stage-B attenuation). Ig = vIn/Rin is a plain scalar, so only oneOverRin changes -- no WDF
+    // impedance re-propagation (Rf/Cj/zener, which DO drive the tree, are untouched).
+    void setInputResistance(double Rin) noexcept { oneOverRin = 1.0 / Rin; }
+
     void prepare(double fs)
     {
         cj.prepare(fs); // re-discretise Cj + propagate impedance up to the zener root
