@@ -25,6 +25,38 @@ These are circuit-agnostic and ship in `src/ui/` — reuse as-is across pedals:
 - **`ThreePositionSwitch`** — generic vertical toggle; `setLabels()`, `onChange(pos)`.
 - **`LEDIndicator`** — `setOn(bool)`; green active / dark bypassed, with glow.
 
+Every element above also accepts an *optional* bitmap override (see below) — call it if your pedal
+supplies photographic assets; skip it for the default vector look.
+
+## Optional bitmap asset overrides
+
+A pedal that supplies photographic/bitmap assets (knob sprites, footswitch photos, LED photos, a
+per-position switch sprite, a faceplate texture) can hand them to the peripherals below **without
+forking the classes** — each peripheral exposes an optional setter that switches it from vector
+drawing to bitmap drawing; leaving the setter uncalled preserves today's vector behaviour exactly,
+so existing pedals built from this template are unaffected:
+
+- `PedalLookAndFeel::setBackgroundImage(Image)` — draws it stretched to bounds in
+  `paintPedalBackground` instead of the procedural mottled fill.
+- `PedalLookAndFeel::setKnobImages(Image pedalKnob, Image trimKnob)` — `drawRotarySlider` rotates
+  the supplied image about the knob centre (`AffineTransform::rotation`) instead of drawing a
+  gradient cap + indicator line. The sprite's indicator must be baked in pointing straight up
+  (rotary value 0 / noon) for the rotation to line up at every setting.
+- `PedalLookAndFeel::setBypassImages(Image up, Image down)` — the `"bypass"` branch of
+  `drawButtonBackground` draws the matching image by press-state instead of the octagon-nut+dome.
+- `PedalLookAndFeel::setShiftButtonImages(Image up, Image down)` — small round pushbuttons
+  (`componentID == "shiftbtn"`), same press-state-only convention as the footswitch.
+- `PedalLookAndFeel::setDisplayTypeface(Typeface::Ptr)` + `getDisplayFont(height)` — an embedded
+  display font for pedal-face text (knob labels, wordmark), separate from the OS-strip/trim labels'
+  plain system font.
+- `LEDIndicator::setImages(Image off, Image on)` — bitmap in place of the vector-gradient ellipse.
+- `ThreePositionSwitch::setBodyImages(Image top, Image mid, Image bottom)` — three **fully
+  composited** switch images (track + handle at that position), one per position, in place of the
+  vector lever; label drawing/highlighting and the mouse interaction are unchanged either way.
+
+See `docs/ui-noamp-assets.md` for a concrete worked example (this pedal's asset map, embedded font
+choice, and per-revision texture handling).
+
 ## Layout contract
 
 Three-column layout: left side panel (Input: label + halo trim + VU), centre pedal face

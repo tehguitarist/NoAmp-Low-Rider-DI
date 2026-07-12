@@ -41,7 +41,7 @@ Each panel is identical in structure. The widths are your choice to suit the ped
 **Top-to-bottom within each panel:**
 
 1. **Section label** — "INPUT" / "OUTPUT". 8 pt, bold, letter-spacing ~0.20, colour `cTrimLabel`. Centred.
-2. **Halo trim knob** — 70×70 px at 1× scale. Rotary slider, `componentID = "trim"`. LookAndFeel draws it as: outer arc track (270° sweep, 5 px wide, `cTrimArcTrack`) + value arc (`cTrimArc`) + 36 px diameter cap with radial gradient (`cKnobHighlight` → `cKnobMid` → `cKnobShadow`) + 2.5 px indicator line (`cKnobIndicator`). Range −12 dB to +12 dB, default 0.
+2. **Halo trim knob** — 70×70 px at 1× scale. Rotary slider, `componentID = "trim"`. LookAndFeel draws it as: outer arc track (270° sweep, 5 px wide, `cTrimArcTrack`) + value arc (`cTrimArc`) + 36 px diameter cap with radial gradient (`cKnobHighlight` → `cKnobMid` → `cKnobShadow`) + 2.5 px indicator line (`cKnobIndicator`). Range −12 dB to +12 dB, default 0. If the pedal supplies a bitmap knob sprite via `setKnobImages()`, the sprite replaces only the cap+indicator — draw it centred in the same 70×70 rotary bounds so it still sits inside the vector arc track (ui.md "Optional bitmap asset overrides").
 3. **"TRIM" sub-label** — 7.5 pt, bold, `cTrimLabel` dimmed slightly. Centred below knob.
 4. **VU bar** — fills all remaining height. See VU spec below.
 
@@ -387,6 +387,10 @@ if (!isButtonDown)
 
 The **"BYPASS" text label** is a separate `juce::Label` placed below the button, not drawn inside it. Colour `cBypassLabel`, 7 pt bold, letter-spacing 0.20.
 
+If the pedal supplies footswitch photos, call `PedalLookAndFeel::setBypassImages(up, down)` instead
+— it substitutes the two images (chosen by press state, not the bypass toggle — real hardware looks
+the same bypassed or active; the LED conveys state) for all three vector layers above (ui.md).
+
 ---
 
 ## LED Indicator
@@ -401,3 +405,6 @@ led.setOn(!isByp);   // LED on = active (not bypassed)
 ```
 
 LED colours: active `0xFF00DD55` with a soft radial glow, inactive `0xFF091A09`.
+
+If the pedal supplies LED photos, call `LEDIndicator::setImages(off, on)` instead — it substitutes
+the two images for the vector ellipse above, same `setOn(bool)` interface (ui.md).

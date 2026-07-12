@@ -349,7 +349,13 @@ interfaces (already exposed via APVTS, so not even code-level detail is needed).
 
 ## Phase 8 — UI  *(Sonnet 5 / medium; user validates visuals)*
 
-Read: `ui.md`, `docs/ui-peripheral-spec.md`, `src/ui/` headers only.
+> ⚑ **UI asset/layout groundwork already built ahead of schedule (2026-07-12)** — see
+> `docs/ui-noamp-assets.md`. The editor, LookAndFeel bitmap overrides, per-revision faceplate
+> textures/layout, and the `UIRenderProbe` headless-render tool all exist; what's left here is
+> wiring against the real per-revision DSP behaviour (once Phase 7 lands) + iterating the
+> first-pass eyeballed knob/control positions against user feedback on the renders.
+
+Read: `ui.md`, `docs/ui-peripheral-spec.md`, `docs/ui-noamp-assets.md`, `src/ui/` headers only.
 Peripherals as-is (side panels, VU, trims, OS strip, footswitch, LED). Centre face: knob rows per
 revision (V1e/V1l: PRESENCE DRIVE BASS TREBLE LEVEL BLEND; V2: + MID knob, MID-SHIFT & BASS-SHIFT
 switches via a new pushbutton switch; a 3-way revision selector styled

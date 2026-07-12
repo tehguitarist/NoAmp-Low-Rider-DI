@@ -17,12 +17,27 @@ PedalLookAndFeel::PedalLookAndFeel()
     setColour(juce::PopupMenu::highlightedTextColourId,       juce::Colour(cKnobHighlight));
 }
 
+// ── Display font ──────────────────────────────────────────────────────────────
+
+juce::Font PedalLookAndFeel::getDisplayFont(float height) const
+{
+    if (displayTypeface != nullptr)
+        return juce::Font(juce::FontOptions(height).withTypeface(displayTypeface));
+    return juce::Font(juce::FontOptions(height, juce::Font::bold));
+}
+
 // ── Pedal background ──────────────────────────────────────────────────────────
 
 void PedalLookAndFeel::paintPedalBackground(juce::Graphics& g, juce::Rectangle<int> bounds)
 {
     auto fb = bounds.toFloat();
     const float W = fb.getWidth(), H = fb.getHeight();
+
+    if (backgroundImage.isValid())
+    {
+        g.drawImage(backgroundImage, fb, juce::RectanglePlacement::fillDestination);
+        return;
+    }
 
     // Rounded base fill
     g.setColour(juce::Colour(cPedalFace));
@@ -99,6 +114,20 @@ void PedalLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, 
     const auto bounds = juce::Rectangle<float>((float) x, (float) y, (float) w, (float) h);
     const auto cx = bounds.getCentreX(), cy = bounds.getCentreY();
     const float valAngle = startAngle + sliderPos * (endAngle - startAngle);
+
+    // Bitmap override: the sprite's indicator is baked in pointing straight up (valAngle == 0),
+    // so a plain rotation about the knob centre reproduces every position (PedalAssets.h).
+    const juce::Image& knobImage = isTrim ? trimKnobImage : pedalKnobImage;
+    if (knobImage.isValid())
+    {
+        const float knobR = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
+        const auto dest = juce::Rectangle<float>(cx - knobR, cy - knobR, knobR * 2.0f, knobR * 2.0f);
+        g.drawImageTransformed(knobImage,
+            juce::RectanglePlacement(juce::RectanglePlacement::stretchToFit)
+                .getTransformToFit(knobImage.getBounds().toFloat(), dest)
+                .followedBy(juce::AffineTransform::rotation(valAngle, cx, cy)));
+        return;
+    }
 
     if (isTrim)
     {
@@ -188,6 +217,16 @@ void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
 
     if (button.getComponentID() == "bypass")
     {
+        // Bitmap override: photographic footswitch. Real hardware doesn't visually change with
+        // the bypass parameter's state, only with mouse press (the ACTIVE LED conveys state) —
+        // so `down` here means shouldDrawButtonAsDown, not the bypass toggle.
+        const juce::Image& fsImage = down ? bypassDownImage : bypassUpImage;
+        if (fsImage.isValid())
+        {
+            g.drawImage(fsImage, b, juce::RectanglePlacement::centred);
+            return;
+        }
+
         // Octagonal footswitch nut + circular rubber dome inner button
         const float cx = b.getCentreX(), cy = b.getCentreY();
         const float nutR  = juce::jmin(b.getWidth(), b.getHeight()) * 0.5f - 1.0f; // octagon outer radius
@@ -277,6 +316,24 @@ void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
                 g.setColour(juce::Colours::white.withAlpha(0.55f));
                 g.fillEllipse(cx - domeR * 0.50f, cy - domeR * 0.52f, domeR * 0.52f, domeR * 0.28f);
             }
+        }
+    }
+    else if (button.getComponentID() == "shiftbtn")
+    {
+        // Small round pushbutton (V2's MID-SHIFT/BASS-SHIFT). Real hardware doesn't visually
+        // change with the parameter's 2-way state, only with mouse press.
+        const juce::Image& img = down ? shiftButtonDownImage : shiftButtonUpImage;
+        if (img.isValid())
+        {
+            g.drawImage(img, b, juce::RectanglePlacement::fillDestination);
+        }
+        else
+        {
+            const float r = juce::jmin(b.getWidth(), b.getHeight()) * 0.5f;
+            g.setColour(juce::Colours::black.withAlpha(down ? 0.6f : 0.4f));
+            g.fillEllipse(b.withSizeKeepingCentre(r * 2.0f, r * 2.0f));
+            g.setColour(juce::Colour(0xFF3A3A3Cu));
+            g.drawEllipse(b.withSizeKeepingCentre(r * 2.0f, r * 2.0f), 1.0f);
         }
     }
     else if (button.getComponentID() == "os")

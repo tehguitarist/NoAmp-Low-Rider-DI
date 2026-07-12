@@ -15,11 +15,28 @@ public:
         }
     }
 
+    // Optional bitmap override (src/ui/PedalAssets.h); unset (invalid) images leave the vector
+    // ellipse drawing below unchanged, so this stays a generic reusable template peripheral.
+    void setImages(juce::Image off, juce::Image on)
+    {
+        offImage = std::move(off);
+        onImage = std::move(on);
+        repaint();
+    }
+
     void paint(juce::Graphics& g) override
     {
         const auto b  = getLocalBounds().toFloat();
         const float r = juce::jmin(b.getWidth(), b.getHeight()) * 0.5f - 0.5f;
         const float cx = b.getCentreX(), cy = b.getCentreY();
+
+        const juce::Image& img = isOn ? onImage : offImage;
+        if (img.isValid())
+        {
+            g.drawImage(img, juce::Rectangle<float>(cx - r, cy - r, r * 2.0f, r * 2.0f),
+                        juce::RectanglePlacement::fillDestination);
+            return;
+        }
 
         if (isOn)
         {
@@ -47,4 +64,5 @@ public:
 
 private:
     bool isOn { true };
+    juce::Image offImage, onImage;
 };

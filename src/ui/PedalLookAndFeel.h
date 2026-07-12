@@ -37,8 +37,35 @@ public:
     static constexpr juce::uint32 cOSBtnActive     = 0xFF70A8D8u;
     static constexpr juce::uint32 cOSBtnActiveBg   = 0xFF0C2040u;
     static constexpr juce::uint32 cOSBtnActiveBdr  = 0xFF2A5890u;
+    static constexpr juce::uint32 cPedalFaceText   = 0xFFE6C846u; // knob labels, wordmark, SHIFT captions
 
     PedalLookAndFeel();
+
+    // ── Optional bitmap overrides (src/ui/PedalAssets.h) ─────────────────────────
+    // Every setter below is optional; an unset (invalid) Image leaves the corresponding vector
+    // drawing path unchanged, so this class stays a generic, reusable template peripheral for any
+    // pedal that doesn't ship photographic assets (ui.md "Optional bitmap asset overrides").
+    void setBackgroundImage(juce::Image image) { backgroundImage = std::move(image); }
+    void setKnobImages(juce::Image pedalKnob, juce::Image trimKnob)
+    {
+        pedalKnobImage = std::move(pedalKnob);
+        trimKnobImage = std::move(trimKnob);
+    }
+    void setBypassImages(juce::Image up, juce::Image down)
+    {
+        bypassUpImage = std::move(up);
+        bypassDownImage = std::move(down);
+    }
+    void setShiftButtonImages(juce::Image up, juce::Image down)
+    {
+        shiftButtonUpImage = std::move(up);
+        shiftButtonDownImage = std::move(down);
+    }
+
+    // Pedal-face display text (knob labels, wordmark, switch captions) — embedded Anton, falls
+    // back to a bold system font if no typeface has been supplied (setDisplayTypeface()).
+    void setDisplayTypeface(juce::Typeface::Ptr typeface) { displayTypeface = std::move(typeface); }
+    juce::Font getDisplayFont(float height) const;
 
     // Called by PluginEditor::paint() to draw the mottled pedal face background.
     void paintPedalBackground(juce::Graphics& g, juce::Rectangle<int> bounds);
@@ -70,4 +97,9 @@ public:
     juce::Font getComboBoxFont(juce::ComboBox& box) override;
 
     void positionComboBoxText(juce::ComboBox& box, juce::Label& label) override;
+
+private:
+    juce::Image backgroundImage, pedalKnobImage, trimKnobImage, bypassUpImage, bypassDownImage;
+    juce::Image shiftButtonUpImage, shiftButtonDownImage;
+    juce::Typeface::Ptr displayTypeface;
 };

@@ -48,6 +48,7 @@ without images.
 | `.claude/rules/architecture.md` | processor-level / threading / APVTS / integration tasks |
 | `.claude/rules/build.md` | CMake / CI / test-harness tasks |
 | `.claude/rules/ui.md` + `docs/ui-peripheral-spec.md` | UI tasks |
+| `docs/ui-noamp-assets.md` | pedal-face layout/asset tasks — this pedal's bitmap-asset map, font, wordmark, per-revision layout |
 | `docs/reference-fr-targets.md` | any linear-stage validation (the FR gates cite its §§) |
 | `docs/calibration-and-gain-staging.md` | level/rail/makeup calibration tasks |
 | `docs/validation-and-capture.md` | capture-based validation (Phase 10) |
@@ -69,7 +70,8 @@ without images.
 - **`analysis/`** — the reusable harness: `gen_test_signal.py` (comprehensive A/B signal) +
   `analyze.py` (load/align, FR, THD, Farina swept-THD, sub-sample null, filename parser).
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
-- **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`.
+- **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
+  `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).
 - **`src/utils/TaperUtils.h`** — taper helpers (note `audioTaperR0` for large gain pots).
 
 ## Build sequence (validate each step before the next — do not skip ahead)
@@ -251,3 +253,15 @@ without images.
   assignments, exact read-lists per task (token discipline), and numeric validation gates keyed to
   `docs/reference-fr-targets.md` §§. UI visuals are validated by the user (send PNGs, never
   self-review screenshots); captures arrive later and only Phase 10 depends on them.
+- **UI asset/layout groundwork built ahead of schedule (2026-07-12, out of phase order — DSP was
+  mid-Phase-6 at the time)**, at the user's request, so the pedal face is ready once Phase 7's
+  revision-switching lands. Full detail in `docs/ui-noamp-assets.md`; headline: `PedalLookAndFeel`/
+  `LEDIndicator`/`ThreePositionSwitch` all gained an *optional* bitmap-override path (vector drawing
+  stays the default/fallback — `ui.md`), fed by a new `src/ui/PedalAssets.{h,cpp}` + `NoAmpAssets`
+  CMake binary-data target embedding the user's photographic knob/switch/LED/footswitch sprites,
+  three per-revision faceplate textures, and the Anton display font (OFL). Wordmark reskinned to
+  "NoAmp"/"LOW RIDER DI" (the reference layout images are Tech21's actual faceplate — replicate the
+  physical layout only, not their wordmark). `tests/UIRenderProbe.cpp` headlessly renders all 3
+  revisions × 3 UI scales to PNG for review. **All knob/control positions in `PluginEditor`'s
+  `layoutV1`/`layoutV2` are first-pass eyeballed estimates** — expect a tuning pass once the user
+  reviews renders (normal per `build-plan.md`'s Phase 8 iterate loop, not a follow-up bug).

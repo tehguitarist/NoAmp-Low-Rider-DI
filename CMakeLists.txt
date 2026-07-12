@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.15)
 
 project(NoAmpLowRiderDI VERSION 0.1.0)   # bump VERSION to force Logic to rescan the AU after changes
 
+# Fallback version string for console-app targets that source PluginEditor.cpp directly (e.g.
+# StateRoundTrip, UIRenderProbe) — they don't get juce_add_plugin's generated JucePlugin_VersionString.
+add_compile_definitions(NALR_VERSION_STRING="${PROJECT_VERSION}")
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS deployment version")
@@ -36,12 +40,36 @@ juce_add_plugin(NoAmpLowRiderDI
     COPY_PLUGIN_AFTER_BUILD TRUE      # installs the AU to ~/Library/Audio/Plug-Ins/Components/
 )
 
+# UI bitmap assets (photographic knob/switch/LED/footswitch sprites + per-revision faceplate
+# textures, docs/ui-noamp-assets.md) + the embedded Anton display font (SIL OFL, src/ui/fonts/OFL.txt).
+# Embedded via BinaryData so the plugin bundle is self-contained (no external asset files to ship).
+juce_add_binary_data(NoAmpAssets SOURCES
+    ui/button_up.png
+    ui/button_down.png
+    ui/footswitch_up.png
+    ui/footswitch_down.png
+    ui/plastic_knob.png
+    ui/vol_trim.png
+    ui/red_led_off.png
+    ui/red_led_on.png
+    ui/selector_up.png
+    ui/selector_mid.png
+    ui/selector_down.png
+    ui/lrdi_v1e_texture.png
+    ui/lrdi_v1l_texture.png
+    ui/lrdi_v2_texture.png
+    src/ui/fonts/Anton-Regular.ttf
+)
+
 target_sources(NoAmpLowRiderDI
     PRIVATE
         src/PluginProcessor.cpp
         src/PluginEditor.cpp
         src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
 )
+
+target_link_libraries(NoAmpLowRiderDI PRIVATE NoAmpAssets)
 
 target_compile_definitions(NoAmpLowRiderDI
     PUBLIC
@@ -121,6 +149,7 @@ target_sources(StateRoundTrip
         src/PluginProcessor.cpp
         src/PluginEditor.cpp
         src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
 )
 target_compile_definitions(StateRoundTrip
     PRIVATE
@@ -133,10 +162,43 @@ target_link_libraries(StateRoundTrip
         juce::juce_audio_utils
         juce::juce_dsp
         chowdsp::chowdsp_wdf
+        NoAmpAssets
     PUBLIC
         juce::juce_recommended_config_flags
 )
 add_test(NAME StateRoundTrip COMMAND StateRoundTrip)
+
+# 8 — Headless UI render probe (build.md's pattern): constructs the real editor off-screen and
+# paints it to PNGs at 1.0x/1.5x/2.0x scale x 3 revisions (9 renders) under build/ui-renders/, so
+# layout can be reviewed without a DAW/display. Gate is build+run succeeds; visual sign-off is the
+# user's (ui.md/architecture rule — never self-approve pedal-face visuals beyond "it rendered").
+juce_add_console_app(UIRenderProbe PRODUCT_NAME "UIRenderProbe")
+target_sources(UIRenderProbe
+    PRIVATE
+        tests/UIRenderProbe.cpp
+        src/PluginProcessor.cpp
+        src/PluginEditor.cpp
+        src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
+)
+target_compile_definitions(UIRenderProbe
+    PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
+        JUCE_STANDALONE_APPLICATION=1
+        JUCE_MODAL_LOOPS_PERMITTED=1
+)
+target_link_libraries(UIRenderProbe
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_graphics
+        chowdsp::chowdsp_wdf
+        NoAmpAssets
+    PUBLIC
+        juce::juce_recommended_config_flags
+)
+add_test(NAME UIRenderProbe COMMAND UIRenderProbe)
 
 # 1.5 — V1 Early BASS/TREBLE tone stack (inverting Baxandall shelving) vs complex MNA + FR §5/§6.
 add_executable(V1EarlyToneStackTest tests/V1EarlyToneStackTest.cpp)
