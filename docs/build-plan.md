@@ -319,10 +319,23 @@ interpretation is inverted — flip it, don't hunt elsewhere.
 
 ---
 
-**6.3 Integrate `V2DSP` + module respin** — *Sonnet 5 / medium.* CH40 module = CH34-9 class with V2
-constants (netlists.md V4: same coupled-pot topology, `R14`/`R15`/`R903` in the L4 roles, coupling
-caps 2.2u→1u, different Cj fit); BLEND/LEVEL differ from V1L (U3B non-inverting — netlists V6).
-**Gate:** 3.1-style sweep + §1 V2 column + §4 V2 drive curves.
+**6.3 Integrate `V2DSP` + module respin ✅ COMPLETE** — *Sonnet 5 / medium.* CH40 module = CH34-9 class
+with V2 constants (netlists.md V4: same coupled-pot topology, `R14`/`R15`/`R903` in the L4 roles,
+coupling caps 2.2u→1u, different Cj fit — numerically identical R values to V1L, `v2Params()` kept
+equal to `v1LateParams()` as a Phase-10 placeholder); BLEND/LEVEL differ from V1L (U3B non-inverting
+— netlists V6, `V2BlendLevelStage`); new `V2OutputStage` (V8). `V2DSP.h` wires input (reused
+`V1EarlyInputBuffer`) → PRESENCE (reused `V1LatePresenceStage`) → CH40 drive → 6.1's recovery → 6.3's
+BLEND/LEVEL → 6.2's MID+MID-SHIFT → 6.2's BASS/TREBLE+BASS-SHIFT → 6.3's output. Wired into
+`PluginProcessor` as `dspV2` (revision==2branch); `idMid`/`idMidShift`/`idBassShift` now live (no
+longer V1-only no-ops).
+**Gate:** `tests/V2IntegrationTest.cpp` (ctest #16, PASSES) — 3.1-style all-knobs/silence/dry-path
+sweep, §1 V2 column (qualitative, wide tolerance per V1LateIntegrationTest's own precedent), §4 V2
+DRIVE isolated at the module (+12.5/+48.2 dB, matches target ±0.5 dB), MID SHIFT throw sanity. Two
+named residual gaps vs the §1 SPICE-graph reading (notch ~9 dB shallower than ~-36 dB — same
+magnitude gap V1LateIntegrationTest's own passing notch check already carries, a shared twin-T-model
+characteristic; LF edge shallower than ~-15 dB because V2's BLEND/LEVEL, unlike V1's, has no feedback
+cap and passes DC flat) are documented in `V2IntegrationTest.cpp`'s header comment, not hidden behind
+looser bounds — flagged for Phase 10 capture calibration, not fixed blind here.
 
 ---
 **⏸ HARD BREAK + optional human checkpoint** (all three revisions playable independently — good

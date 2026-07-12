@@ -29,7 +29,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcesso
     addPot(idLevel, "Level");
     addPot(idBass, "Bass");
     addPot(idTreble, "Treble");
-    addPot(idMid, "Mid"); // V2-only; inert on V1 revisions, UI hides it
+    addPot(idMid, "Mid"); // V2-only; no-op on V1 revisions (Phase 6.3), UI hides it
 
     params.push_back(std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { idMidShift, 1 }, "Mid Shift",
@@ -118,6 +118,12 @@ void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samples
         d.prepare(sampleRate, maxBlockSize);
         d.reset();
     }
+    for (auto& d : dspV2)
+    {
+        d.setOversamplingFactor(currentOSFactor); // no-op for now — see PluginProcessor.h/V2DSP.h
+        d.prepare(sampleRate, maxBlockSize);
+        d.reset();
+    }
 
     reportedLatency = dspEarly[0].getLatencySamples();
     setLatencySamples(reportedLatency);
@@ -151,10 +157,11 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     const int wantFactor = 1 << (isNonRealtime() ? (int) pRenderOversampling->load() : (int) pOversampling->load());
 
     // Pot values -> DSP (change-gated inside setParams). Shared across channels. Taper is identity on
-    // every revision (all B100k linear), so the 0..1 params pass straight through. Both revisions'
+    // every revision (all B100k linear), so the 0..1 params pass straight through. All three revisions'
     // graphs are kept live (cheap — change-gated internally) so a revision switch has no first-block
-    // stale-parameter glitch.
-    const int revision = (int) pRevision->load(); // 0 = V1 Early, 1 = V1 Late, 2 = V2 (Phase 6.3)
+    // stale-parameter glitch. idMidShift/idBassShift are AudioParameterChoice with "500 Hz"/"40 Hz" at
+    // index 0 (V2Stages.h convention: true = the lower-frequency throw), so index==0 -> true.
+    const int revision = (int) pRevision->load(); // 0 = V1 Early, 1 = V1 Late, 2 = V2
     for (auto& d : dspEarly)
     {
         d.setOversamplingFactor(wantFactor);
@@ -166,6 +173,12 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         d.setOversamplingFactor(wantFactor);
         d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(),
                     pTreble->load());
+    }
+    for (auto& d : dspV2)
+    {
+        d.setOversamplingFactor(wantFactor);
+        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pMid->load(),
+                    pMidShift->load() < 0.5f, pBass->load(), pTreble->load(), pBassShift->load() < 0.5f);
     }
     currentOSFactor = wantFactor;
 
@@ -199,12 +212,14 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         }
 
         // The circuit, in real volts (input buffer -> notch/presence -> drive/clip/recovery -> blend/
-        // level -> tone -> output buffer). `revision` selects which pre-allocated graph runs; V2 joins
-        // this switch in Phase 6.3 (falls back to V1 Late's chain until then).
+        // level -> [V2: MID] -> tone -> output buffer). `revision` selects which pre-allocated graph
+        // runs (0 = V1 Early, 1 = V1 Late, 2 = V2).
         if (revision == 0)
             dspEarly[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
-        else
+        else if (revision == 1)
             dspLate[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
+        else
+            dspV2[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
 
         // Back to DAW domain (kOutputMakeup/kInputRef folded into outGainRamp) + bypass crossfade.
         for (int i = 0; i < numSamples; ++i)
@@ -221,7 +236,9 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
     // Report OS-factor/revision latency changes to the host (only when it actually changed — the call
     // can trigger a host graph re-sync). getLatencySamples() reflects what the active chain just ran.
-    const int lat = revision == 0 ? dspEarly[0].getLatencySamples() : dspLate[0].getLatencySamples();
+    const int lat = revision == 0 ? dspEarly[0].getLatencySamples()
+                   : revision == 1 ? dspLate[0].getLatencySamples()
+                                   : dspV2[0].getLatencySamples();
     if (lat != reportedLatency)
     {
         reportedLatency = lat;

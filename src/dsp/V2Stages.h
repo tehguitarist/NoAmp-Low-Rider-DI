@@ -310,4 +310,93 @@ private:
     double bass01 = 0.5, treble01 = 0.5;
     bool bass40 = false;
 };
+// -------------------------------------------------------------------------------------------------
+// BLEND -> LEVEL -> U3B non-inverting +10.1 dB buffer (netlists.md V6). Unlike either V1 revision's
+// BLEND/LEVEL cell, V2's LEVEL wiper feeds a NON-INVERTING gain stage (no polarity flip) instead of
+// V1e's follower+inverter pair or V1L's single loaded inverter -- gain = 1+R63/R67 = 1+22k/10k = 3.2x
+// (+10.1 dB). Dry tap has no coupling cap (direct wire from the input buffer, matching V1L's L6, not
+// V1e's C1) -- modelled by wiring BLEND's dry end straight to kInput. R36 (LEVEL wiper -> U3B(+))
+// develops no drop into the high-Z (+) input, so the wiper node IS U3B(+) directly (same
+// no-redundant-node simplification as V1LateOutputStage's R33/C9 read -- see that class's comment).
+// Output feeds directly into V2MidStage (no coupling cap there either, per netlists.md V6's "U3B.out
+// -R23 100k- U3A(-)").
+class V2BlendLevelStage
+{
+public:
+    V2BlendLevelStage() { build(); }
+
+    void prepare(double fs)
+    {
+        net.prepare(fs);
+        setBlendLevel(blend01, level01);
+    }
+
+    void reset() noexcept { net.reset(); }
+
+    // blend: 0 = full dry .. 1 = full wet. level: 0 = min .. 1 = max. Same taper convention as V1/V1L.
+    void setBlendLevel(double blend, double level) noexcept
+    {
+        blend01 = blend;
+        level01 = level;
+        const double kPot = 100.0e3, kMin = 0.5; // clamp wiper-at-end to avoid a 0-ohm (singular) leg
+        auto clamp = [&](double r) { return r < kMin ? kMin : r; };
+        net.setResistorValue(rBlendA, clamp(blend * kPot));         // VR50 a(dry, direct)->wiper
+        net.setResistorValue(rBlendB, clamp((1.0 - blend) * kPot)); // VR50 wiper->b(wet)
+        net.setResistorValue(rLevelA, clamp((1.0 - level) * kPot)); // VR51 top->wiper
+        net.setResistorValue(rLevelB, clamp(level * kPot));         // VR51 wiper->bottom
+        net.rebuild();
+    }
+
+    // dry = input-buffer output (direct, no cap); wet = recovery-stage output (via this stage's C2).
+    inline double process(double dry, double wet) noexcept { return net.process(dry, wet); }
+
+private:
+    void build()
+    {
+        using NC = NodalCircuit;
+        // nodes: vb50=0(wet, via C2) vw50=1(=VR51 top) vw51=2(=U3B(+), no-drop R36) vbot51=3
+        // uminus=4 uout=5.
+        net.setNumNodes(6);
+        rBlendA = net.addResistor(NC::kInput, 1, 50.0e3);   // VR50 a(dry, direct)->wiper
+        net.addCapacitor(NC::kInput2, 0, 1.0e-6);           // C2 wet coupling
+        rBlendB = net.addResistor(0, 1, 50.0e3);            // VR50 wiper->b(wet)
+        rLevelA = net.addResistor(1, 2, 50.0e3);            // VR51 top(=wiper50)->wiper51
+        rLevelB = net.addResistor(2, 3, 50.0e3);            // VR51 wiper51->bottom
+        net.addResistor(3, NC::kDatum, 1.0e3);              // R39 bottom->VCOM
+        net.addResistor(4, NC::kDatum, 10.0e3);             // R67 (-)->VCOM
+        net.addResistor(4, 5, 22.0e3);                      // R63 feedback (-)->OUT
+        net.addOpAmp(2, 4, 5);                               // U3B non-inverting (+ = wiper51, - = 4)
+        net.setOutputNode(5);
+    }
+
+    NodalCircuit net;
+    int rBlendA = 0, rBlendB = 0, rLevelA = 0, rLevelB = 0;
+    double blend01 = 0.5, level01 = 0.7;
+};
+
+// -------------------------------------------------------------------------------------------------
+// FET-mute + output buffer (U6A), SW1B closed/unity throw modelled (V8; the +10dB LINE-style throw is
+// out of scope per circuit.md's scope decision, same as V1L's L8). Q4 is a straight series switch into
+// a high-Z (+) input -- electrically inert for the AC model, same simplification as V1LateOutputStage.
+class V2OutputStage
+{
+public:
+    V2OutputStage() { build(); }
+    void prepare(double fs) { net.prepare(fs); }
+    void reset() noexcept { net.reset(); }
+    inline double process(double vin) noexcept { return net.process(vin); }
+
+private:
+    void build()
+    {
+        using NC = NodalCircuit;
+        // nodes: nJ=0.
+        net.setNumNodes(1);
+        net.addCapacitor(NC::kInput, 0, 2.0e-6); // C35||C38 = 2u
+        net.addResistor(0, NC::kDatum, 100.0e3); // R40 pulldown (R41 1k to jack sees no load -> nJ = out)
+        net.setOutputNode(0);
+    }
+
+    NodalCircuit net;
+};
 } // namespace nalr

@@ -105,59 +105,59 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 6.2 COMPLETE — V2 switched-topology stages built (`src/dsp/V2Stages.h`):
-> `V2MidStage` (Baxandall peaking MID + MID SHIFT) and `V2PeakingToneStage` (BASS/TREBLE peaking =
-> V1L L7 values + a switched BASS-SHIFT wiper leg).** `tests/V2MidToneTest.cpp` (plain chowdsp exe,
-> registered in CMake, ctest #15, PASSES): validates both vs an independent complex-MNA reference and
-> FR §5/§7. MID: +18.3/−18.6 dB @ 440 Hz ("500" throw), +17.7/−18.2 dB @ 884 Hz ("1000"), ratio 2.01,
-> flat centre. BASS SHIFT: 80 Hz throw ≡ V1L (+11.9/−12.6 @ ~80 Hz); 40 Hz throw +14.7/−16.3 @
-> ~45/36 Hz (lower + wider). WDF↔analytic <0.5 dB (top-octave warp only).
-> **Switch modelling: NOT `setSMatrixData()` — these are NodalCircuit (MNA) stages, so "switched
-> topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) + `rebuild()` (rare, not
-> per-block). MID SHIFT = ganged DPDT shorting two 1M twin-T bridges; BASS SHIFT = two R32s, the
-> inactive one opened (≡ the real single R32 whose far end the DPDT moves).**
-> **⚠ MID topology RE-TRACED from `schematics/crops/v2_midshift_zoom.png` — the 4th-pass netlist V6
-> reading was wrong-node AND incomplete (corrected in netlists.md V6 + circuit.md):** MID is a full
-> Baxandall peaking cell with TWO switched twin-Ts — (1) wiper leg returns to the SUMMING NODE nV
-> (= U3A −), NOT VCOM (else no boost/cut); (2) a switched cap ACROSS THE POT m1↔m2 (analog of BASS
-> `C27`/TREBLE `C30`) is what places the peak in the mid band. First pass omitted the across-pot
-> twin-T → the wiper leg alone was rail-limited, peaking ~3 kHz, untunable (ratio 1.0). Adding it →
-> 430/850 Hz, ±18 dB, ratio 2× exactly.
-> **Gotcha (cost real time on V2MidToneTest): a peaking DEEP CUT that nulls at very low freq (the
-> 40 Hz BASS-SHIFT throw nulls ~36 Hz) needs a long settle window in the sine-sweep measurement — a
-> not-yet-decayed transient reads as a too-shallow cut (WDF −13.8 vs analytic −16.9), a MEASUREMENT
-> artifact not a discretisation error (bilinear warp is negligible at 30 Hz/96k). Fixed by
-> settle=0.38·fs. Tell: only the deep-cut case mismatched; boost matched fine.**
-> **Phase 6.1 gotcha still relevant (ANY hand-derived analytic MNA reference): when an
+> **CURRENT: Phase 6 COMPLETE — all three revisions now have a full, integrated DSP chain.**
+> Phase 6.3 built `src/dsp/V2DSP.h`: input (reused `V1EarlyInputBuffer`) → PRESENCE (reused
+> `V1LatePresenceStage`, netlists.md reuse map: "identical values" V1L/V2) → CH40 drive
+> (`ZenerDriveModule::v2Params()`, numerically identical R-values to V1L's CH34-9 — only the
+> un-modelled sub-audio coupling caps and zener package differ, `v2Params()` kept equal to
+> `v1LateParams()` as a Phase-10 placeholder) → 6.1's `V2RecoveryStage` → new `V2BlendLevelStage`
+> (U3B non-inverting +10.1 dB, netlists V6, no feedback cap → passes DC/LF flat, unlike V1's
+> BLEND/LEVEL cells) → 6.2's `V2MidStage`+`V2PeakingToneStage` → new `V2OutputStage`. Wired into
+> `PluginProcessor` as `dspV2` (`revision==2`); `idMid`/`idMidShift`/`idBassShift` are now live
+> (index 0 = the lower-frequency throw on both choice params, matched to `V2Stages.h`'s
+> `setShift(true)`/`setBassShift(true)` convention).
+> **Gate: `tests/V2IntegrationTest.cpp` (ctest #16, PASSES)** — 3.1-style all-knobs/silence/dry-path
+> sweep (now 7 continuous knobs + 2 shift switches), §1 V2 column, §4 V2 DRIVE isolated at the
+> module (+12.5/+48.2 dB, matches target), MID SHIFT throw sanity. **Two residual gaps vs the §1
+> SPICE-graph reading, deliberately left visible (not papered over with looser bounds) — see the
+> test file's header comment:** (a) the notch bottoms out ~9 dB shallower than the ~−36 dB reading —
+> the SAME-size gap V1LateIntegrationTest's own passing notch check already carries (−26.7 vs −35
+> dB target), so it's a shared twin-T-model characteristic, not new to V2; (b) V2's LF edge (−1.9 dB
+> measured vs ~−15 dB target @ 25 Hz) reads shallower because `V2BlendLevelStage` has no feedback
+> cap (netlists V6 — resistive R63/R67 only) and passes DC flat, partially offsetting the recovery
+> stage's genuine ~72 Hz C41/R46 coupling highpass. Both flagged for Phase 10 capture calibration,
+> not adjusted blind. Full `ctest` suite: 18/18 green.
+> **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed a DAW listen of any revision** —
+> carried forward from Phase 3/4/5.4; now all three revisions are independently playable
+> (`revision` param 0/1/2), so this is the natural point for an A/B-by-ear session before Phase 7's
+> revision-switching UX work.
+> **⏸ NEXT: Phase 7 (revision switching, Sonnet 5/medium).** Read `architecture.md` + processor
+> code. All three DSP graphs are already owned by the processor and pre-allocated
+> (`dspEarly`/`dspLate`/`dspV2`); Phase 7 replaces the current plain block-start `revision` read
+> with a glitch-free crossfade + state-preserving polish (see build-plan.md Phase 7). Gate: flip
+> `revision` every N blocks under signal, assert no NaN/clicks/allocs; state round-trip preserves
+> `revision`.
+> **Durable gotchas from Phase 6 (still relevant to future NodalCircuit/switch-stage work):**
+> (1) **Switch modelling is NOT `setSMatrixData()`** — V2's MID/BASS-SHIFT stages are NodalCircuit
+> (MNA), so "switched topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) +
+> `rebuild()` (rare, not per-block). (2) **ANY hand-derived analytic MNA reference:** when an
 > op-amp's (+) input node is a bare passive junction and the buffered OUTPUT is a separate node
 > forced to the same voltage, a positive-feedback cap returning to that output must NOT be included
-> in the (+) node's own KCL row** — its current is absorbed by the op-amp's output (an ideal
-> source), not by the high-Z input node. `NodalCircuit::addOpAmp`'s nullor stamping already handles
-> this correctly (an extra current unknown replaces the output node's row); only a hand-derived
-> reference has to do it explicitly. Caught by a large, frequency-growing WDF-vs-analytic
-> mismatch — the WDF code was right, the reference was wrong.
-> **RESOLVED (2026-07-12): `tests/UIRenderProbe.cpp` now exists** (built alongside the UI
-> asset/layout groundwork — see the carry-forward below and `docs/ui-noamp-assets.md`). `cmake -B
-> build && cmake --build build` and the full `ctest` suite (16/16, incl. `UIRenderProbe`) are green
-> again; no action needed before the next full build.
-> **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed the V1-Early DAW listen** — carried
-> forward from Phase 3/4; now doubled up with the Phase-5.4 "V1 Late playable" checkpoint. Resolve
-> both with a DAW listen (Revision: V1 Early / V1 Late) before more DSP is built on top.
-> **Carry-forward from 5.3 (still relevant):** the two DRIVE stages are CASCADED not simultaneous
-> (IC100A's wiper is a stiff source); Cj=220pF for V1L; stage-A op-amp RAIL clip deferred alongside
-> zener OS/ADAA to a later pass (unscheduled follow-up work, flag before Phase 9's HQ/perf pass).
-> **Two earlier gotchas still relevant:** (1) `WDFParallelT`/pot legs at a literal 0 Ω → NaN; floor
-> parallel-adaptor pot legs at 0.5 Ω. (2) `NodalCircuit::addOpAmp` does NOT support `kInput` as the (+)
-> node (silently drops the input term → floating output); route input via a component into an internal
-> node first, or wire the next component straight to `kInput` if nothing drops voltage before it.
-> **⏸ NEXT: Phase 6.3 (integrate `V2DSP` + CH40 module respin, Sonnet 5/medium — see the build-plan's
-> ⏸ BREAK to switch models first).** CH40 = CH34-9 class with V2 constants (netlists.md V4: coupling
-> caps 2.2u→1u, `R14`/`R15`/`R903`, different Cj fit); BLEND/LEVEL U3B is non-inverting +10.1 dB
-> (netlists V6 — build the V2 blend/level stage, not yet in `V2Stages.h`). Wire PRESENCE (V3, reuse
-> `V1LatePresenceStage`)→drive→`V2RecoveryStage`→blend/level→`V2MidStage`→`V2PeakingToneStage`→output.
-> Gate: 3.1-style sweep + §1 V2 column + §4 V2 drive curves. The `V2MidStage`/`V2PeakingToneStage`
-> switch setters take booleans — wire MID-SHIFT/BASS-SHIFT as `AudioParameterChoice` (in-scope runtime
-> switches per circuit.md); MID-SHIFT `true`=430 Hz("500"), BASS-SHIFT `true`=40 Hz.
+> in the (+) node's own KCL row — its current is absorbed by the op-amp's output (an ideal source),
+> not the high-Z input node; `NodalCircuit::addOpAmp`'s nullor stamping already handles this, only a
+> hand-derived reference has to do it explicitly. (3) A peaking DEEP CUT that nulls at very low freq
+> needs a long settle window in a sine-sweep measurement, or a not-yet-decayed transient reads as a
+> too-shallow cut (measurement artifact, not a discretisation error). (4) `WDFParallelT`/pot legs at
+> a literal 0 Ω → NaN; floor parallel-adaptor pot legs at 0.5 Ω. (5) `NodalCircuit::addOpAmp` does
+> NOT support `kInput` as the (+) node (silently drops the input term → floating output); route
+> input via a component into an internal node first, or wire the next component straight to
+> `kInput` if nothing drops voltage before it — and when a series R develops no drop into a high-Z
+> (+) input, skip the redundant node entirely (V1LateOutputStage/V2BlendLevelStage/V2OutputStage
+> pattern) rather than modelling an inert buffer stage.
+> **Carry-forward from 5.3 (still relevant):** the two DRIVE stages (CH34-9/CH40, both revisions)
+> are CASCADED not simultaneous (the wiper is a stiff source); Cj=220pF fit (V1L and, provisionally,
+> V2); stage-A op-amp RAIL clip deferred alongside zener OS/ADAA to a later pass (unscheduled
+> follow-up, flag before Phase 9's HQ/perf pass).
 
 ## Project-specific carry-forwards
 

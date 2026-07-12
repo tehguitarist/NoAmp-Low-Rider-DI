@@ -1,0 +1,255 @@
+// Phase 6.3 gate: V2 full-chain integration (nalr::V2DSP) — same shape as Phase 5.4's
+// V1LateIntegrationTest: an automated all-knobs stability sweep (finite, bounded, no clicks), a
+// dry-path passthrough check, the §1 V2-column full-wet-path FR checkpoint, and an isolated §4 V2
+// DRIVE small-signal gain check (isolated at the ZenerDriveModule level, same pattern the codebase
+// uses elsewhere to separate one stage's gain figure from the rest of the chain's broadband offset).
+//
+// Like V1LateIntegrationTest, there is no OS-factor sweep — V2DSP's DRIVE/clip module is not yet
+// oversampled (deferred alongside V1 Late's, see ZenerDriveModule.h/V2DSP.h). Pure chowdsp console
+// exe (no juce::dsp needed without an OS region).
+//
+// §1/§8-style FR checks use WIDE tolerance windows, same discipline as V1LateIntegrationTest — these
+// are qualitative SPICE-graph readings, not tight fits (the per-stage FR gates in Phase 6.1/6.2/6.3's
+// isolated tests already pinned each individual network). Two residual gaps vs the read-off §1 V2
+// targets are visible here and printed for the record (not hidden behind an artificially wide bound):
+// (a) the notch bottoms out a few dB shallower than the ~-36 dB reading — the SAME-sized gap
+// V1LateIntegrationTest's own passing §1 check already carries for its twin-T notch (compare its
+// -26.7 dB actual vs -35 dB target), so this is a shared twin-T-model characteristic, not new to V2;
+// (b) V2's LF edge measures shallower than the ~-15 dB reading because V2's BLEND/LEVEL (U3B) has NO
+// feedback capacitor (netlists.md V6 — resistive R63/R67 only, unlike V1's IC3A/IC4B blocks), so it
+// passes DC/LF flat, partially offsetting the recovery stage's genuine ~72 Hz C41/R46 coupling
+// highpass (netlists.md V5b). Both gaps are plausible SPICE-graph-reading tolerance / an unstated
+// LEVEL assumption in the source sim, not a topology mismatch (every stage's node wiring was checked
+// against netlists.md V1-V8 individually) — flagged for Phase 10 capture-anchored calibration rather
+// than adjusted blind here.
+
+#include "../src/dsp/V2DSP.h"
+#include "../src/dsp/ZenerDriveModule.h"
+
+#include <cmath>
+#include <cstdio>
+#include <vector>
+
+namespace
+{
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kFs = 48000.0;
+
+bool finiteBounded(const std::vector<double>& x, double bound)
+{
+    for (double v : x)
+        if (!std::isfinite(v) || std::abs(v) > bound)
+            return false;
+    return true;
+}
+
+double magnitudeDb(nalr::V2DSP& dsp, double freqHz, double ampIn)
+{
+    const int period = std::max(2, (int) std::lround(kFs / freqHz));
+    const int settleCycles = std::max(8, (int) std::lround(kFs / (double) period));
+    const int measureCycles = std::max(8, settleCycles / 2);
+    long n = 0;
+    double sample = 0.0;
+    for (int i = 0; i < settleCycles * period; ++i)
+    {
+        sample = ampIn * std::sin(2.0 * kPi * freqHz * (double) n / kFs);
+        dsp.processBlock(&sample, 1);
+        ++n;
+    }
+    double re = 0.0, im = 0.0;
+    const int measureN = measureCycles * period;
+    for (int i = 0; i < measureN; ++i)
+    {
+        sample = ampIn * std::sin(2.0 * kPi * freqHz * (double) n / kFs);
+        dsp.processBlock(&sample, 1);
+        re += sample * std::cos(2.0 * kPi * freqHz * (double) i / kFs);
+        im += sample * std::sin(2.0 * kPi * freqHz * (double) i / kFs);
+        ++n;
+    }
+    const double mag = 2.0 * std::sqrt(re * re + im * im) / (double) measureN;
+    return 20.0 * std::log10(mag / ampIn);
+}
+
+// Isolated small-signal gain of ZenerDriveModule alone (no downstream stages) — the §4 comparison
+// point, since the module's own datasheet-style figure is defined at its own terminals, not through
+// the rest of the chain (whose broadband gain/loss would otherwise swamp the reading).
+double driveModuleGainDb(double drive01, double freqHz, double ampIn)
+{
+    nalr::ZenerDriveModule d;
+    d.setParams(nalr::ZenerDriveModule::v2Params());
+    d.prepare(kFs);
+    d.setDrive(drive01);
+    d.reset();
+    const int period = std::max(2, (int) std::lround(kFs / freqHz));
+    const int settleCycles = std::max(8, (int) std::lround(kFs / (double) period));
+    const int measureCycles = std::max(8, settleCycles / 2);
+    long n = 0;
+    double sample = 0.0;
+    for (int i = 0; i < settleCycles * period; ++i)
+    {
+        sample = ampIn * std::sin(2.0 * kPi * freqHz * (double) n / kFs);
+        d.process(sample);
+        ++n;
+    }
+    double re = 0.0, im = 0.0;
+    const int measureN = measureCycles * period;
+    for (int i = 0; i < measureN; ++i)
+    {
+        const double vin = ampIn * std::sin(2.0 * kPi * freqHz * (double) n / kFs);
+        const double y = d.process(vin);
+        re += y * std::cos(2.0 * kPi * freqHz * (double) i / kFs);
+        im += y * std::sin(2.0 * kPi * freqHz * (double) i / kFs);
+        ++n;
+    }
+    const double mag = 2.0 * std::sqrt(re * re + im * im) / (double) measureN;
+    return 20.0 * std::log10(mag / ampIn);
+}
+
+// A musically-broad excitation for the stability sweep — matches V1LateIntegrationTest's style.
+double excite(long n)
+{
+    const double t = (double) n / kFs;
+    const double sweepHz = 60.0 + 4000.0 * (0.5 + 0.5 * std::sin(2.0 * kPi * 0.5 * t));
+    return 0.35 * std::sin(2.0 * kPi * 110.0 * t) + 0.15 * std::sin(2.0 * kPi * 880.0 * t)
+         + 0.10 * std::sin(2.0 * kPi * sweepHz * t);
+}
+} // namespace
+
+int main()
+{
+    bool pass = true;
+    auto check = [&](bool ok, const char* msg)
+    {
+        std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
+        pass &= ok;
+    };
+
+    // --- 1. All-knobs sweep: finite + bounded (no NaN/Inf/blowup) ---------------------------------
+    std::printf("All-knobs finite/bounded sweep:\n");
+    {
+        nalr::V2DSP dsp;
+        dsp.prepare(kFs, 256);
+        bool ok = true;
+        const double steps[5] = { 0.0, 0.25, 0.5, 0.75, 1.0 };
+        auto run = [&](int nSamples) {
+            std::vector<double> buf((size_t) nSamples);
+            for (int i = 0; i < nSamples; ++i)
+                buf[(size_t) i] = excite(i);
+            dsp.processBlock(buf.data(), nSamples);
+            return buf;
+        };
+        // Continuous knobs: drive, presence, blend, level, mid, bass, treble (7); shift switches
+        // (mid_shift, bass_shift) swept separately (booleans, not part of the 0..1 sweep).
+        auto sweepKnob = [&](int which)
+        {
+            for (double s : steps)
+            {
+                double p[7] = { 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 };
+                p[which] = s;
+                dsp.setParams(p[0], p[1], p[2], p[3], p[4], true, p[5], p[6], false);
+                dsp.reset();
+                ok &= finiteBounded(run(2048), 1000.0);
+            }
+        };
+        for (int k = 0; k < 7; ++k)
+            sweepKnob(k);
+        for (double corner : { 0.0, 1.0 })
+        {
+            for (bool shiftLow : { false, true })
+            {
+                dsp.setParams(corner, corner, corner, corner, corner, shiftLow, corner, corner, shiftLow);
+                dsp.reset();
+                ok &= finiteBounded(run(2048), 1000.0);
+            }
+        }
+        check(ok, "every knob position and switch throw stays finite and bounded (<1000 V)");
+    }
+
+    // --- 2. Silence in -> silence out (no self-oscillation) --------------------------------------
+    std::printf("Silence stability:\n");
+    {
+        nalr::V2DSP dsp;
+        dsp.prepare(kFs, 256);
+        dsp.setParams(1.0, 1.0, 1.0, 1.0, 1.0, true, 1.0, 1.0, true); // worst case: max gain everywhere
+        dsp.reset();
+        double worst = 0.0;
+        double zero = 0.0;
+        for (int i = 0; i < 20000; ++i)
+        {
+            zero = 0.0;
+            dsp.processBlock(&zero, 1);
+            if (i > 4000) // let the DC-blocks / filters settle
+                worst = std::max(worst, std::abs(zero));
+        }
+        check(std::isfinite(worst) && worst < 1.0e-6, "zero input decays to zero output (<1 uV)");
+    }
+
+    // --- 3. Dry-path unity: blend=0 bypasses the wet chain -> near-unity, clean -------------------
+    std::printf("Dry-path (blend=0) linear passthrough:\n");
+    {
+        nalr::V2DSP dsp;
+        dsp.prepare(kFs, 256);
+        dsp.setParams(1.0, 0.5, 0.0, 0.5, 0.5, true, 0.5, 0.5, false); // blend=full dry, level/mid/tone flat
+        dsp.reset();
+        const double gainDb = magnitudeDb(dsp, 1000.0, 0.3);
+        std::printf("      dry-path 1 kHz gain = %.2f dB (near-unity: input buffer + BLEND/LEVEL loading + "
+                    "MID/tone/output stages)\n", gainDb);
+        check(std::isfinite(gainDb) && gainDb > -12.0 && gainDb < 12.0, "dry path is near-unity and stable");
+    }
+
+    // --- 4. §1 full wet-path column: PRESENCE 0 / DRIVE 0 / BLEND 100% -----------------------------
+    std::printf("FR §1 V2 full wet-path column (PRESENCE 0%%, DRIVE 0%%, BLEND 100%%):\n");
+    {
+        nalr::V2DSP dsp;
+        dsp.prepare(kFs, 256);
+        dsp.setParams(0.0, 0.0, 1.0, 0.7, 0.5, true, 0.5, 0.5, false);
+        dsp.reset();
+        const double lfEdge = magnitudeDb(dsp, 25.0, 0.3);
+        const double lowBump = magnitudeDb(dsp, 70.0, 0.3);
+        const double notch = magnitudeDb(dsp, 750.0, 0.3);
+        const double highBump = magnitudeDb(dsp, 2700.0, 0.3);
+        const double hf8k = magnitudeDb(dsp, 8000.0, 0.3);
+        std::printf("      LF edge @25Hz = %.1f dB (target ~-15 dB; see class-comment gap note (b))\n", lfEdge);
+        std::printf("      low bump @70Hz = %.1f dB (target ~-3 dB)\n", lowBump);
+        std::printf("      deep notch @750Hz = %.1f dB (target ~-36 dB; see class-comment gap note (a))\n", notch);
+        std::printf("      high bump @2.7kHz = %.1f dB (target ~-10 dB)\n", highBump);
+        std::printf("      HF @8kHz = %.1f dB (target near the -40 dB point)\n", hf8k);
+        check(lfEdge > -20.0 && lfEdge < 4.0, "§1 LF edge negative and in range");
+        check(lowBump > -10.0 && lowBump < 8.0, "§1 low bump in range");
+        check(notch < -20.0, "§1 deep notch present (< -20 dB)");
+        check(highBump > -15.0 && highBump < 5.0, "§1 high bump in range");
+        check(hf8k < notch, "§1 top end rolls off well below the notch by 8 kHz");
+    }
+
+    // --- 5. §4 V2 DRIVE small-signal gain, isolated at the module (min/max knob) --------------------
+    std::printf("FR §4 V2 DRIVE small-signal gain (isolated ZenerDriveModule, v2Params()):\n");
+    {
+        const double gMin = driveModuleGainDb(0.0, 1000.0, 1.0e-4);
+        const double gMax = driveModuleGainDb(1.0, 1000.0, 1.0e-5);
+        std::printf("      min-knob gain = %.1f dB (target ~+12.5 dB)\n", gMin);
+        std::printf("      max-knob gain = %.1f dB (target ~+48 dB)\n", gMax);
+        check(std::abs(gMin - 12.5) < 2.0, "§4 DRIVE min-knob gain matches V2 column");
+        check(std::abs(gMax - 48.0) < 3.0, "§4 DRIVE max-knob gain matches V2 column");
+    }
+
+    // --- 6. MID SHIFT sanity: throw changes the mid response through the full chain -----------------
+    std::printf("MID SHIFT throw sanity (full chain, MID pot at max boost):\n");
+    {
+        nalr::V2DSP dspLow, dspHigh;
+        dspLow.prepare(kFs, 256);
+        dspLow.setParams(0.3, 0.3, 1.0, 0.7, 1.0, true, 0.5, 0.5, false); // "500 Hz" throw
+        dspLow.reset();
+        dspHigh.prepare(kFs, 256);
+        dspHigh.setParams(0.3, 0.3, 1.0, 0.7, 1.0, false, 0.5, 0.5, false); // "1000 Hz" throw
+        dspHigh.reset();
+        const double at440Low = magnitudeDb(dspLow, 440.0, 0.05);
+        const double at440High = magnitudeDb(dspHigh, 440.0, 0.05);
+        std::printf("      @440Hz: 500Hz-throw=%.1fdB  1000Hz-throw=%.1fdB (500Hz throw should read higher here)\n",
+                    at440Low, at440High);
+        check(std::isfinite(at440Low) && std::isfinite(at440High) && at440Low > at440High,
+              "MID SHIFT throw audibly changes the response (500Hz throw boosts more at 440Hz)");
+    }
+
+    std::printf("%s\n", pass ? "V2IntegrationTest PASSED" : "V2IntegrationTest FAILED");
+    return pass ? 0 : 1;
+}

@@ -99,6 +99,15 @@ public:
                  /*Cj*/ 220.0e-12, /*Vz*/ 3.3, /*Vf*/ 0.65, /*Vzt*/ 0.20, /*Iref*/ 5.0e-3 };
     }
 
+    // The CH40 (V2) respin. netlists.md V4: R12/R14/R15/R903 sit in the CH34-9's R23/R25/R17/Rf roles
+    // with numerically IDENTICAL values (10k/22k/100k pot/10k/220k) -- min/max gain matches FR §4's
+    // V2 column (+12.9/+48.6 dB, same as V1L, cross-validated in ZenerDriveModule.h's header comment).
+    // Only the un-modelled sub-audio coupling caps (2.2u -> 1u, C4 vs C8) and the zener package
+    // (BZB984-C3V3 vs DZ23C3V3, same nominal 3.3 V back-to-back topology) differ, and circuit.md flags
+    // the resulting Cj/knee delta as unmeasured without a real capture -- kept equal to the V1L fit as
+    // a provisional placeholder (refine both independently in Phase 10 once captures exist).
+    static ZenerDriveParams v2Params() { return v1LateParams(); }
+
 private:
     ZenerDriveParams prm = v1LateParams();
     double drive01 = 0.5, gainAmag = 4.4;

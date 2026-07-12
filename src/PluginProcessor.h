@@ -9,12 +9,13 @@
 #include "dsp/Calibration.h"
 #include "dsp/V1EarlyDSP.h"
 #include "dsp/V1LateDSP.h"
+#include "dsp/V2DSP.h"
 
 // NoAmp Low Rider DI — plugin processor.
 //
-// Phase 3 wired the V1 Early chain (nalr::V1EarlyDSP) into processBlock; Phase 5.4 adds V1 Late
-// (nalr::V1LateDSP) alongside it, both pre-allocated/prepared per architecture.md, selected per-block
-// by the `revision` param. V2 joins the same way in Phase 6.3. Switching is currently a plain
+// Phase 3 wired the V1 Early chain (nalr::V1EarlyDSP) into processBlock; Phase 5.4 added V1 Late
+// (nalr::V1LateDSP); Phase 6.3 adds V2 (nalr::V2DSP) alongside them, all three pre-allocated/prepared
+// per architecture.md, selected per-block by the `revision` param. Switching is currently a plain
 // block-start selection (one-block-old parameter read on change, same as an OS-factor change) — the
 // glitch-free crossfade + state-preserving polish is Phase 7's job, not required for a revision to be
 // audible. This class owns the APVTS, smoothed input/output gain, bypass crossfade, metering, and the
@@ -103,10 +104,10 @@ private:
 
     // One DSP chain per channel per revision (WDF trees hold per-channel state, so they can't be
     // shared). All revisions are pre-allocated/prepared up front (architecture.md: no audio-thread
-    // allocation on a revision switch); `revision` selects which array processBlock reads from. V2
-    // joins the same way in Phase 6.3.
+    // allocation on a revision switch); `revision` selects which array processBlock reads from.
     std::array<nalr::V1EarlyDSP, 2> dspEarly;
     std::array<nalr::V1LateDSP, 2> dspLate;
+    std::array<nalr::V2DSP, 2> dspV2;
 
     // Pre-allocated audio-thread scratch (sized in prepareToPlay; never reallocated in processBlock).
     std::vector<double> voltsScratch;                       // volts-domain block, reused per channel

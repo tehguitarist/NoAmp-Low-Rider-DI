@@ -257,6 +257,16 @@ target_link_libraries(V2MidToneTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(V2MidToneTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V2MidToneTest COMMAND V2MidToneTest)
 
+# 6.3 — V2 full-chain integration (src/dsp/V2DSP.h): assembles input/PRESENCE (reused from V1 Late)
+# + CH40 DRIVE/zener module (ZenerDriveModule::v2Params()) + Phase 6.1/6.2's recovery/MID/tone stages
+# + BLEND/LEVEL/output (V2Stages.h). Same shape as V1LateIntegrationTest: all-knobs stability sweep,
+# dry-path passthrough, FR §1 V2-column checkpoint, isolated §4 V2 DRIVE gain check, MID SHIFT sanity.
+# No OS region yet (deferred alongside V1 Late's — see V2DSP.h), so this is a pure chowdsp console exe.
+add_executable(V2IntegrationTest tests/V2IntegrationTest.cpp)
+target_link_libraries(V2IntegrationTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V2IntegrationTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V2IntegrationTest COMMAND V2IntegrationTest)
+
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
 # region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
 juce_add_console_app(V1EarlyNonlinearTest PRODUCT_NAME "V1EarlyNonlinearTest")
