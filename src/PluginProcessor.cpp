@@ -1,10 +1,16 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include <algorithm>
+
 namespace
 {
 constexpr float kTrimRangeDb = 24.0f;
 constexpr double kBypassRampSeconds = 0.005; // ~5 ms crossfade, architecture.md "Bypass"
+constexpr double kRevisionCrossfadeSeconds = 0.030; // Phase 7: longer than bypass's 5ms — the three
+                                                     // revisions differ enough in level/spectrum
+                                                     // (different clip elements, tone topologies)
+                                                     // that a fast fade could still read as a bump.
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcessor::createParameterLayout()
@@ -81,6 +87,23 @@ NoAmpLowRiderDIAudioProcessor::NoAmpLowRiderDIAudioProcessor()
     pBypass             = apvts.getRawParameterValue(idBypass);
 }
 
+void NoAmpLowRiderDIAudioProcessor::runRevision(int revision, int channel, double* data, int numSamples) noexcept
+{
+    if (revision == 0)
+        dspEarly[(size_t) channel].processBlock(data, numSamples);
+    else if (revision == 1)
+        dspLate[(size_t) channel].processBlock(data, numSamples);
+    else
+        dspV2[(size_t) channel].processBlock(data, numSamples);
+}
+
+int NoAmpLowRiderDIAudioProcessor::latencyForRevision(int revision) const noexcept
+{
+    return revision == 0 ? dspEarly[0].getLatencySamples()
+         : revision == 1 ? dspLate[0].getLatencySamples()
+                          : dspV2[0].getLatencySamples();
+}
+
 float NoAmpLowRiderDIAudioProcessor::outputGainFor(float outTrimDb) const noexcept
 {
     // Fold kOutputMakeup and 1/kInputRef into the output gain so kInputRef cancels in the linear path
@@ -97,10 +120,18 @@ void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samples
     inputGainSmoothed.reset(sampleRate, 0.02);
     outputGainSmoothed.reset(sampleRate, 0.02);
     bypassMix.reset(sampleRate, kBypassRampSeconds);
+    revisionCrossfade.reset(sampleRate, kRevisionCrossfadeSeconds);
 
     inputGainSmoothed.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
     outputGainSmoothed.setCurrentAndTargetValue(outputGainFor(pOutputTrim->load()));
     bypassMix.setCurrentAndTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
+
+    // A fresh prepare (SR change, host reload) starts clean on whatever `revision` currently is —
+    // no crossfade to carry across a discontinuous re-prepare.
+    activeRevision = (int) pRevision->load();
+    fadingFromRevision = -1;
+    crossfading = false;
+    revisionCrossfade.setCurrentAndTargetValue(1.0f);
 
     // OS factor from the LIVE param, so the pre-prepare reports the right latency (offline bounce
     // switches to the render factor at the first isNonRealtime() block).
@@ -129,10 +160,12 @@ void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samples
     setLatencySamples(reportedLatency);
 
     voltsScratch.assign((size_t) maxBlockSize, 0.0);
+    voltsScratchPrev.assign((size_t) maxBlockSize, 0.0);
     dryCopy.assign((size_t) maxBlockSize, 0.0f);
     inTrimRamp.assign((size_t) maxBlockSize, 0.0f);
     outGainRamp.assign((size_t) maxBlockSize, 0.0f);
     bypassRamp.assign((size_t) maxBlockSize, 0.0f);
+    revisionFadeRamp.assign((size_t) maxBlockSize, 1.0f);
 }
 
 void NoAmpLowRiderDIAudioProcessor::releaseResources() {}
@@ -161,7 +194,17 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     // graphs are kept live (cheap — change-gated internally) so a revision switch has no first-block
     // stale-parameter glitch. idMidShift/idBassShift are AudioParameterChoice with "500 Hz"/"40 Hz" at
     // index 0 (V2Stages.h convention: true = the lower-frequency throw), so index==0 -> true.
-    const int revision = (int) pRevision->load(); // 0 = V1 Early, 1 = V1 Late, 2 = V2
+    const int targetRevision = (int) pRevision->load(); // 0 = V1 Early, 1 = V1 Late, 2 = V2
+    if (targetRevision != activeRevision)
+    {
+        // Start (or retarget) a crossfade: snap any in-progress fade to done first so a rapid
+        // double-switch doesn't try to blend three graphs at once — see the header comment.
+        fadingFromRevision = activeRevision;
+        activeRevision = targetRevision;
+        crossfading = true;
+        revisionCrossfade.setCurrentAndTargetValue(0.0f);
+        revisionCrossfade.setTargetValue(1.0f);
+    }
     for (auto& d : dspEarly)
     {
         d.setOversamplingFactor(wantFactor);
@@ -194,7 +237,10 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         inTrimRamp[(size_t) i] = inputGainSmoothed.getNextValue();
         outGainRamp[(size_t) i] = outputGainSmoothed.getNextValue();
         bypassRamp[(size_t) i] = bypassMix.getNextValue();
+        revisionFadeRamp[(size_t) i] = crossfading ? revisionCrossfade.getNextValue() : 1.0f;
     }
+    if (crossfading && revisionCrossfade.isSmoothing() == false)
+        crossfading = false; // fade reached 1.0 this block — fadingFromRevision no longer needed
 
     for (int ch = 0; ch < numChannels; ++ch)
     {
@@ -210,21 +256,26 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
             peakIn = juce::jmax(peakIn, std::abs(wet));
             voltsScratch[(size_t) i] = (double) wet * nalr::kInputRef;
         }
+        if (crossfading)
+            std::copy(voltsScratch.begin(), voltsScratch.begin() + numSamples, voltsScratchPrev.begin());
 
         // The circuit, in real volts (input buffer -> notch/presence -> drive/clip/recovery -> blend/
-        // level -> [V2: MID] -> tone -> output buffer). `revision` selects which pre-allocated graph
-        // runs (0 = V1 Early, 1 = V1 Late, 2 = V2).
-        if (revision == 0)
-            dspEarly[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
-        else if (revision == 1)
-            dspLate[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
-        else
-            dspV2[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
+        // level -> [V2: MID] -> tone -> output buffer). `activeRevision` selects which pre-allocated
+        // graph runs (0 = V1 Early, 1 = V1 Late, 2 = V2); while crossfading, `fadingFromRevision`'s
+        // graph also runs (on its own scratch buffer, fed the same input) and the two outputs blend
+        // per-sample by `revisionFadeRamp` (Phase 7 — glitch-free revision switching).
+        runRevision(activeRevision, ch, voltsScratch.data(), numSamples);
+        if (crossfading)
+            runRevision(fadingFromRevision, ch, voltsScratchPrev.data(), numSamples);
 
         // Back to DAW domain (kOutputMakeup/kInputRef folded into outGainRamp) + bypass crossfade.
         for (int i = 0; i < numSamples; ++i)
         {
-            const float processed = (float) voltsScratch[(size_t) i] * outGainRamp[(size_t) i];
+            const double wdfOut = crossfading
+                ? (voltsScratch[(size_t) i] * (double) revisionFadeRamp[(size_t) i]
+                   + voltsScratchPrev[(size_t) i] * (1.0 - (double) revisionFadeRamp[(size_t) i]))
+                : voltsScratch[(size_t) i];
+            const float processed = (float) wdfOut * outGainRamp[(size_t) i];
             const float mix = bypassRamp[(size_t) i];
             data[i] = processed * (1.0f - mix) + dryCopy[(size_t) i] * mix;
             peakOut = juce::jmax(peakOut, std::abs(data[i]));
@@ -236,9 +287,7 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 
     // Report OS-factor/revision latency changes to the host (only when it actually changed — the call
     // can trigger a host graph re-sync). getLatencySamples() reflects what the active chain just ran.
-    const int lat = revision == 0 ? dspEarly[0].getLatencySamples()
-                   : revision == 1 ? dspLate[0].getLatencySamples()
-                                   : dspV2[0].getLatencySamples();
+    const int lat = latencyForRevision(activeRevision);
     if (lat != reportedLatency)
     {
         reportedLatency = lat;

@@ -77,6 +77,10 @@ private:
     // Output gain = kOutputMakeup * dbToGain(outTrimDb) / kInputRef (calibration doc §1).
     float outputGainFor(float outTrimDb) const noexcept;
 
+    // Runs the given revision's pre-allocated graph for one channel, in place on `data`.
+    void runRevision(int revision, int channel, double* data, int numSamples) noexcept;
+    int latencyForRevision(int revision) const noexcept;
+
     // Cached atomic parameter pointers (avoid string lookups on the audio thread).
     std::atomic<float>* pRevision            = nullptr;
     std::atomic<float>* pDrive               = nullptr;
@@ -98,6 +102,17 @@ private:
     juce::SmoothedValue<float> outputGainSmoothed;
     juce::SmoothedValue<float> bypassMix;
 
+    // Phase 7: glitch-free revision switching. `activeRevision` is the graph processBlock reads as
+    // "current"; when the `revision` param changes, `fadingFromRevision` captures the old one and
+    // `revisionCrossfade` ramps 0->1 over kRevisionCrossfadeSeconds, during which BOTH graphs run
+    // (fed the same input) and their outputs are blended. A second revision change mid-crossfade
+    // just retargets immediately (snap-restart) rather than queuing — this is a deliberate, rare
+    // user gesture, not audio-rate automation, so that simplification is fine.
+    int activeRevision = 0;
+    int fadingFromRevision = -1; // -1 = no crossfade in progress
+    bool crossfading = false;
+    juce::SmoothedValue<float> revisionCrossfade;
+
     std::atomic<float> inputLevelL { 0.0f }, inputLevelR { 0.0f };
     std::atomic<float> outputLevelL { 0.0f }, outputLevelR { 0.0f };
     std::atomic<bool> bypassed { false };
@@ -110,9 +125,11 @@ private:
     std::array<nalr::V2DSP, 2> dspV2;
 
     // Pre-allocated audio-thread scratch (sized in prepareToPlay; never reallocated in processBlock).
-    std::vector<double> voltsScratch;                       // volts-domain block, reused per channel
+    std::vector<double> voltsScratch;                       // active-revision volts-domain block
+    std::vector<double> voltsScratchPrev;                   // fading-from-revision volts-domain block
     std::vector<float> dryCopy;                              // DAW-domain raw input, for bypass mix
     std::vector<float> inTrimRamp, outGainRamp, bypassRamp;  // per-block gain ramps, shared L/R
+    std::vector<float> revisionFadeRamp;                     // per-block revision-crossfade ramp
 
     int currentOSFactor = 1;
     int reportedLatency = 0;

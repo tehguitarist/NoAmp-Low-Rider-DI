@@ -105,38 +105,26 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 6 COMPLETE — all three revisions now have a full, integrated DSP chain.**
-> Phase 6.3 built `src/dsp/V2DSP.h`: input (reused `V1EarlyInputBuffer`) → PRESENCE (reused
-> `V1LatePresenceStage`, netlists.md reuse map: "identical values" V1L/V2) → CH40 drive
-> (`ZenerDriveModule::v2Params()`, numerically identical R-values to V1L's CH34-9 — only the
-> un-modelled sub-audio coupling caps and zener package differ, `v2Params()` kept equal to
-> `v1LateParams()` as a Phase-10 placeholder) → 6.1's `V2RecoveryStage` → new `V2BlendLevelStage`
-> (U3B non-inverting +10.1 dB, netlists V6, no feedback cap → passes DC/LF flat, unlike V1's
-> BLEND/LEVEL cells) → 6.2's `V2MidStage`+`V2PeakingToneStage` → new `V2OutputStage`. Wired into
-> `PluginProcessor` as `dspV2` (`revision==2`); `idMid`/`idMidShift`/`idBassShift` are now live
-> (index 0 = the lower-frequency throw on both choice params, matched to `V2Stages.h`'s
-> `setShift(true)`/`setBassShift(true)` convention).
-> **Gate: `tests/V2IntegrationTest.cpp` (ctest #16, PASSES)** — 3.1-style all-knobs/silence/dry-path
-> sweep (now 7 continuous knobs + 2 shift switches), §1 V2 column, §4 V2 DRIVE isolated at the
-> module (+12.5/+48.2 dB, matches target), MID SHIFT throw sanity. **Two residual gaps vs the §1
-> SPICE-graph reading, deliberately left visible (not papered over with looser bounds) — see the
-> test file's header comment:** (a) the notch bottoms out ~9 dB shallower than the ~−36 dB reading —
-> the SAME-size gap V1LateIntegrationTest's own passing notch check already carries (−26.7 vs −35
-> dB target), so it's a shared twin-T-model characteristic, not new to V2; (b) V2's LF edge (−1.9 dB
-> measured vs ~−15 dB target @ 25 Hz) reads shallower because `V2BlendLevelStage` has no feedback
-> cap (netlists V6 — resistive R63/R67 only) and passes DC flat, partially offsetting the recovery
-> stage's genuine ~72 Hz C41/R46 coupling highpass. Both flagged for Phase 10 capture calibration,
-> not adjusted blind. Full `ctest` suite: 18/18 green.
+> **CURRENT: Phase 7 COMPLETE — glitch-free revision switching.** `PluginProcessor` now
+> crossfades between revisions instead of a hard block-start swap: on a `revision` param change,
+> `activeRevision`/`fadingFromRevision` + a 30 ms `SmoothedValue<float> revisionCrossfade` blend
+> the outgoing and incoming graphs' outputs sample-by-sample (both graphs run, each on its own
+> volts-domain scratch buffer — `voltsScratch`/`voltsScratchPrev` — fed the same input) until the
+> ramp reaches 1, then only the active graph runs (unchanged perf from pre-Phase-7 in steady state).
+> A second revision change mid-crossfade snaps the fade and restarts rather than queuing a 3-way
+> blend — deliberate simplification, revision switching is a rare user gesture, not audio-rate
+> automation. All buffers pre-allocated in `prepareToPlay` (no audio-thread allocation).
+> **Gate: `tests/RevisionSwitchTest.cpp` (ctest #7, PASSES)** — drives the real processor with a
+> continuous tone, flips `revision` every 7 blocks (some flips land mid-crossfade, since the fade
+> is ~6 blocks at 48 kHz/256), asserts every output sample finite and no sample-to-sample delta
+> exceeds a click threshold; separately asserts `revision` round-trips through
+> `getStateInformation`/`setStateInformation`. Full `ctest` suite: 19/19 green.
 > **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed a DAW listen of any revision** —
-> carried forward from Phase 3/4/5.4; now all three revisions are independently playable
-> (`revision` param 0/1/2), so this is the natural point for an A/B-by-ear session before Phase 7's
-> revision-switching UX work.
-> **⏸ NEXT: Phase 7 (revision switching, Sonnet 5/medium).** Read `architecture.md` + processor
-> code. All three DSP graphs are already owned by the processor and pre-allocated
-> (`dspEarly`/`dspLate`/`dspV2`); Phase 7 replaces the current plain block-start `revision` read
-> with a glitch-free crossfade + state-preserving polish (see build-plan.md Phase 7). Gate: flip
-> `revision` every N blocks under signal, assert no NaN/clicks/allocs; state round-trip preserves
-> `revision`.
+> carried forward from Phase 3/4/5.4/6; worth doing before/alongside Phase 8's UI work.
+> **⏸ NEXT: Phase 8 (UI, Sonnet 5/medium) — discuss layout with the user before starting** per
+> build-plan.md (UI asset/layout groundwork already built ahead of schedule, see
+> `docs/ui-noamp-assets.md`; what's left is wiring against real per-revision DSP + iterating
+> knob/control positions against user feedback on headless renders).
 > **Durable gotchas from Phase 6 (still relevant to future NodalCircuit/switch-stage work):**
 > (1) **Switch modelling is NOT `setSMatrixData()`** — V2's MID/BASS-SHIFT stages are NodalCircuit
 > (MNA), so "switched topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) +

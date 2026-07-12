@@ -168,6 +168,36 @@ target_link_libraries(StateRoundTrip
 )
 add_test(NAME StateRoundTrip COMMAND StateRoundTrip)
 
+# 7 — Revision-switch crossfade: drives the real processor with a continuous tone, flipping
+# `revision` every few blocks (including mid-crossfade), asserting finite output, no click-sized
+# sample-to-sample jumps, and that the revision param round-trips through state (architecture.md
+# "processBlock structure" / "State save/restore").
+juce_add_console_app(RevisionSwitchTest PRODUCT_NAME "RevisionSwitchTest")
+target_sources(RevisionSwitchTest
+    PRIVATE
+        tests/RevisionSwitchTest.cpp
+        src/PluginProcessor.cpp
+        src/PluginEditor.cpp
+        src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
+)
+target_compile_definitions(RevisionSwitchTest
+    PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
+        JUCE_STANDALONE_APPLICATION=1
+)
+target_link_libraries(RevisionSwitchTest
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        chowdsp::chowdsp_wdf
+        NoAmpAssets
+    PUBLIC
+        juce::juce_recommended_config_flags
+)
+add_test(NAME RevisionSwitchTest COMMAND RevisionSwitchTest)
+
 # 8 — Headless UI render probe (build.md's pattern): constructs the real editor off-screen and
 # paints it to PNGs at 1.0x/1.5x/2.0x scale x 3 revisions (9 renders) under build/ui-renders/, so
 # layout can be reviewed without a DAW/display. Gate is build+run succeeds; visual sign-off is the
