@@ -124,11 +124,62 @@ match the INPUT LEVEL (a hot-reamp capture is ideal) and compare a per-harmonic 
 harmonics + overall THD already match and the "ceiling" was a level-calibration artifact; the only
 real gap is the missing even harmonics above. Don't chase it with global EQ; it's clipping asymmetry.
 
+### Reverse-breakdown zener-pair clip (V1 Late / V2 DRIVE) — `ZenerPairT.h` (Phase 4 spike)
+
+The V1-Late/V2 drive module clips with an **antiparallel 3.3 V zener pair** in the op-amp feedback
+leg (netlists.md L4/V4), not a forward diode pair. On each swing one device conducts forward (~Vf
+0.6 V) while the other reverse-**breaks down** at ~Vz 3.3 V, so the pair clamps at an effective
+`Vth = Vf + Vz ≈ 3.9 V`. chowdsp's `DiodePairT` models forward Shockley conduction only (turn-on
+fixed near ~0.6 V), so it CANNOT place a 3.9 V knee without an absurd, ill-scaled `Is`. This needed a
+bespoke element — it's the one genuinely-open modelling item flagged in `circuit.md` "Nonlinear
+devices".
+
+**Chosen approach (a): reparameterised antiparallel-pair wave solve.** The pair's I-V is odd-symmetric
+and both branches' "−1" terms cancel → `I(V) = 2·Is·sinh(V/Vt)` — *exactly* the antiparallel-diode
+law. So the WDF reflection is Werner et al. eqn-18 (the `DiodePairT` `Good`-path form), reused verbatim
+but with `(Is,Vt)` reparameterised from the zener's physical knee: `Vt = Vzt` (knee softness),
+`Is = Iref·exp(−Vth/Vzt)` (pins `I(Vth)=Iref`). Templated on the omega provider so **AccurateOmega**
+actually bites — critical because `DiodePairT`'s `Best` path hardcodes omega4 (the −35 dB floor);
+using the Good-form directly is what avoids that trap. Junction capacitance is a `CapacitorT` in
+**parallel** with the pair (the two junction caps are in series → ~half a device's Cd → the "~100 pF
+class"); it gives the DRIVE HF rolloff (reference-fr-targets.md §4, the V1L/V2-vs-V1E difference) and
+is re-discretised on `prepare()` so the corner is sample-rate-independent. The whole feedback leg
+(ideal-current-source `Ig=Vin/Rin` ∥ `Rf` ∥ `Cj` ∥ zener, `vOut=−V_fb`) is `ZenerFeedbackClipper`,
+the reusable stage the Phase-5 drive module drops in.
+
+**Parameter grounding & the softness trap.** From the DZ23C3V3 datasheet (Nexperia DZ23, 3V3 row):
+Vz 3.10–3.50 @ 5 mA, Vf ≤ 0.9 @ 10 mA, `r_dif` 95 Ω @ 5 mA / 600 Ω @ 1 mA. **Do NOT set `Vzt` from
+`r_dif`** (that's the *deep-breakdown* slope ≈ 0.5 V): a single exponential that soft leaks ~130 nA at
+22 mV — comparable to the 220k feedback resistor — which *destroys the small-signal linear gain* and
+clamps soft at ~2.4 V, never reaching the ~3.3 V rating for the ~0.1–0.5 mA this leg actually passes.
+A real 3.3 V zener is ≈open until a couple of volts, then holds near Vz. A **sharper `Vzt ≈ 0.20 V`**
+(with Vth pinned at the 5 mA test current) keeps the sub-knee open, puts a defined knee at ~2.8 V, and
+holds the clamp at ~3.4–3.9 V — the true zener-clip behaviour. Defaults: `Vz 3.3, Vf 0.65, Vzt 0.20,
+Iref 5 mA`. All are per-revision **fit parameters** (refine vs captures in Phase 10; V2's BZB984 knee/
+Cj differs slightly — reuse the same class, different constants).
+
+**Rejected alternatives.** (b) *Composed WDF* (`DiodeT` + a series bias branch to shift turn-on to
+Vth): more elements, and the wave-domain bias shift perturbs near-zero-signal behaviour (same class of
+artifact as the lateral-bias trap above) — no accuracy gain over (a). (c) *Static waveshaper* (tanh/
+polynomial clamp at ±3.9 V): can't carry the Cj memory (would need a separate ad-hoc filter), and
+gives up sample-rate-correct discretisation and the wave-domain solve's guaranteed passivity — it's
+the fallback only if (a) ever proved unstable, which it didn't.
+
+**Gate results (`tests/ZenerClipTest.cpp`, all pass):** AccurateOmega residual 9e-14; WDF DC transfer
+vs an independent exact-Newton solve of the same device model — 1.4e-5 below knee, 1e-7 through it
+(spec was 1%/5%); perfectly odd-symmetric; clamp 3.85 V at 30 V drive; THD stable within <1% across
+44.1/96 kHz at 3 drive levels (0.01% → 27% → 38%, rising monotonically — no solver divergence); Cj
+corner 4774 Hz @ 96k ≈ the 4823 Hz analytic, SR-independent, → 1540 Hz at 470 pF. Not yet
+oversampled/ADAA'd — that's Phase 6 (this hard clip will alias at base rate, like the rail clip).
+
 ### Omega accuracy gotcha (do NOT use the default omega)
 
 chowdsp's default `Omega::omega` (omega4) uses bit-trick log/exp approximations that impose a
 ~−35 dB distortion floor — audible on a "transparent" pedal. Supply a custom **AccurateOmega**
-provider (std::log/exp + a few Newton steps solving `w + ln(w) = x`).
+provider (std::log/exp + a few Newton steps solving `w + ln(w) = x`). **This now exists at
+`src/dsp/AccurateOmega.h`** (`nalr::AccurateOmega`, built Phase 4): asymptotic seed + 3 Halley steps →
+double precision (residual ~1e-13); same static `omega(x)` interface as chowdsp's, drops into any
+provider-templated element. The Halley iteration count is the natural Eco lever (drop to omega4).
 **Trap:** `DiodePairT`'s `DiodeQuality::Best` path HARDCODES omega4 and ignores the provider — use
 **`DiodeQuality::Good`** for the pair (eqn-18; accurate once given a true omega). `DiodeT` and the
 pair's `Good` path both honour the provider. Verify with an audible-band aliasing test.

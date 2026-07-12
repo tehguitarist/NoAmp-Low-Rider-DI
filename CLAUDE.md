@@ -103,24 +103,19 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 3 COMPLETE — V1 Early integration done & validated (ctest 10/10). NOT yet
-> committed. Milestone reached: V1 Early is playable.** New: `src/dsp/V1EarlyDSP.h` (top-level
-> per-channel chain in verified signal order — input buffer → twin-T/PRESENCE → [OS region:
-> DRIVE→rail-clip→recovery] → BLEND(dry,wet)→LEVEL → BASS/TREBLE → output; dry tap = input-buffer
-> output; change-gated setParams; block-based processBlock with internal dry-tap scratch) and
-> `src/dsp/Calibration.h` (shared `nalr::kInputRef`/`kOutputMakeup`, single source of truth for
-> processor + OfflineRender). `PluginProcessor` now runs the real chain per channel: DAW↔volts via
-> kInputRef, per-block gain ramps precomputed ONCE and shared L/R (avoids the stereo double-advance),
-> bypass crossfade, meters (DAW domain), `isNonRealtime()` live/render OS select, latency reported +
-> updated on factor change. `analysis/offline_render.cpp` (OfflineRender exe) mirrors processBlock
-> gain staging for the A/B harness. `tests/V1EarlyIntegrationTest.cpp` gates assembly (all-knobs × OS
-> finite/bounded, silence→silence at max gain, glitch-free OS switching, dry-path passthrough).
-> **NEXT: ⏸ HARD BREAK + human checkpoint — first sound; user should LISTEN in a DAW before more DSP.
-> Then Phase 4 — Zener clip research spike (Opus 4.8 / XHIGH; self-contained, no dep on Phases 1–3):
-> `src/dsp/ZenerPairT.h` for the antiparallel zener pair (±~3.9 V, +Cj term), unit test, dsp.md
-> writeup. Read `dsp.md` nonlinear+omega, `circuit.md` Nonlinear devices, DZ23C3V3/BZB984-C3V3
-> datasheets (WebSearch OK). Model: Phase 4 wants XHIGH effort — bump before starting.**
-> **Process note: Phase 3 ran on Opus 4.8/high as planned (fresh session, no `/model` needed).**
+> **CURRENT: Phase 4 COMPLETE — zener-clip research spike done & validated (ctest 11/11). NOT yet
+> committed.** New: `src/dsp/AccurateOmega.h` (`nalr::AccurateOmega`, Wright-omega, asymptotic seed +
+> 3 Halley steps → ~1e-13; the project's first omega, drop-in for provider-templated elements) and
+> `src/dsp/ZenerPairT.h` (`ZenerPairT` = bespoke antiparallel-zener WDF root, Werner eqn-18 Good-form
+> reparameterised from zener physical knee, honours AccurateOmega; `ZenerFeedbackClipper` = the
+> reusable inverting-feedback stage `Ig∥Rf∥Cj∥zener`→`−V_fb` that Phase 5's drive module drops in).
+> `tests/ZenerClipTest.cpp` gates it (all pass, see dsp.md "Reverse-breakdown zener-pair clip").
+> Phase 3 (V1 Early integration) is committed (`4a659c2`); the earlier "NOT yet committed" note was
+> stale. **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed the V1-Early DAW listen — Phase
+> 4 was self-contained so it didn't need it, but the listen still gates further V1-Early work.**
+> **NEXT: commit Phase 4, then Phase 5 — V1 Late DSP (reuses Phase-1 primitives + `ZenerFeedbackClipper`;
+> 5.1–5.2 linear stages can start independently). Read `circuit.md` V1-Late tables, `netlists.md`
+> L-sections, `reference-fr-targets.md` cited §§, `dsp.md`. Model per docs/build-plan.md Phase 5.**
 
 ## Project-specific carry-forwards
 
@@ -147,9 +142,9 @@ without images.
 - **Headline finding**: the three revisions differ far more than component values — V1 Early has
   **no clipping diodes at all** in the drive stage (op-amp rail saturation only); V1 Late and V2
   both use a small zener-clipping sub-module (different zener part number each: `DZ23C3V3` vs
-  `BZB984-C3V3`, same 3.3 V back-to-back topology) that will need bespoke WDF treatment (reverse
-  zener breakdown isn't what `chowdsp_wdf`'s `DiodePairT`/`DiodeT` model) — flagged as a research
-  spike before the nonlinear-stage build step. Tone stack topology also changes: V1 Early is
+  `BZB984-C3V3`, same 3.3 V back-to-back topology) needing bespoke WDF treatment (reverse zener
+  breakdown isn't what `chowdsp_wdf`'s `DiodePairT`/`DiodeT` model) — **now built (Phase 4,
+  `ZenerPairT.h`); see the Phase-4 carry-forward below.** Tone stack topology also changes: V1 Early is
   Baxandall shelving, V1 Late/V2 are peaking, and V2 adds a whole new MID control (post-blend,
   switchable center freq) plus a BASS-frequency-shift switch neither V1 revision has.
 - **3rd-pass verification (Fable) resolved every open schematic item** — see `circuit.md`
@@ -224,6 +219,16 @@ without images.
   gotcha resolved: per-sample SmoothedValue advanced per-channel ramps 2× too fast in stereo and
   desyncs L/R — precompute the input-trim/output-gain/bypass ramps ONCE per block into shared arrays,
   index both channels into them.
+- **Phase 4 (zener clip) — RESOLVED the one open WDF research item.** `ZenerPairT.h`:
+  antiparallel-pair is `I=2·Is·sinh(V/Vt)` → reuse Werner eqn-18 (DiodePairT `Good`-form) with
+  `(Is,Vt)` reparameterised from the zener knee, honouring `nalr::AccurateOmega` (NOT omega4). Cj =
+  `CapacitorT` in parallel (pair caps in series → ~half a device's Cd → "~100 pF class"; sets the §4
+  DRIVE HF rolloff). `ZenerFeedbackClipper` (`Ig∥Rf∥Cj∥zener`, `vOut=−V_fb`) is the reusable stage
+  Phase 5's V1L/V2 drive module drops in (same class both revs; differ only in Rf/Cj/coupling +
+  zener knee). **Params (fit, refine in Phase 10): `Vz 3.3, Vf 0.65, Vzt 0.20, Iref 5 mA` → Vth≈3.95.**
+  **Softness TRAP that cost real time: do NOT set `Vzt` from the datasheet `r_dif` (~0.5 V) — that
+  single-exp is so leaky it kills the small-signal linear gain and clamps soft at ~2.4 V; use the
+  sharper ~0.20 V (clean linear region, holds near the 3.3 V rating).** Not yet OS/ADAA'd (Phase 6).
 - **The build plan lives in `docs/build-plan.md`** — per-task model (Opus 4.8 vs Sonnet 5) + effort
   assignments, exact read-lists per task (token discipline), and numeric validation gates keyed to
   `docs/reference-fr-targets.md` §§. UI visuals are validated by the user (send PNGs, never

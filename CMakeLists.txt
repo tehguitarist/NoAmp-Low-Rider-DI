@@ -150,6 +150,13 @@ target_link_libraries(V1EarlyOutputTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(V1EarlyOutputTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V1EarlyOutputTest COMMAND V1EarlyOutputTest)
 
+# 4 — Zener clip research spike: bespoke antiparallel-zener WDF element (ZenerPairT.h) + AccurateOmega.
+# Pure chowdsp console exe (WDF is header-only; DFT/THD hand-rolled — no JUCE). For V1 Late / V2 drive.
+add_executable(ZenerClipTest tests/ZenerClipTest.cpp)
+target_link_libraries(ZenerClipTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(ZenerClipTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME ZenerClipTest COMMAND ZenerClipTest)
+
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
 # region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
 juce_add_console_app(V1EarlyNonlinearTest PRODUCT_NAME "V1EarlyNonlinearTest")
