@@ -157,6 +157,13 @@ target_link_libraries(ZenerClipTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(ZenerClipTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME ZenerClipTest COMMAND ZenerClipTest)
 
+# 5.1 — V1 Late deltas on shared linear stages (new PRESENCE topology, retuned recovery + wet
+# make-up buffer, single-inverting-stage LEVEL) vs analytic nodal reference + FR §2/§3.
+add_executable(V1LateStagesTest tests/V1LateStagesTest.cpp)
+target_link_libraries(V1LateStagesTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1LateStagesTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1LateStagesTest COMMAND V1LateStagesTest)
+
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
 # region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
 juce_add_console_app(V1EarlyNonlinearTest PRODUCT_NAME "V1EarlyNonlinearTest")

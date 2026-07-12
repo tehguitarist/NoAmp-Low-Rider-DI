@@ -103,19 +103,35 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 4 COMPLETE — zener-clip research spike done & validated (ctest 11/11). NOT yet
-> committed.** New: `src/dsp/AccurateOmega.h` (`nalr::AccurateOmega`, Wright-omega, asymptotic seed +
-> 3 Halley steps → ~1e-13; the project's first omega, drop-in for provider-templated elements) and
-> `src/dsp/ZenerPairT.h` (`ZenerPairT` = bespoke antiparallel-zener WDF root, Werner eqn-18 Good-form
-> reparameterised from zener physical knee, honours AccurateOmega; `ZenerFeedbackClipper` = the
-> reusable inverting-feedback stage `Ig∥Rf∥Cj∥zener`→`−V_fb` that Phase 5's drive module drops in).
-> `tests/ZenerClipTest.cpp` gates it (all pass, see dsp.md "Reverse-breakdown zener-pair clip").
-> Phase 3 (V1 Early integration) is committed (`4a659c2`); the earlier "NOT yet committed" note was
-> stale. **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed the V1-Early DAW listen — Phase
-> 4 was self-contained so it didn't need it, but the listen still gates further V1-Early work.**
-> **NEXT: commit Phase 4, then Phase 5 — V1 Late DSP (reuses Phase-1 primitives + `ZenerFeedbackClipper`;
-> 5.1–5.2 linear stages can start independently). Read `circuit.md` V1-Late tables, `netlists.md`
-> L-sections, `reference-fr-targets.md` cited §§, `dsp.md`. Model per docs/build-plan.md Phase 5.**
+> **CURRENT: Phase 5.1 COMPLETE — V1-Late shared-stage deltas built & validated (ctest 12/12),
+> committed.** New: `src/dsp/TwinTNotch.h` (the deep ~800 Hz character notch, identical on all
+> three revisions — extracted from `V1EarlyStages.h`'s `V1EarlyPresenceStage` as a pure refactor, so
+> V1 Early's existing tests double as the regression check; `V1EarlyStages.h` now delegates to it).
+> `src/dsp/V1LateStages.h`: `V1LatePresenceStage` (new pot-in-feedback topology, shared verbatim
+> with V2 later — Zf=VR5(a-w)∥C32, Zg=VR5(w-b)+R24+C31, DC gain always 1 since C31 blocks), `V1Late
+> RecoveryStage` (S-K#1 retuned + S-K#2/bridged-T reused unchanged + NEW wet make-up buffer IC3B
+> +10.1 dB/~1.5 kHz rolloff), `V1LateBlendLevelStage` (single inverting LEVEL stage w/ loaded wiper,
+> dry tap direct-wired per L1 — no coupling cap), `V1LateOutputStage` (simplified unity path, INST
+> throw). `tests/V1LateStagesTest.cpp` gates PRESENCE against FR §3 (analytic + WDF cross-check) and
+> sanity-checks the other deltas; full §1 end-to-end needs the DRIVE module (5.3) + tone stack (5.2),
+> deferred to the 5.4 integration gate.
+> **Two gotchas that cost time, worth knowing for later stages:** (1) `WDFParallelT` with a literal
+> 0 Ω leg (e.g. a pot rheostat at its end-stop) produces NaN, not the physically-correct short — floor
+> pot legs at a small nonzero value (0.5 Ω) whenever they feed a *parallel* adaptor, not just a series
+> one (V1Early's existing series-leg pots were fine at exactly 0 Ω; this only bit the new parallel-leg
+> case). (2) `NodalCircuit::addOpAmp`/`addUnityBuffer` does NOT support `kInput`/`kInput2` as the (+)
+> node — its op-amp constraint-row stamping only special-cases `kDatum` (ground, correctly skipped)
+> and internal nodes, not a nonzero known input voltage, so the row silently drops the input term and
+> leaves the output floating (NaN downstream). Route the input through a resistor/cap into an internal
+> node first, or — if genuinely no component drops voltage before the buffer (as V1L's output stage's
+> R33) — skip the buffer node entirely and wire the next real component straight to `kInput`.
+> **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed the V1-Early DAW listen** — carried
+> forward unresolved from Phase 3/4, still gates nothing further right now since 5.1 was linear-stage
+> work, but should be resolved before any more V1-Early-touching work.
+> **⏸ BREAK — model switch to Opus 4.8 next: NEXT is Phase 5.2 (peaking BASS/TREBLE tone stack, new
+> topology derivation) then 5.3 (CH34-9 drive module: coupled-pot two-op-amp stage + `ZenerFeedback
+> Clipper` from Phase 4).** Read `circuit.md` V1-Late tone-stack + drive-module tables, `netlists.md`
+> L4/L7, `reference-fr-targets.md` §4/§5/§6, `dsp.md`. Model per docs/build-plan.md Phase 5.
 
 ## Project-specific carry-forwards
 

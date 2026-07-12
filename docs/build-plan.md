@@ -375,15 +375,7 @@ follow `dsp.md` HQ guidance).
 **Gate:** CI green on all three platforms; ctest suite green locally.
 **Session:** standalone; low effort, small enough that internal sub-steps don't need their own breaks.
 
-**9.x (optional) Factory presets** — *Sonnet 5 / low.* Source: **Tech 21's official BDDI owner's
-manuals** (both versions carry printed "sample settings" charts — SVT, fat tube, bright, slap,
-etc.). The koichizikan blog (`koichizikan.seesaa.net/article/sansamp_bddi_v2.html`, photos
-`sansamp_bddi_v2_008/009.png`) shows the two manuals' charts side by side and confirms Tech 21
-itself compensated V2's chart vs V1's (slight mid-cut on V2's MID to recover the "donshari"
-scoop, since V2's mid is post-blend — see circuit.md's semantic note). Ship per-revision presets
-from the matching revision's own manual chart; do NOT copy V1 knob positions onto V2. Knob values
-must be read off the manual images at implementation time — they are not transcribed anywhere in
-this repo yet.
+**9.x (optional) Factory presets** — *Sonnet 5 / low.* Source: /docs/presets.csv. There will need to be three folders, V1 Early, V1 Late, and V2. V1 early and late share the same settings, with the revision switch being the only change. V2 has additional parameters.
 
 ---
 **⏸ HARD BREAK — externally blocked.** Phase 10 waits on captures you provide; there's nothing to

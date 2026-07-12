@@ -19,6 +19,7 @@
 #include "NodalCircuit.h"
 #include "OpAmpStage.h"
 #include "RtypeNumeric.h"
+#include "TwinTNotch.h"
 
 namespace nalr
 {
@@ -64,13 +65,9 @@ public:
 
     void prepare(double fs)
     {
-        C19.prepare(fs);
-        C17.prepare(fs);
-        C18.prepare(fs);
-        C26.prepare(fs);
+        notch.prepare(fs);
         C31.prepare(fs);
         C32.prepare(fs);
-        notchSrc.propagateImpedanceChange();
         zgSrc.propagateImpedanceChange();
         zfSrc.propagateImpedanceChange();
     }
@@ -84,13 +81,7 @@ public:
         zgSrc.propagateImpedanceChange();
     }
 
-    inline double processNotch(double vB) noexcept
-    {
-        notchSrc.setVoltage(vB);
-        notchSrc.incident(notchR.reflected());
-        notchR.incident(notchSrc.reflected());
-        return wdft::voltage<double>(R22); // V_P at the op-amp (+) input
-    }
+    inline double processNotch(double vB) noexcept { return notch.process(vB); } // V_P at the op-amp (+) input
 
     inline double processOpAmp(double vP) noexcept
     {
@@ -100,53 +91,7 @@ public:
     inline double process(double vB) noexcept { return processOpAmp(processNotch(vB)); }
 
 private:
-    // --- passive twin-T notch (bridge -> numeric R-type) ---
-    // Nodes: B=0, J2=1, L1=2, L2=3 ; datum = VCOM.
-    // Ports (index): 0=up(B-gnd,faces source), 1=R16(B-J2), 2=C19(B-L1), 3=C17(J2-L2),
-    //                4=C18(L1-L2), 5=R3(L1-gnd), 6=R11(L2-gnd), 7=outBranch C26+R22 (J2-gnd).
-    wdft::ResistorT<double> R16 { 100.0e3 };
-    wdft::CapacitorT<double> C19 { 22.0e-9 };
-    wdft::CapacitorT<double> C17 { 22.0e-9 };
-    wdft::CapacitorT<double> C18 { 22.0e-9 };
-    wdft::ResistorT<double> R3 { 2.2e3 };
-    wdft::ResistorT<double> R11 { 22.0e3 };
-    wdft::CapacitorT<double> C26 { 22.0e-9 };
-    wdft::ResistorT<double> R22 { 100.0e3 };
-    wdft::WDFSeriesT<double, decltype(C26), decltype(R22)> outBranch { C26, R22 };
-
-    struct NotchImpedance
-    {
-        static constexpr int NP = 8, NN = 4, UP = 0;
-        static constexpr int np[NP] = { 0, 0, 0, 1, 2, 2, 3, 1 };
-        static constexpr int nm[NP] = { rtype::kDatum, 1, 2, 3, 3, rtype::kDatum, rtype::kDatum, rtype::kDatum };
-
-        template <typename RType>
-        static double calcImpedance(RType& R)
-        {
-            const auto z = R.getPortImpedances(); // size 7, tuple order == port indices 1..7
-            double portR[NP];
-            for (int i = 0; i < NP - 1; ++i)
-                portR[i + 1] = z[(size_t) i];
-
-            const double Rup = rtype::drivingPointResistance(NP, NN, np, nm, portR, UP);
-            portR[UP] = Rup;
-
-            double S[NP * NP];
-            rtype::scatteringMatrix(NP, NN, np, nm, portR, S);
-            double S2[NP][NP];
-            for (int i = 0; i < NP; ++i)
-                for (int j = 0; j < NP; ++j)
-                    S2[i][j] = S[i * NP + j];
-            R.setSMatrixData(S2);
-            return Rup;
-        }
-    };
-
-    using NotchRtype = wdft::RtypeAdaptor<double, 0, NotchImpedance, decltype(R16), decltype(C19),
-                                          decltype(C17), decltype(C18), decltype(R3), decltype(R11),
-                                          decltype(outBranch)>;
-    NotchRtype notchR { R16, C19, C17, C18, R3, R11, outBranch };
-    wdft::IdealVoltageSourceT<double, NotchRtype> notchSrc { notchR };
+    TwinTNotch notch; // shared passive twin-T (identical on all three revisions — TwinTNotch.h)
 
     // --- IC3B op-amp gain legs ---
     // Zg = R24(3.3k) + C31(10n) + VR5 (series to VCOM). Zf = R26(330k) || C32(100p).
