@@ -105,26 +105,22 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 7 COMPLETE — glitch-free revision switching.** `PluginProcessor` now
-> crossfades between revisions instead of a hard block-start swap: on a `revision` param change,
-> `activeRevision`/`fadingFromRevision` + a 30 ms `SmoothedValue<float> revisionCrossfade` blend
-> the outgoing and incoming graphs' outputs sample-by-sample (both graphs run, each on its own
-> volts-domain scratch buffer — `voltsScratch`/`voltsScratchPrev` — fed the same input) until the
-> ramp reaches 1, then only the active graph runs (unchanged perf from pre-Phase-7 in steady state).
-> A second revision change mid-crossfade snaps the fade and restarts rather than queuing a 3-way
-> blend — deliberate simplification, revision switching is a rare user gesture, not audio-rate
-> automation. All buffers pre-allocated in `prepareToPlay` (no audio-thread allocation).
-> **Gate: `tests/RevisionSwitchTest.cpp` (ctest #7, PASSES)** — drives the real processor with a
-> continuous tone, flips `revision` every 7 blocks (some flips land mid-crossfade, since the fade
-> is ~6 blocks at 48 kHz/256), asserts every output sample finite and no sample-to-sample delta
-> exceeds a click threshold; separately asserts `revision` round-trips through
-> `getStateInformation`/`setStateInformation`. Full `ctest` suite: 19/19 green.
+> **CURRENT: Phase 8 COMPLETE — UI wired + user-approved.** The editor/asset groundwork built ahead
+> of schedule (`docs/ui-noamp-assets.md`) needed no DSP-wiring changes post-Phase-7 — it already
+> reads the real APVTS params correctly. Verified via `UIRenderProbe` (9 PNGs: 3 revisions ×
+> 1.0/1.5/2.0x scale), reviewed and approved by the user. One tweak made: `ThreePositionSwitch`'s
+> revision labels ("V1 EARLY"/"V1 LATE"/"V2") are now stretched 30% wider — a horizontal-only
+> `AffineTransform::scale` anchored at `labelX` (so the track/lever position is untouched, only
+> glyph width) via a new `kLabelStretchX` constant; `PluginEditor.cpp`'s `kSwitchW` ratio widened
+> (2.7×→3.4× `kSwitchH`) to fit the stretched text without clipping. Knob order/pushbutton mapping
+> user-confirmed exactly matching `layoutV1`/`layoutV2` as built — no changes needed there.
 > **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed a DAW listen of any revision** —
-> carried forward from Phase 3/4/5.4/6; worth doing before/alongside Phase 8's UI work.
-> **⏸ NEXT: Phase 8 (UI, Sonnet 5/medium) — discuss layout with the user before starting** per
-> build-plan.md (UI asset/layout groundwork already built ahead of schedule, see
-> `docs/ui-noamp-assets.md`; what's left is wiring against real per-revision DSP + iterating
-> knob/control positions against user feedback on headless renders).
+> carried forward from Phase 3/4/5.4/6/7; worth doing before/alongside Phase 9.
+> **⏸ NEXT: Phase 9 (Probes, CI, polish — Sonnet 5/low)** per build-plan.md: `PerfBenchmark`,
+> `OSFidelity`, `FeatureProfile` exes + `add_test()` registration + README perf table + clang-format
+> pass. HQ toggle only if `FeatureProfile` shows a real lever (likely only V1L/V2 zener omega
+> matters — see the 5.3 carry-forward below). Optional 9.x: factory presets from `docs/presets.csv`
+> (V1 Early/Late share settings, V2 adds its extra params).
 > **Durable gotchas from Phase 6 (still relevant to future NodalCircuit/switch-stage work):**
 > (1) **Switch modelling is NOT `setSMatrixData()`** — V2's MID/BASS-SHIFT stages are NodalCircuit
 > (MNA), so "switched topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) +

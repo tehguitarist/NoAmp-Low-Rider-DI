@@ -28,6 +28,7 @@
 #include "V1LateStages.h"    // V1LatePresenceStage, reused verbatim (netlists.md reuse map)
 #include "V2Stages.h"
 #include "ZenerDriveModule.h"
+#include "../utils/ChangeGate.h"
 
 namespace nalr
 {
@@ -72,23 +73,23 @@ public:
     void setParams(double driveKnob, double presence01, double blend, double level, double mid01,
                    bool midShiftLow430, double bass, double treble, bool bassShift40) noexcept
     {
-        if (presence01 != lastPresence)
+        if (changed(presence01, lastPresence))
         {
             presence.setPresence(presence01);
             lastPresence = presence01;
         }
-        if (driveKnob != lastDrive)
+        if (changed(driveKnob, lastDrive))
         {
             drive.setDrive(driveKnob);
             lastDrive = driveKnob;
         }
-        if (blend != lastBlend || level != lastLevel)
+        if (changed(blend, lastBlend) || changed(level, lastLevel))
         {
             blendLevel.setBlendLevel(blend, level);
             lastBlend = blend;
             lastLevel = level;
         }
-        if (mid01 != lastMid)
+        if (changed(mid01, lastMid))
         {
             mid.setMid(mid01);
             lastMid = mid01;
@@ -98,7 +99,7 @@ public:
             mid.setShift(midShiftLow430);
             lastMidShift = (int) midShiftLow430;
         }
-        if (bass != lastBass || treble != lastTreble)
+        if (changed(bass, lastBass) || changed(treble, lastTreble))
         {
             tone.setTone(bass, treble);
             lastBass = bass;

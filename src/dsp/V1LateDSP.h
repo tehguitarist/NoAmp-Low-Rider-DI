@@ -27,6 +27,7 @@
 #include "V1EarlyStages.h" // V1EarlyInputBuffer, reused verbatim (netlists.md L1 == E1, small-signal)
 #include "V1LateStages.h"
 #include "ZenerDriveModule.h"
+#include "../utils/ChangeGate.h"
 
 namespace nalr
 {
@@ -66,23 +67,23 @@ public:
     void setParams(double driveKnob, double presence01, double blend, double level, double bass,
                    double treble) noexcept
     {
-        if (presence01 != lastPresence)
+        if (changed(presence01, lastPresence))
         {
             presence.setPresence(presence01);
             lastPresence = presence01;
         }
-        if (driveKnob != lastDrive)
+        if (changed(driveKnob, lastDrive))
         {
             drive.setDrive(driveKnob);
             lastDrive = driveKnob;
         }
-        if (blend != lastBlend || level != lastLevel)
+        if (changed(blend, lastBlend) || changed(level, lastLevel))
         {
             blendLevel.setBlendLevel(blend, level);
             lastBlend = blend;
             lastLevel = level;
         }
-        if (bass != lastBass || treble != lastTreble)
+        if (changed(bass, lastBass) || changed(treble, lastTreble))
         {
             tone.setTone(bass, treble);
             lastBass = bass;

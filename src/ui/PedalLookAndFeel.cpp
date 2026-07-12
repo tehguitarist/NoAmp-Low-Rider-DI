@@ -211,7 +211,7 @@ void PedalLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, 
 
 void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button,
                                               const juce::Colour&,
-                                              bool highlighted, bool down)
+                                              bool /*highlighted*/, bool down)
 {
     auto b = button.getLocalBounds().toFloat();
 

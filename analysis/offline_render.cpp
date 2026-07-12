@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     }
 
     outFile.deleteFile();
-    std::unique_ptr<juce::FileOutputStream> outStream(outFile.createOutputStream());
+    std::unique_ptr<juce::OutputStream> outStream = outFile.createOutputStream();
     if (outStream == nullptr)
     {
         std::fprintf(stderr, "offline_render: cannot write %s\n", outFile.getFullPathName().toRawUTF8());
@@ -105,7 +105,10 @@ int main(int argc, char** argv)
     }
     juce::WavAudioFormat wav;
     std::unique_ptr<juce::AudioFormatWriter> writer(
-        wav.createWriterFor(outStream.release(), fs, 1, 24, {}, 0));
+        wav.createWriterFor(outStream, juce::AudioFormatWriterOptions{}
+                                           .withSampleRate(fs)
+                                           .withNumChannels(1)
+                                           .withBitsPerSample(24)));
     if (writer == nullptr)
     {
         std::fprintf(stderr, "offline_render: cannot create WAV writer\n");

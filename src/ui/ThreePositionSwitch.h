@@ -53,6 +53,9 @@ public:
         const float kBodyW = 20.0f * sc;
         const float kGap   =  4.0f * sc;
         const float kLabelW = 145.0f * sc; // wide enough for "V1 EARLY" at the ~17.5px-scaled font below
+        // Labels are stretched this much wider on screen (horizontal-only scale in the paint loop
+        // below, anchored at labelX) — the final on-screen text width is kLabelW * kLabelStretchX.
+        constexpr float kLabelStretchX = 1.3f;
 
         // Body centred in component; labels extend to the right
         const float bodyH  = 60.0f * sc;
@@ -99,7 +102,9 @@ public:
             g.drawRoundedRectangle(leverX + 0.5f, leverY + 0.5f, leverW - 1.0f, leverH - 1.0f, 3.0f * sc, 1.0f);
         }
 
-        // Labels to the right of the body (configurable via setLabels)
+        // Labels to the right of the body (configurable via setLabels). Stretched kLabelStretchX
+        // wider — a horizontal-only scale anchored at labelX, so the track/lever position and
+        // text height are unaffected, only the glyphs' width.
         g.setFont(labelTypeface != nullptr
                       ? juce::Font(juce::FontOptions(17.5f * sc).withTypeface(labelTypeface))
                       : juce::Font(juce::FontOptions(17.5f * sc)));
@@ -110,6 +115,8 @@ public:
             const bool active = (n == position);
             g.setColour(active ? juce::Colour(PedalLookAndFeel::cSWLabelActive)
                                : juce::Colour(PedalLookAndFeel::cSWLabelInactive));
+            juce::Graphics::ScopedSaveState save(g);
+            g.addTransform(juce::AffineTransform::scale(kLabelStretchX, 1.0f, labelX, cy));
             g.drawText(labelText[n],
                        juce::Rectangle<float>(labelX, cy - 15.0f * sc, kLabelW, 30.0f * sc),
                        juce::Justification::centredLeft, false);

@@ -39,9 +39,9 @@ public:
     void prepare(double baseFs, int maxBlock)
     {
         baseSampleRate = baseFs;
-        for (int i = 0; i < kNumOs; ++i)
+        for (size_t i = 0; i < kNumOs; ++i)
         {
-            const size_t stages = (size_t) (i + 1); // os[0]=2x(1 stage), os[1]=4x, os[2]=8x
+            const size_t stages = i + 1; // os[0]=2x(1 stage), os[1]=4x, os[2]=8x
             os[i] = std::make_unique<juce::dsp::Oversampling<double>>(
                 1, stages, juce::dsp::Oversampling<double>::filterHalfBandFIREquiripple,
                 /*isMaxQuality*/ true, /*useIntegerLatency*/ true);
@@ -63,7 +63,7 @@ public:
         drive.reset();
         railClip.reset();
         recovery.reset();
-        for (int i = 0; i < kNumOs; ++i)
+        for (size_t i = 0; i < kNumOs; ++i)
             if (os[i] != nullptr)
                 os[i]->reset();
     }
@@ -110,9 +110,9 @@ public:
     int getActiveFactor() const noexcept { return activeFactor; }
 
 private:
-    static constexpr int kNumOs = 3; // 2x, 4x, 8x
+    static constexpr size_t kNumOs = 3; // 2x, 4x, 8x
 
-    static int osIndex(int factor) noexcept { return factor == 2 ? 0 : (factor == 4 ? 1 : 2); }
+    static size_t osIndex(int factor) noexcept { return factor == 2 ? 0u : (factor == 4 ? 1u : 2u); }
 
     void applyFactor(int factor) noexcept
     {

@@ -45,8 +45,9 @@ namespace nalr::assets
         {
             case Revision::v1Early: return fromBinary(BinaryData::lrdi_v1e_texture_png, BinaryData::lrdi_v1e_texture_pngSize);
             case Revision::v1Late:  return fromBinary(BinaryData::lrdi_v1l_texture_png, BinaryData::lrdi_v1l_texture_pngSize);
-            default:                return fromBinary(BinaryData::lrdi_v2_texture_png, BinaryData::lrdi_v2_texture_pngSize);
+            case Revision::v2:      return fromBinary(BinaryData::lrdi_v2_texture_png, BinaryData::lrdi_v2_texture_pngSize);
         }
+        return fromBinary(BinaryData::lrdi_v2_texture_png, BinaryData::lrdi_v2_texture_pngSize); // unreachable: all revisions handled
     }
 
     juce::Typeface::Ptr displayTypeface()

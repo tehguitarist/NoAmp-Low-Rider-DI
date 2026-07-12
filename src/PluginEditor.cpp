@@ -24,10 +24,12 @@ namespace
     // The CSV's 70x210 measures the switch-track GRAPHIC only. ThreePositionSwitch draws its
     // adjacent "V1 EARLY"/"V1 LATE"/"V2" text labels within the SAME component bounds (scaled off
     // the component's own height), so the component itself must stay wider than the bare graphic
-    // or those labels clip. Ratio = (bodyW 20 + gap 4 + labelW 145) / refHeight 65 ≈ 2.6, with a
-    // small safety margin, matching ThreePositionSwitch's internal proportions at its label font.
+    // or those labels clip. Ratio = (bodyW 20 + gap 4 + labelW 145*kLabelStretchX 1.3) / refHeight
+    // 65 ≈ 3.27, with a small safety margin, matching ThreePositionSwitch's internal proportions
+    // (labels are stretched 30% wider there — kLabelStretchX — to make the switch text easier to
+    // read; this ratio was widened to match so the stretched text doesn't clip).
     constexpr float kSwitchH  = 210.0f / kTexW;
-    constexpr float kSwitchW  = kSwitchH * 2.7f;
+    constexpr float kSwitchW  = kSwitchH * 3.4f;
 
     // Knobs shared by both revisions (same position either way).
     constexpr float kLevelX  =  253.0f / kTexW, kLevelY  = 287.0f / kTexH;
