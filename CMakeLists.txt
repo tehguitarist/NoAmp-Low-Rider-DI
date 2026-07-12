@@ -234,6 +234,29 @@ target_link_libraries(V1LateDriveTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(V1LateDriveTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V1LateDriveTest COMMAND V1LateDriveTest)
 
+# 5.4 — V1 Late full-chain integration (src/dsp/V1LateDSP.h): all-knobs stability sweep, dry-path
+# passthrough, and the FR §1/§8 voiced end-to-end checkpoints. No OS region yet (deferred — see
+# V1LateDSP.h), so this is a pure chowdsp console exe like V1LateStagesTest, not a JUCE one.
+add_executable(V1LateIntegrationTest tests/V1LateIntegrationTest.cpp)
+target_link_libraries(V1LateIntegrationTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1LateIntegrationTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1LateIntegrationTest COMMAND V1LateIntegrationTest)
+
+# 6.1 — V2 recovery stage: new R47/C42 input LP corner + retuned S-K coupling, no bridged-T
+# (src/dsp/V2Stages.h) vs an independent analytic nodal reference + FR §1 qualitative HF trend.
+add_executable(V2RecoveryTest tests/V2RecoveryTest.cpp)
+target_link_libraries(V2RecoveryTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V2RecoveryTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V2RecoveryTest COMMAND V2RecoveryTest)
+
+# 6.2 — V2 switched-topology stages: MID (Baxandall peaking + MID SHIFT 430/850 Hz) and BASS SHIFT
+# (40/80 Hz) on the peaking tone stack (src/dsp/V2Stages.h) vs an independent complex-MNA reference
+# + FR §5/§7. Pure chowdsp console exe like V1LateStagesTest.
+add_executable(V2MidToneTest tests/V2MidToneTest.cpp)
+target_link_libraries(V2MidToneTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V2MidToneTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V2MidToneTest COMMAND V2MidToneTest)
+
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
 # region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
 juce_add_console_app(V1EarlyNonlinearTest PRODUCT_NAME "V1EarlyNonlinearTest")

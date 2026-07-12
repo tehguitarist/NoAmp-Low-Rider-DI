@@ -8,13 +8,17 @@
 
 #include "dsp/Calibration.h"
 #include "dsp/V1EarlyDSP.h"
+#include "dsp/V1LateDSP.h"
 
 // NoAmp Low Rider DI — plugin processor.
 //
-// Phase 3 wires the V1 Early chain (nalr::V1EarlyDSP, one instance per channel) into processBlock.
-// V1 Late / V2 graphs land later; the `revision` param currently only ever selects V1 Early. This
-// class owns the APVTS, smoothed input/output gain, bypass crossfade, metering, and the DAW<->volts
-// conversion around the DSP (architecture.md processBlock contract + calibration doc §1).
+// Phase 3 wired the V1 Early chain (nalr::V1EarlyDSP) into processBlock; Phase 5.4 adds V1 Late
+// (nalr::V1LateDSP) alongside it, both pre-allocated/prepared per architecture.md, selected per-block
+// by the `revision` param. V2 joins the same way in Phase 6.3. Switching is currently a plain
+// block-start selection (one-block-old parameter read on change, same as an OS-factor change) — the
+// glitch-free crossfade + state-preserving polish is Phase 7's job, not required for a revision to be
+// audible. This class owns the APVTS, smoothed input/output gain, bypass crossfade, metering, and the
+// DAW<->volts conversion around the DSP (architecture.md processBlock contract + calibration doc §1).
 class NoAmpLowRiderDIAudioProcessor final : public juce::AudioProcessor
 {
 public:
@@ -97,9 +101,12 @@ private:
     std::atomic<float> outputLevelL { 0.0f }, outputLevelR { 0.0f };
     std::atomic<bool> bypassed { false };
 
-    // One DSP chain per channel (WDF trees hold per-channel state, so they can't be shared). Only
-    // V1 Early exists so far; V1 Late / V2 join as a variant selected by the `revision` param.
-    std::array<nalr::V1EarlyDSP, 2> dsp;
+    // One DSP chain per channel per revision (WDF trees hold per-channel state, so they can't be
+    // shared). All revisions are pre-allocated/prepared up front (architecture.md: no audio-thread
+    // allocation on a revision switch); `revision` selects which array processBlock reads from. V2
+    // joins the same way in Phase 6.3.
+    std::array<nalr::V1EarlyDSP, 2> dspEarly;
+    std::array<nalr::V1LateDSP, 2> dspLate;
 
     // Pre-allocated audio-thread scratch (sized in prepareToPlay; never reallocated in processBlock).
     std::vector<double> voltsScratch;                       // volts-domain block, reused per channel

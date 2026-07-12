@@ -106,14 +106,20 @@ void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samples
     // switches to the render factor at the first isNonRealtime() block).
     currentOSFactor = 1 << (int) pOversampling->load();
 
-    for (auto& d : dsp)
+    for (auto& d : dspEarly)
     {
         d.setOversamplingFactor(currentOSFactor);
         d.prepare(sampleRate, maxBlockSize); // prepare() applies the pending factor
         d.reset();
     }
+    for (auto& d : dspLate)
+    {
+        d.setOversamplingFactor(currentOSFactor); // no-op for now — see PluginProcessor.h/V1LateDSP.h
+        d.prepare(sampleRate, maxBlockSize);
+        d.reset();
+    }
 
-    reportedLatency = dsp[0].getLatencySamples();
+    reportedLatency = dspEarly[0].getLatencySamples();
     setLatencySamples(reportedLatency);
 
     voltsScratch.assign((size_t) maxBlockSize, 0.0);
@@ -138,15 +144,24 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 {
     juce::ScopedNoDenormals noDenormals;
 
-    const int numChannels = juce::jmin(buffer.getNumChannels(), (int) dsp.size());
+    const int numChannels = juce::jmin(buffer.getNumChannels(), (int) dspEarly.size());
     const int numSamples = juce::jmin(buffer.getNumSamples(), maxBlockSize);
 
     // Pick OS factor: render factor during offline bounce, live factor otherwise (architecture.md).
     const int wantFactor = 1 << (isNonRealtime() ? (int) pRenderOversampling->load() : (int) pOversampling->load());
 
-    // Pot values -> DSP (change-gated inside setParams). Shared across channels. V1 Early taper is
-    // identity (all B100k linear), so the 0..1 params pass straight through.
-    for (auto& d : dsp)
+    // Pot values -> DSP (change-gated inside setParams). Shared across channels. Taper is identity on
+    // every revision (all B100k linear), so the 0..1 params pass straight through. Both revisions'
+    // graphs are kept live (cheap — change-gated internally) so a revision switch has no first-block
+    // stale-parameter glitch.
+    const int revision = (int) pRevision->load(); // 0 = V1 Early, 1 = V1 Late, 2 = V2 (Phase 6.3)
+    for (auto& d : dspEarly)
+    {
+        d.setOversamplingFactor(wantFactor);
+        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(),
+                    pTreble->load());
+    }
+    for (auto& d : dspLate)
     {
         d.setOversamplingFactor(wantFactor);
         d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(),
@@ -183,9 +198,13 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
             voltsScratch[(size_t) i] = (double) wet * nalr::kInputRef;
         }
 
-        // The circuit, in real volts (input buffer -> notch/presence -> oversampled drive/clip/recovery
-        // -> blend/level -> tone -> output buffer).
-        dsp[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
+        // The circuit, in real volts (input buffer -> notch/presence -> drive/clip/recovery -> blend/
+        // level -> tone -> output buffer). `revision` selects which pre-allocated graph runs; V2 joins
+        // this switch in Phase 6.3 (falls back to V1 Late's chain until then).
+        if (revision == 0)
+            dspEarly[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
+        else
+            dspLate[(size_t) ch].processBlock(voltsScratch.data(), numSamples);
 
         // Back to DAW domain (kOutputMakeup/kInputRef folded into outGainRamp) + bypass crossfade.
         for (int i = 0; i < numSamples; ++i)
@@ -200,9 +219,10 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         else if (ch == 1) { inputLevelR.store(peakIn); outputLevelR.store(peakOut); }
     }
 
-    // Report OS-factor latency changes to the host (only when it actually changed — the call can
-    // trigger a host graph re-sync). getLatencySamples() reflects the factor the DSP just applied.
-    if (const int lat = dsp[0].getLatencySamples(); lat != reportedLatency)
+    // Report OS-factor/revision latency changes to the host (only when it actually changed — the call
+    // can trigger a host graph re-sync). getLatencySamples() reflects what the active chain just ran.
+    const int lat = revision == 0 ? dspEarly[0].getLatencySamples() : dspLate[0].getLatencySamples();
+    if (lat != reportedLatency)
     {
         reportedLatency = lat;
         setLatencySamples(lat);

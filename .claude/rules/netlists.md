@@ -362,11 +362,18 @@ U3B.out —R23 100k— U3A(−) ;  U3A(+) = VCOM
 U3A feedback : R55 100k (−)—OUT  → flat gain −1 (R55 was missing from circuit.md's table)
                C11 100p (−)—OUT  (stability)
 MID pot rail : input-node(U3B.out side) —R21 3.3k— m1 —VR1— m2 —R62 3.3k— OUT
-MID wiper leg → VCOM, frequency-selective, SWITCHED (SW5A/SW5B, resolved in circuit.md
-   Validation notes): upper T = C19 10n + C21 10n with R27 1M bridging (SW5B);
-   lower T = C13 10n + C36 10n with R13 1M (SW5A) — DPDT toggles ~10n vs ~20n effective
-   → centre ~850 vs ~430 Hz. Gate: ±18 dB peaks per FR §7; if centres come out swapped,
-   flip the throw interpretation (self-validation rule).
+MID: full Baxandall PEAKING cell, TWO switched twin-Ts (⚠ CORRECTED 2026-07-12, Phase 6.2 —
+   re-traced from schematics/crops/v2_midshift_zoom.png; the 4th-pass "wiper leg → VCOM" reading
+   was BOTH wrong-node AND incomplete):
+   • WIPER LEG (SW5B), returns to the SUMMING NODE nV (= U3A(−)), NOT VCOM — else the inverting
+     stage produces no boost/cut: nV —C21 10n— wiper ; nV —C19 10n— nBL ; nBL —R27 1M— wiper.
+   • CAP ACROSS THE POT (SW5A), m1↔m2 — the analog of the BASS rail's C27 100n / TREBLE's C30;
+     WITHOUT it the wiper leg alone is rail-limited (peaks ~3 kHz, untunable by the caps):
+     m1 —C13 10n— m2 ; m1 —R13 1M— nLbot ; nLbot —C36 10n— m2.
+   MID SHIFT = ganged DPDT (SW5A+SW5B) shorting BOTH 1M bridges together: closed → C19‖C21=20n
+   leg AND C13‖C36=20n across-pot → ~430 Hz ("500" silk); open → 10n each → ~850 Hz ("1000").
+   Gate PASSED (tests/V2MidToneTest, V2MidStage): +18.3/−18.6 dB @ 440 Hz and +17.7/−18.2 dB @
+   884 Hz, ratio 2.01, flat centre detent (FR §7). If centres come out swapped, flip the throw.
 U3A.out —C12 1u ∥ C23 1u (parallel pair ⇒ 2u effective)— T_IN
 ```
 Note the V2 chain has only TWO inverting stages total (U901A+U901B are the others... plus U3A

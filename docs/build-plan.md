@@ -302,7 +302,7 @@ math in the plan — everything after this is parameterisation/integration/mecha
 
 ---
 
-**6.2 MID stage + MID SHIFT + BASS SHIFT** — *Opus 4.8 / high.* Read: `netlists.md` V6/V7 +
+**6.2 MID stage + MID SHIFT + BASS SHIFT ✅ COMPLETE** — *Opus 4.8 / high.* Read: `netlists.md` V6/V7 +
 `circuit.md` resolved-wiring notes (Validation notes section) **and, only if the derivation
 disagrees with the gates,** `schematics/crops/v2_midshift_zoom.png`. Note (4th pass): U3A's fixed
 feedback is `R55` 100k (flat gain −1 with `R23` 100k in; missing from circuit.md's first-pass

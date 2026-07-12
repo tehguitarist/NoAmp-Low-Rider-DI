@@ -616,7 +616,7 @@ for V2.*
 | U3A | TLC2262 (ch. A) | MID stage op-amp (inverting — one polarity flip) |
 | C19, C21 | 10n, 10n | MID shift network caps |
 | R27 | 1M | MID shift network |
-| SW5A, SW5B | 2-position switch, "MID SHIFT 500/1000Hz" (author measured actual shift points as ~400–450 Hz and ~800–900 Hz, not the silkscreened 500/1000) | DPDT toggling caps in the MID wiper leg — **wiring RESOLVED, see Validation notes**. Baxandall peaking stage: `R23` 100k in, `C11` 100p stability, pot rail `R21` 3.3k / `VR1` B100k / `R62` 3.3k, wiper leg `C19`+`C21` 10n w/ `R27` 1M (SW5B) and `C13`+`C36` 10n w/ `R13` 1M (SW5A) |
+| SW5A, SW5B | 2-position switch, "MID SHIFT 500/1000Hz" (author measured actual shift points as ~400–450 Hz and ~800–900 Hz, not the silkscreened 500/1000) | Ganged DPDT, **wiring RE-TRACED Phase 6.2 — see Validation notes**. TWO switched twin-Ts: SW5B in the wiper leg to nV (`C19`+`C21` 10n, `R27` 1M), SW5A **across the pot m1↔m2** (`C13`+`C36` 10n, `R13` 1M — the mid-band-placing element). Both short their 1M bridge together: 20n→~430 Hz / 10n→~850 Hz. Gate PASSED (`tests/V2MidToneTest`) |
 | C12, C23 | 1u, 1u | coupling into BASS/TREBLE |
 
 *Sim (`fr_mid.png`): ~±18 dB peaking boost/cut at the 500 Hz throw, ~±17 dB at the 1000 Hz throw —
@@ -793,14 +793,18 @@ finalized here. Record the final decision in `architecture.md` once made.
 - **RESOLVED — V2 MID SHIFT / BASS SHIFT wiring** (from `schematics/crops/v2_midshift_zoom.png`):
   both are **Baxandall-style peaking cut/boost stages** — inverting op-amp, pot ends tied via 3.3k
   resistors to the stage's input and output rails, wiper into a frequency-selective leg to VCOM:
-  - **MID (`U3A`):** input `R23` 100k from U3B out; stability feedback `C11` 100p; pot rail
-    `R21` 3.3k — `VR1` B100k — `R62` 3.3k. Wiper leg: upper T = `C19` 10n + `C21` 10n with `R27` 1M
-    bridging, switched by `SW5B` (pins 4–5, pin 6 ✗); lower T = `C13` 10n + `C36` 10n with `R13` 1M,
-    switched by `SW5A` (pins 1–2, pin 3 ✗). The DPDT toggles caps in/out of the wiper leg — a 10n vs
-    ~20n effective change, giving the ~2× centre-frequency ratio (~430 vs ~850 Hz) the FR sims show.
-    The residual series/shunt micro-detail **self-validates during the transfer-function derivation**:
-    if the derived centres/depths don't land on ~430/850 Hz and ±18 dB (`reference-fr-targets.md` §7),
-    the throw interpretation is inverted — flip it, don't hunt elsewhere.
+  - **MID (`U3A`) — ⚠ FULLY RE-TRACED 2026-07-12 (Phase 6.2, netlists.md V6 wins):** the "wiper
+    into a frequency-selective leg to VCOM" gloss above was wrong-node AND incomplete. It is a full
+    Baxandall peaking cell with **TWO** switched twin-Ts. Input `R23` 100k from U3B out; feedback
+    `R55` 100k ∥ `C11` 100p (flat −1); pot rail `R21` 3.3k — `VR1` B100k — `R62` 3.3k.
+    (1) **Wiper leg → the SUMMING NODE nV (U3A −), not VCOM** (C19/C21 top plates tie to the R23/
+    U3A(−) node): `nV—C21 10n—wiper`, `nV—C19 10n—nBL`, `nBL—R27 1M—wiper` (SW5B shorts nBL↔wiper).
+    (2) **Cap ACROSS the pot m1↔m2** (the mid-band-placing element, analog of BASS `C27`/TREBLE
+    `C30` — omit it and the peak is rail-limited ~3 kHz, untunable): `m1—C13 10n—m2`,
+    `m1—R13 1M—nLbot`, `nLbot—C36 10n—m2` (SW5A shorts m1↔nLbot). MID SHIFT = the ganged DPDT
+    shorting BOTH 1M bridges: closed → 20n each → ~430 Hz ("500"); open → 10n each → ~850 Hz
+    ("1000"). **Gate PASSED** (`tests/V2MidToneTest`): +18.3/−18.6 dB @ 440 Hz, +17.7/−18.2 dB @
+    884 Hz, ratio 2.01, flat centre (FR §7). If centres come out swapped, flip the throw.
   - **BASS SHIFT (`U6B` shared with TREBLE):** pot rail `R29` 3.3k — `VR48` B100k — `R33` 3.3k with
     `C27` 100n across; wiper leg `C28` 10n / `R4` 1M / `C20` 47n, switched by `SW4B` (pins 4–5,
     pin 6 ✗) through `R32` 100k up to the − input node. **`SW4A` is the unused half of the DPDT**
