@@ -83,6 +83,40 @@ def fractional_octave_freqs(f_lo=20.0, f_hi=20000.0, frac=3):
     return [f_lo * 2.0 ** (i / frac) for i in range(n + 1)]
 
 
+# Named regions where this pedal has narrow, must-resolve FR features; densified past the 1/6-oct
+# base so the notch depth / peak Q read accurately (values from circuit.md / reference-fr-targets).
+# (f_lo, f_hi, frac): local fractional-octave resolution inside that band.
+INTEREST_BANDS = (
+    (300.0, 520.0, 24),     # ~430 Hz bridged-T mid-cut (V1e/V1l) + V2 MID low throw (~430 Hz)
+    (600.0, 1000.0, 24),    # the DEEP ~800 Hz twin-T character notch (all revisions) — the sharpest feature
+    (2500.0, 5000.0, 12),   # TREBLE peak (V1l/V2 ~3-4 kHz) + PRESENCE migrating peak (up to ~4.8 kHz)
+    (7000.0, 13000.0, 12),  # speaker-sim HF rolloff / low-OS top-octave droop region
+)
+
+
+def analysis_freqs(f_lo=20.0, f_hi=20000.0, base_frac=6, interest=INTEREST_BANDS):
+    """The reporting frequency grid for FR analyses: a 1/6-octave base (~60 pts, finer than a 24-band
+    EQ) with extra points injected inside INTEREST_BANDS so the ~800 Hz notch, ~430 Hz mid features,
+    treble peak, and HF rolloff are resolved. Returns a sorted, de-duplicated list. The sweep itself
+    is continuous (transfer() has ~6 Hz bins) — this only sets where the tables/plots sample it."""
+    freqs = set(fractional_octave_freqs(f_lo, f_hi, base_frac))
+    for lo, hi, frac in interest:
+        freqs.update(x for x in fractional_octave_freqs(lo, hi, frac) if lo - 1e-6 <= x <= hi + 1e-6)
+    return sorted(freqs)
+
+
+def sweep_segments():
+    """Ordered {input_dBFS: segment_name} for every full-range sweep (clean + driven). Iterate this
+    to read FR (transfer) and THD (harmonic_thd_curve) as a function of INPUT LEVEL — the
+    hot-pickup-vs-rolled-off-volume characterisation. -30 ('sweep_clean') is the primary clean read."""
+    segs = {G.CLEAN_FR_LEVELS_DB[0]: "sweep_clean"}
+    for db in G.CLEAN_FR_LEVELS_DB[1:]:
+        segs[db] = f"sweep_clean_{db}"
+    for db in G.DRIVEN_LEVELS_DB:
+        segs[db] = f"sweep_drv_{db}"
+    return dict(sorted(segs.items()))
+
+
 # --- THD: discrete tone + continuous Farina swept-sine ----------------------------------------
 def thd(x, f0):
     w = np.hanning(len(x)); X = np.abs(np.fft.rfft(x * w)); fr = np.fft.rfftfreq(len(x), 1 / FS)

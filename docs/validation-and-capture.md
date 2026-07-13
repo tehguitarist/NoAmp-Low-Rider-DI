@@ -9,19 +9,30 @@ levels; this one verifies them and the rest of the model against the real thing)
 > Spend your recapture budget on the matrix (§3), not on the signal.
 
 The reusable harness lives in `analysis/`:
-- `gen_test_signal.py` — the comprehensive A/B signal (full-range sweep + 3 driven sweeps for THD +
-  level steps + discrete tones + IMD + decay notes). Single source of truth for segment timings.
+- `gen_test_signal.py` — the comprehensive A/B signal. A **bank of 5 full-range 20→20k sweeps at
+  −36/−30/−18/−12/−6 dBFS** (2 clean + 3 driven) so FR *and* THD are read as a function of input
+  level — the compressive circuit reacts differently to a rolled-off/soft input (−36) than a hot
+  active pickup digging in (−6). Plus a 1 kHz compression-knee step ladder (−36..−3), discrete tone
+  spot-checks, IMD, and decay notes. Single source of truth for segment timings (`sweep_segments()`
+  maps each input-dBFS to its segment name). **The whole file plays once per capture setting**, so
+  it's ~84 s × your matrix size — see the matrix warning above before adding more.
 - `analyze.py` — reusable primitives: load/align, `transfer` (FR), `thd` (discrete) +
   `harmonic_thd_curve` (continuous Farina swept THD), `frac_align`/`null_depth` (sub-sample null),
-  `parse_filename` (clock + 0-10 notations), `is_full_length` (truncation guard).
+  `parse_filename` (clock + 0-10 notations), `is_full_length` (truncation guard). `analysis_freqs()`
+  is the reporting grid: **1/6-octave (~60 pts) with extra points densified around the ~430/800 Hz
+  mid features, the treble peak, and the HF rolloff** — the sweep itself is continuous (~6 Hz bins);
+  this only sets where tables/plots sample it.
 
 ---
 
 ## 1. The four analyses (what each answers)
 
-1. **Frequency response** — 1/3-octave (≈30 pts, 20 Hz–20 kHz) from the **clean** sweep via
-   `transfer()`. Read EQ ONLY from the clean (low-level) sweep so clip harmonics don't pollute the
-   tone fit. This is your taper/tone-stack accuracy check.
+1. **Frequency response** — on the `analysis_freqs()` grid (1/6-octave + densified mid/HF, ~120 pts,
+   20 Hz–20 kHz) from the **clean** sweeps via `transfer()`. Read the tone/taper EQ from the clean
+   (low-level, −36/−30) sweeps so clip harmonics don't pollute the tone fit — this is your
+   taper/tone-stack accuracy check. Then read `transfer()` from the **driven** sweeps too and compare
+   across `sweep_segments()`: how the FR shifts from −36 → −6 dBFS is the hot-pickup-vs-rolled-off
+   behaviour (a compressive circuit's response is level-dependent, so it won't be flat across levels).
 2. **THD by frequency band** — `harmonic_thd_curve()` deconvolves a **driven** sweep (Farina
    exponential-sweep harmonic separation) into a **continuous** THD(f) curve from a single capture —
    no need for hundreds of discrete tones. Pay attention to the 1–8 kHz band (where most saturation

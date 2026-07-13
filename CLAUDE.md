@@ -64,7 +64,8 @@ without images.
   for every stage/control on all three revisions, transcribed from the author's SPICE sim graphs.
   The first-pass validation reference for every linear stage — available before any real capture.
 - **`docs/validation-and-capture.md`** — how to measure how close the plugin is to the real pedal
-  (1/3-oct FR, continuous Farina swept-THD, sub-sample null, knob-tracking pass/fail) and how to
+  (1/6-oct+densified FR read across a 5-level sweep bank, continuous Farina swept-THD, sub-sample
+  null, knob-tracking pass/fail) and how to
   CAPTURE the pedal so the measurement is trustworthy (bypass anchor, one-knob-at-a-time, sweep
   Volume, no truncation). The capture MATRIX, not the signal, is the usual limitation.
 - **`analysis/`** — the reusable harness: `gen_test_signal.py` (comprehensive A/B signal) +
