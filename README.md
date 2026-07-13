@@ -2,12 +2,13 @@
 
 A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, JUCE 8) modelled directly from
 three reverse-engineered generations of the Tech 21 SansAmp Bass Driver DI (BDDI).
+As far as I'm aware this is the first BDDI plugin to accurately model all three revisions, each of which have it's huge proponents. As far as I could find, it's also the only accurate BDDI plugin that still works on modern PCs outside captures.
 
 ## What it is
 
 Rather than model one fixed circuit, this plugin lets you pick **which era of the pedal** you're
 playing through, right down to the component-level differences Tech 21 made between production
-runs:
+runs. I wanted to capture the unique differences, as I remember early in my studio assistant days, bringing my own SansAmp BDDI into the studio and the producer saying "Oh, you got one of the good ones! They're much better than the newer ones." He was referring to my v1 Early as opposed to the V1 Late, and it's always stuck with me.
 
 - **Three selectable circuit revisions** — V1 Early, V1 Late, and V2 — as one automatable
   `revision` parameter with a matching per-revision pedal face, not three separate plugins
