@@ -1,113 +1,130 @@
-# Pedal Plugin Template
+# NoAmp Low Rider DI
 
-A starting point for building a new circuit-level guitar-pedal plugin (AU/VST3, JUCE 8+,
-`chowdsp_wdf`), capturing hard-won generic engineering, validation tooling, and UI so you don't
-reinvent the wheel each time. Nothing here is tied to a specific pedal — fill in the `<...>`
-placeholders for yours.
+A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, JUCE 8) modelled directly from
+three reverse-engineered generations of the Tech 21 SansAmp Bass Driver DI (BDDI).
 
-## What's here
+## What it is
 
-```
-CLAUDE.md                          project-memory template + the build/validation sequence
-.claude/rules/
-  circuit.md                       fill-in-from-schematic template (with reading gotchas)
-  dsp.md                           WDF / chowdsp / oversampling / ADAA rules + gotchas
-  architecture.md                  threading, plugin structure, processBlock, bypass, OS, state
-  ui.md                            UI contract (points at the spec + provided components)
-  build.md                         CMake, submodules, layout, testing, CI, validation gates
-.claude/agents/
-  schematic-checker.md             reads circuit.md, answers component/topology questions exactly
-  dsp-validator.md                 checks a DSP stage's implementation against circuit.md/dsp.md
-docs/
-  calibration-and-gain-staging.md  ★ the hard-won DSP/level lessons — read first
-  validation-and-capture.md        ★ how to measure accuracy vs the real pedal + capture protocol
-  ui-peripheral-spec.md            full visual spec for the reusable UI elements
-analysis/
-  gen_test_signal.py               comprehensive A/B capture signal (sweep + driven + IMD + tones)
-  analyze.py                       reusable harness: FR, THD (incl. Farina swept), null + null-floor
-.github/workflows/
-  ci.yml                           build + ctest on macOS/Windows/Linux (push/PR); auval on macOS
-  release.yml                      manual-trigger packaging -> one zip per platform on a GH Release
-src/
-  ui/PedalLookAndFeel.{h,cpp}      palette, knobs, octagonal footswitch, ComboBox, VU drawing
-  ui/VUMeter.h                     22-segment bar meter
-  ui/ThreePositionSwitch.h         generic vertical toggle (setLabels / onChange)
-  ui/LEDIndicator.h                bypass LED
-  utils/TaperUtils.h               taper helpers (incl. audioTaperR0 for large gain pots)
-```
+Rather than model one fixed circuit, this plugin lets you pick **which era of the pedal** you're
+playing through, right down to the component-level differences Tech 21 made between production
+runs:
 
-The `src/ui/*` and `utils/*` files are **drop-in** — proven, production-tested code with all
-pedal-specific names removed (`PedalLookAndFeel`, `ThreePositionSwitch`). The colour palette is a
-dark-navy theme; recolour via the constants in `PedalLookAndFeel.h`.
+- **Three selectable circuit revisions** — V1 Early, V1 Late, and V2 — as one automatable
+  `revision` parameter with a matching per-revision pedal face, not three separate plugins
+- PRESENCE, DRIVE, BLEND (dry/wet mix), LEVEL, BASS, and TREBLE on every revision; V2 adds a
+  post-blend MID control with a switchable centre frequency (MID SHIFT) and a BASS SHIFT
+  low-frequency switch
+- **The revisions are genuinely different circuits, not value tweaks**: V1 Early clips purely via
+  op-amp rail saturation (no clipping diodes at all in the drive stage); V1 Late and V2 both add a
+  small reverse-breakdown zener clipping sub-module in the drive feedback path; the tone stack
+  changes from Baxandall shelving (V1 Early) to peaking (V1 Late/V2)
+- Input/output trim with VU metering, switchable oversampling with separate Live and Render
+  settings, and a glitch-free revision-switch crossfade
 
-## How to use it
+## Under the Hood
 
-1. Copy this folder to a new repo (or `cp -R` it and `git init`).
-2. Add JUCE / chowdsp_wdf (+ optional xsimd) as submodules under `libs/` (see `.claude/rules/build.md`).
-3. Drop the schematic images into `schematics/` and fill in `.claude/rules/circuit.md`.
-4. Write `CMakeLists.txt` from `CMakeLists.txt.template` (replace every `<PLACEHOLDER>`; see build.md
-   for the structure), then `PluginProcessor`/`PluginEditor` following `architecture.md`.
-5. Follow the build/validation sequence in `CLAUDE.md`, validating each stage.
-6. **Calibrate** per `docs/calibration-and-gain-staging.md` — measure `kInputRef` for your own rig;
-   set the output makeup by **level-matching to your captures** (not to a headroom target).
-7. **Validate** against real-pedal captures per `docs/validation-and-capture.md` (frequency
-   response, THD-by-band, null depth) using the `analysis/` harness.
+The entire signal path uses Wave Digital Filters in double precision, built from the circuit's
+actual node-level topology rather than hand-tuned approximations:
 
-## The things that bit us before (so they don't bite you)
+- Passive bridge/twin-T networks solved as R-type adaptors with a **numerically-derived**
+  scattering matrix (no hand-transcribed matrices)
+- Op-amp-embedded linear stages (active Sallen-Key recovery filters, inverting tone/gain stages)
+  solved with a bilinear-companion MNA engine treating ideal op-amps as nullors
+- A bespoke reverse-breakdown zener-pair WDF element for the V1 Late/V2 drive clip — antiparallel
+  diode-pair math reparameterised from the zener's physical knee, since off-the-shelf diode models
+  only cover forward Shockley conduction
+- Op-amp rail saturation on the V1 Early drive stage, both with 1st-order ADAA anti-aliasing
+- Switchable oversampling (1×/2×/4×/8×) with a separate, higher-quality offline-render factor
 
-1. **Input level calibration** — the circuit is nonlinear, so the absolute input voltage decides
-   where it clips. Anchor `kInputRef` (volts per full-scale) to a real measurement.
-2. **The audio-taper floor** — a 1%-floored taper on a large (1 M) gain pot injects ~10 kΩ that
-   adds ~8 dB of phantom minimum gain. Use `audioTaperR0` for pots whose minimum is ~0 Ω.
-3. **The `10^(2x-2)` audio taper is too steep** — it puts ~10 % of pot R at the midpoint where a
-   real audio pot is ~35–40 %, making tone controls too shallow. Fit a power-law taper from
-   captures instead (calibration doc §3b).
-4. **Output makeup is calibrated, not padded** — level-match it to the captures; it may exceed 1.0,
-   and a faithful pedal genuinely exceeds 0 dBFS at high drive+volume (the output trim manages it).
-   Do NOT pad it down "for headroom" — that breaks the A/B match (calibration doc §2).
-5. **The capture MATRIX, not the test signal, is the usual limit** — sweep one knob at a time,
-   capture a bypass/unity anchor, keep the recording gain fixed, and never truncate
-   (validation doc §3).
-6. **A multi-stage pedal's true signal order isn't always what the physical layout suggests** —
-   verify it from the hardware/schematic, never assume left-to-right or numbered layout matches
-   processing order (`.claude/rules/circuit.md`).
-7. **Never reconstruct a WDF node voltage from a source port's voltage** — combine only passive
-   ports, or you get a spurious one-sample-averaged low-pass that masquerades as ordinary bilinear
-   warping (`.claude/rules/dsp.md`).
-
-## Performance (NoAmp Low Rider DI, Phase 9 probes)
+## Performance (Phase 9 probes)
 
 Measured via `PerfBenchmark`/`FeatureProfile`/`OSFidelity` (`ctest`), Apple Silicon, Release build.
 Absolute CPU % is machine-dependent — read this as relative shape, not an absolute spec.
 
 | Revision | OS factor | CPU % of realtime | Latency (samples) |
-|----------|-----------|--------------------|--------------------|
-| V1 Early | 1x        | 1.4%               | 0                  |
-| V1 Early | 2x        | 1.6%               | 49                 |
-| V1 Early | 4x        | 2.3%               | 61                 |
-| V1 Early | 8x        | 3.7%               | 65                 |
-| V1 Late  | any*      | 1.5%               | 0                  |
-| V2       | any*      | 1.6%               | 0                  |
+|----------|-----------|-------------------|-------------------|
+| V1 Early | 1x        | 1.4%              | 0                 |
+| V1 Early | 2x        | 1.6%              | 49                |
+| V1 Early | 4x        | 2.3%              | 61                |
+| V1 Early | 8x        | 3.7%              | 65                |
+| V1 Late  | any*      | 1.5%              | 0                 |
+| V2       | any*      | 1.6%              | 0                 |
 
 \* V1 Late / V2's zener DRIVE module has no oversampling region yet (a documented, deferred
 follow-up — see `CLAUDE.md`), so every OS-factor setting renders identically for those revisions.
 
-**HQ toggle: not added.** `FeatureProfile` A/B'd the two candidate CPU/accuracy levers per
-`dsp.md`'s "HQ / Eco mode" guidance and found neither justifies a toggle:
+**No HQ toggle.** `FeatureProfile` A/B'd the two candidate CPU/accuracy levers per `dsp.md`'s
+"HQ / Eco mode" guidance and found neither justifies one:
 
 - **Zener-clip omega solver** (`AccurateOmega` vs chowdsp's `omega4`): `AccurateOmega` costs ~2.7x
   the CPU, but omega4's distortion floor never exceeds the level the zener's own physical curvature
-  already produces at any realistic drive (both solvers agree to 0.0 dB from small-signal up to
-  large-signal) — omega4 buys back CPU with no perceptible accuracy cost for this stage's specific
-  operating range, contradicting the generic "~-35 dB omega4 floor" expectation. Kept `AccurateOmega`
-  as the shipping default (already near-negligible in absolute per-sample terms); no toggle needed.
-- **Rail-clip ADAA** (V1 Early): ~7.6 dB less 1x aliasing for ~3.4 ns/sample extra (~0.02% of one
-  sample period) — a free win, left always-on.
+  already produces at any realistic drive — omega4 buys back CPU with no perceptible accuracy cost
+  for this stage's specific operating range. Kept `AccurateOmega` as the shipping default (already
+  near-negligible in absolute per-sample terms).
+- **Rail-clip ADAA** (V1 Early): ~7.6 dB less 1x aliasing for ~3.4 ns/sample extra — a free win,
+  left always-on.
 
-**`OSFidelity` confirmed the known low-OS top-octave droop** (`dsp.md` "Top-octave accuracy"): at
-1x, V1 Early's recovery filters read ~-5.7 dB @ 8 kHz / ~-13.1 dB @ 12 kHz / ~-25.7 dB @ 16 kHz
-versus the 8x reference, shrinking sharply by 4x (2x) and 8x (matching expectations for a bilinear
-discretization artifact that scales with sample rate). The wanted clip character (THD) stays flat
-across all four OS factors, confirming the droop is a pure discretization artifact, not a
-clipping-fidelity one. No prewarp/shelf is implemented yet — this is data for that follow-up
-decision, not a regression against a prior number.
+`OSFidelity` also confirmed a known low-OS top-octave droop on the recovery filters (a bilinear
+discretisation artifact, not a clip-fidelity issue) — documented in `CLAUDE.md` as a follow-up.
+
+## Building
+
+Requirements: CMake 3.15+, a C++17 compiler, and the `libs/JUCE`, `libs/chowdsp_wdf`, and
+`libs/xsimd` submodules (`git submodule update --init --recursive`). Supports AU + VST3 on macOS;
+VST3 on Windows and Linux.
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target NoAmpLowRiderDI_AU     # macOS AU (auto-installs; bump VERSION to force a Logic rescan)
+cmake --build build                                 # everything, including the test suite
+ctest --test-dir build                              # run the validation suite
+```
+
+## Where to Find Things
+
+```text
+src/PluginProcessor.{h,cpp}   APVTS, per-channel DSP, oversampling, bypass/metering
+src/PluginEditor.{h,cpp}      per-revision pedal-face layout
+src/dsp/                      one header per stage (WDF nodal circuits, zener clip, rail clip,
+                               tone stacks) + a top-level graph per revision
+src/ui/                       PedalLookAndFeel, VUMeter, ThreePositionSwitch, LEDIndicator,
+                               PedalAssets (bitmap knob/switch/LED/faceplate assets)
+src/utils/                    taper helpers, prewarp, change-gated smoothing
+tests/                        per-stage validation exes (frequency response, THD, null, aliasing,
+                               performance/fidelity probes) — registered with `ctest`
+analysis/                     gen_test_signal.py + analyze.py, the real-pedal capture/A-B harness
+schematics/                   the source schematic images + transcribed FR-target reference data
+docs/                         calibration, FR targets, capture protocol, UI asset map
+.claude/rules/                circuit reference, node-level netlists, DSP/architecture/UI/build rules
+```
+
+## Installing a Release Build
+
+Platform installers (`.pkg` on macOS with an AU/VST3 choice screen, `.exe` via NSIS on Windows,
+`.deb` on Linux) are built from `installer/{macos,windows,linux}` by the `release.yml` GitHub
+Actions workflow (manual `workflow_dispatch` trigger only). Alternatively, build from source per
+above and copy the resulting AU/VST3 bundle into your system's plugin folder.
+
+## Known Limitations
+
+- AU is macOS-only (no AU on Windows/Linux, matching the format itself)
+- The V1 Late/V2 zener drive stage has no oversampling/ADAA region yet — see the Performance
+  section and `CLAUDE.md`'s carry-forward notes
+- Reference validation against real-pedal captures (frequency response, THD-by-band, null depth)
+  is not yet complete — see `docs/validation-and-capture.md`
+
+## Acknowledgements
+
+The three circuit revisions modelled here were reverse-engineered and published by
+**[kanengomibako](https://kanengomibako.github.io/)** (可燃ごみ箱) — this project would not exist
+without that independent reverse-engineering work. Component values and topology were transcribed
+from their public write-ups; the schematic images themselves are not redistributed here (see
+`.claude/rules/circuit.md` for the license note on the source material).
+
+## Technical Details
+
+Built using the [JUCE](https://juce.com/) framework, [chowdsp_wdf](https://github.com/Chowdhury-DSP/chowdsp_wdf)
+for Wave Digital Filter modelling, and [xsimd](https://github.com/xtensor-stack/xsimd) for SIMD
+acceleration. Licensed under [AGPLv3](LICENSE).
+
+**Author:** Leigh Pierce
