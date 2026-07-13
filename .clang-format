@@ -1,6 +1,11 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
 ColumnLimit: 120
-BreakBeforeBraces: Attach
+BreakBeforeBraces: Allman
 AllowShortFunctionsOnASingleLine: Inline
 SortIncludes: false
+AccessModifierOffset: -4
+IndentAccessModifiers: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+SpaceAfterCStyleCast: true

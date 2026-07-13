@@ -61,8 +61,8 @@ public:
     }
 
 private:
-    juce::String valueA { "A" }, valueB { "B" };
-    int selected { 0 };
-    juce::Colour highlight { juce::Colours::white }, dim { juce::Colours::grey };
-    juce::Font font { juce::FontOptions(14.0f) };
+    juce::String valueA{"A"}, valueB{"B"};
+    int selected{0};
+    juce::Colour highlight{juce::Colours::white}, dim{juce::Colours::grey};
+    juce::Font font{juce::FontOptions(14.0f)};
 };

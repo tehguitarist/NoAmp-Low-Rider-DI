@@ -12,7 +12,9 @@ public:
     // Position labels (top, middle, bottom). Default placeholders — call setLabels() to suit.
     void setLabels(const juce::String& top, const juce::String& mid, const juce::String& bot)
     {
-        labelText[0] = top; labelText[1] = mid; labelText[2] = bot;
+        labelText[0] = top;
+        labelText[1] = mid;
+        labelText[2] = bot;
         repaint();
     }
     std::function<void(int)> onChange;
@@ -39,7 +41,11 @@ public:
     void setPosition(int pos)
     {
         pos = juce::jlimit(0, 2, pos);
-        if (pos != position) { position = pos; repaint(); }
+        if (pos != position)
+        {
+            position = pos;
+            repaint();
+        }
     }
 
     int getPosition() const { return position; }
@@ -49,18 +55,18 @@ public:
         const auto b = getLocalBounds().toFloat();
 
         // All dimensions proportional to component height (base = 65px at 1x scale)
-        const float sc     = b.getHeight() / 65.0f;
+        const float sc = b.getHeight() / 65.0f;
         const float kBodyW = 20.0f * sc;
-        const float kGap   =  4.0f * sc;
+        const float kGap = 4.0f * sc;
         const float kLabelW = 145.0f * sc; // wide enough for "V1 EARLY" at the ~17.5px-scaled font below
         // Labels are stretched this much wider on screen (horizontal-only scale in the paint loop
         // below, anchored at labelX) — the final on-screen text width is kLabelW * kLabelStretchX.
         constexpr float kLabelStretchX = 1.3f;
 
         // Body centred in component; labels extend to the right
-        const float bodyH  = 60.0f * sc;
-        const float bodyX  = (b.getWidth() - kBodyW) * 0.5f;
-        const float bodyY  = (b.getHeight() - bodyH) * 0.5f;
+        const float bodyH = 60.0f * sc;
+        const float bodyX = (b.getWidth() - kBodyW) * 0.5f;
+        const float bodyY = (b.getHeight() - bodyH) * 0.5f;
         const float labelX = bodyX + kBodyW + kGap;
         const float section = bodyH / 3.0f; // used by the lever (vector mode) and the label loop below
 
@@ -85,16 +91,16 @@ public:
             g.drawLine(grooveX - 0.5f, bodyY + 5.0f * sc, grooveX - 0.5f, bodyY + bodyH - 5.0f * sc, 1.0f);
 
             // Lever
-            const float leverH  = 14.0f * sc;
-            const float leverW  = kBodyW - 4.0f * sc;
-            const float leverX  = bodyX + 2.0f * sc;
-            const float leverY  = bodyY + (float)position * section + (section - leverH) * 0.5f;
+            const float leverH = 14.0f * sc;
+            const float leverW = kBodyW - 4.0f * sc;
+            const float leverX = bodyX + 2.0f * sc;
+            const float leverY = bodyY + (float) position * section + (section - leverH) * 0.5f;
 
             g.setColour(juce::Colours::black.withAlpha(0.35f));
             g.fillRoundedRectangle(leverX + sc, leverY + 2.0f * sc, leverW, leverH, 3.0f * sc);
 
-            juce::ColourGradient leverGrad(juce::Colour(0xFFB8C4D0u), leverX, leverY,
-                                            juce::Colour(0xFF6E7C8Au), leverX, leverY + leverH, false);
+            juce::ColourGradient leverGrad(juce::Colour(0xFFB8C4D0u), leverX, leverY, juce::Colour(0xFF6E7C8Au), leverX,
+                                           leverY + leverH, false);
             leverGrad.addColour(0.45, juce::Colour(0xFF9AAAB8u));
             g.setGradientFill(leverGrad);
             g.fillRoundedRectangle(leverX, leverY, leverW, leverH, 3.0f * sc);
@@ -105,49 +111,48 @@ public:
         // Labels to the right of the body (configurable via setLabels). Stretched kLabelStretchX
         // wider — a horizontal-only scale anchored at labelX, so the track/lever position and
         // text height are unaffected, only the glyphs' width.
-        g.setFont(labelTypeface != nullptr
-                      ? juce::Font(juce::FontOptions(17.5f * sc).withTypeface(labelTypeface))
-                      : juce::Font(juce::FontOptions(17.5f * sc)));
+        g.setFont(labelTypeface != nullptr ? juce::Font(juce::FontOptions(17.5f * sc).withTypeface(labelTypeface))
+                                           : juce::Font(juce::FontOptions(17.5f * sc)));
 
         for (int n = 0; n < 3; ++n)
         {
-            const float cy    = bodyY + (float)n * section + section * 0.5f;
+            const float cy = bodyY + (float) n * section + section * 0.5f;
             const bool active = (n == position);
             g.setColour(active ? juce::Colour(PedalLookAndFeel::cSWLabelActive)
                                : juce::Colour(PedalLookAndFeel::cSWLabelInactive));
             juce::Graphics::ScopedSaveState save(g);
             g.addTransform(juce::AffineTransform::scale(kLabelStretchX, 1.0f, labelX, cy));
-            g.drawText(labelText[n],
-                       juce::Rectangle<float>(labelX, cy - 15.0f * sc, kLabelW, 30.0f * sc),
+            g.drawText(labelText[n], juce::Rectangle<float>(labelX, cy - 15.0f * sc, kLabelW, 30.0f * sc),
                        juce::Justification::centredLeft, false);
         }
     }
 
-    void mouseDown(const juce::MouseEvent& e) override  { updateFromMouse(e.position.y); }
-    void mouseDrag(const juce::MouseEvent& e) override  { updateFromMouse(e.position.y); }
+    void mouseDown(const juce::MouseEvent& e) override { updateFromMouse(e.position.y); }
+    void mouseDrag(const juce::MouseEvent& e) override { updateFromMouse(e.position.y); }
 
 private:
-    int position { 0 };
-    juce::String labelText[3] { "Top", "Mid", "Bot" };
+    int position{0};
+    juce::String labelText[3]{"Top", "Mid", "Bot"};
     juce::Image bodyImage[3];
     juce::Typeface::Ptr labelTypeface;
 
     void updateFromMouse(float mouseY)
     {
-        const auto b  = getLocalBounds().toFloat();
-        const float sc    = b.getHeight() / 65.0f;
+        const auto b = getLocalBounds().toFloat();
+        const float sc = b.getHeight() / 65.0f;
         const float bodyH = 60.0f * sc;
         const float bodyY = (b.getHeight() - bodyH) * 0.5f;
-        const float relY  = mouseY - bodyY;
+        const float relY = mouseY - bodyY;
 
         if (relY >= 0.0f && relY < bodyH)
         {
-            const int newPos = juce::jlimit(0, 2, (int)(relY / (bodyH / 3.0f)));
+            const int newPos = juce::jlimit(0, 2, (int) (relY / (bodyH / 3.0f)));
             if (newPos != position)
             {
                 position = newPos;
                 repaint();
-                if (onChange) onChange(position);
+                if (onChange)
+                    onChange(position);
             }
         }
     }

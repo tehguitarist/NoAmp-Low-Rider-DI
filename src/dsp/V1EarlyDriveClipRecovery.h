@@ -90,7 +90,7 @@ public:
         }
 
         auto& osr = *os[osIndex(activeFactor)];
-        double* channels[1] = { data };
+        double* channels[1] = {data};
         juce::dsp::AudioBlock<double> block(channels, 1, (size_t) n);
         auto up = osr.processSamplesUp(block);
         double* d = up.getChannelPointer(0);
@@ -102,10 +102,7 @@ public:
 
     // Single-sample core at the CURRENT discretisation rate (drive -> clip -> recovery). Intended for
     // 1x/base-rate probes such as the DC-step polarity test; the oversampled path uses it internally.
-    inline double processCoreSample(double x) noexcept
-    {
-        return recovery.process(railClip.process(drive.process(x)));
-    }
+    inline double processCoreSample(double x) noexcept { return recovery.process(railClip.process(drive.process(x))); }
 
     int getActiveFactor() const noexcept { return activeFactor; }
 
@@ -131,7 +128,7 @@ private:
     RailClip railClip;
     V1EarlyRecoveryStage recovery;
 
-    std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os {};
+    std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};
     double baseSampleRate = 48000.0;
     int pendingFactor = 4; // default live/render factor; processor overrides via setOversamplingFactor
     int activeFactor = 0;  // 0 = not yet prepared -> first applyFactor always runs

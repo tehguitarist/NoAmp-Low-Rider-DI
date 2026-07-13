@@ -60,7 +60,8 @@ double dcGain(double fs, double drive01)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
@@ -91,12 +92,17 @@ int main()
     int nPts = 0;
     bool wdfOk = true;
     for (double f = 20.0; f <= 20000.0; f *= std::pow(10.0, 1.0 / 24.0))
-        for (double d : { 0.0, 0.5, 1.0 })
+        for (double d : {0.0, 0.5, 1.0})
         {
             const double delta = measureWdfDb(fs, f, d) - analyticDb(f, d);
             const double tol = (f < 8000.0) ? 0.5 : (f < 15000.0 ? 1.0 : 2.0);
-            if (std::abs(delta) > tol) wdfOk = false;
-            if (std::abs(delta) > std::abs(worst)) { worst = delta; worstF = f; }
+            if (std::abs(delta) > tol)
+                wdfOk = false;
+            if (std::abs(delta) > std::abs(worst))
+            {
+                worst = delta;
+                worstF = f;
+            }
             ++nPts;
         }
     std::printf("      compared %d points, worst delta %.2f dB @ %.0f Hz\n", nPts, worst, worstF);

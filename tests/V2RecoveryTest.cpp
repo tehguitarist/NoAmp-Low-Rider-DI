@@ -44,7 +44,10 @@ void check(bool cond, const char* msg)
 // Because the buffer forces Vout_A = V(n2), and n2 only connects to n1 via R18 and to GND via C16,
 // solve the 3-node (n0,n1,n2) passive network with Vout_A as an additional unknown tied to n2, via
 // nodal analysis (small enough to hand-solve as a 3x3 linear system in n0,n1,n2).
-cd zSeriesRC(double R, double C, double w) { return cd(R, 0.0) + cd(0.0, -1.0 / (w * C)); }
+cd zSeriesRC(double R, double C, double w)
+{
+    return cd(R, 0.0) + cd(0.0, -1.0 / (w * C));
+}
 
 cd hSkA(double w)
 {
@@ -91,9 +94,8 @@ cd hSkA(double w)
     const cd a20 = cd(0.0, 0.0), a21 = -Y18, a22 = Y18 + Yc16, b2 = cd(0.0, 0.0);
 
     // Solve via Cramer's rule (3x3).
-    auto det3 = [](cd m00, cd m01, cd m02, cd m10, cd m11, cd m12, cd m20, cd m21, cd m22) {
-        return m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20);
-    };
+    auto det3 = [](cd m00, cd m01, cd m02, cd m10, cd m11, cd m12, cd m20, cd m21, cd m22)
+    { return m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20); };
     const cd D = det3(a00, a01, a02, a10, a11, a12, a20, a21, a22);
     const cd Dn2 = det3(a00, a01, b0, a10, a11, b1, a20, a21, b2);
     const cd n2 = Dn2 / D;
@@ -123,9 +125,8 @@ cd hSkB(double w)
     const cd a10 = -Y19, a11 = Y19 + Y20 + Y17, a12 = -(Y20 + Y17), b1 = cd(0.0, 0.0);
     const cd a20 = cd(0.0, 0.0), a21 = -Y20, a22 = Y20 + Y18c, b2 = cd(0.0, 0.0);
 
-    auto det3 = [](cd m00, cd m01, cd m02, cd m10, cd m11, cd m12, cd m20, cd m21, cd m22) {
-        return m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20);
-    };
+    auto det3 = [](cd m00, cd m01, cd m02, cd m10, cd m11, cd m12, cd m20, cd m21, cd m22)
+    { return m00 * (m11 * m22 - m12 * m21) - m01 * (m10 * m22 - m12 * m20) + m02 * (m10 * m21 - m11 * m20); };
     const cd D = det3(a00, a01, a02, a10, a11, a12, a20, a21, a22);
     const cd Dn2 = det3(a00, a01, b0, a10, a11, b1, a20, a21, b2);
     return Dn2 / D;
@@ -155,7 +156,10 @@ double wdfMagDb(nalr::V2RecoveryStage& rec, double fs, double f, int settleCycle
     return 20.0 * std::log10(peak + 1.0e-12);
 }
 
-double analyticMagDb(double f) { return 20.0 * std::log10(std::abs(hRecoveryV2(f)) + 1.0e-300); }
+double analyticMagDb(double f)
+{
+    return 20.0 * std::log10(std::abs(hRecoveryV2(f)) + 1.0e-300);
+}
 
 } // namespace
 
@@ -169,7 +173,7 @@ int main()
     {
         nalr::V2RecoveryStage rec;
         rec.prepare(kFs);
-        for (double f : { 100.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0 })
+        for (double f : {100.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0})
         {
             nalr::V2RecoveryStage fresh;
             fresh.prepare(kFs);
@@ -221,7 +225,7 @@ int main()
         // A bridged-T dip would show dbMid several dB BELOW both neighbours; absent that network,
         // 430 Hz should not be a local minimum relative to both sides by more than a fraction of a dB.
         const bool isDip = (dbMid < dbLow - 1.0) && (dbMid < dbHigh - 1.0);
-        check(! isDip, "unexpected ~430 Hz dip -- bridged-T should be absent on V2");
+        check(!isDip, "unexpected ~430 Hz dip -- bridged-T should be absent on V2");
     }
 
     std::printf(failures == 0 ? "\nALL PASS\n" : "\n%d FAILURE(S)\n", failures);

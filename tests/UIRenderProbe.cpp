@@ -26,11 +26,19 @@ int main()
     const juce::File outDir = juce::File::getCurrentWorkingDirectory().getChildFile("ui-renders");
     outDir.createDirectory();
 
-    struct RevisionSpec { int index; const char* name; };
-    const RevisionSpec revisions[] = { { 0, "v1early" }, { 1, "v1late" }, { 2, "v2" } };
+    struct RevisionSpec
+    {
+        int index;
+        const char* name;
+    };
+    const RevisionSpec revisions[] = {{0, "v1early"}, {1, "v1late"}, {2, "v2"}};
 
-    struct ScaleSpec { float factor; const char* name; };
-    const ScaleSpec scales[] = { { 1.0f, "1.0x" }, { 1.5f, "1.5x" }, { 2.0f, "2.0x" } };
+    struct ScaleSpec
+    {
+        float factor;
+        const char* name;
+    };
+    const ScaleSpec scales[] = {{1.0f, "1.0x"}, {1.5f, "1.5x"}, {2.0f, "2.0x"}};
 
     bool ok = true;
     auto* revisionParam = processor.apvts.getParameter(NoAmpLowRiderDIAudioProcessor::idRevision);
@@ -52,7 +60,7 @@ int main()
             outFile.deleteFile(); // FileOutputStream doesn't truncate; ensure a clean overwrite each run
             juce::PNGImageFormat png;
             juce::FileOutputStream stream(outFile);
-            if (! (stream.openedOk() && png.writeImageToStream(image, stream)))
+            if (!(stream.openedOk() && png.writeImageToStream(image, stream)))
             {
                 std::cerr << "Failed to write " << outFile.getFullPathName() << "\n";
                 ok = false;

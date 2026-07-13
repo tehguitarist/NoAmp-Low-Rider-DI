@@ -49,24 +49,23 @@ private:
     // Nodes: B=0 (input), J2=1, L1=2, L2=3 ; datum = VCOM.
     // Ports (index): 0=up(B-gnd,faces source), 1=R16(B-J2), 2=C19(B-L1), 3=C17(J2-L2),
     //                4=C18(L1-L2), 5=R3(L1-gnd), 6=R11(L2-gnd), 7=outBranch C26+R22 (J2-gnd).
-    wdft::ResistorT<double> R16 { 100.0e3 };
-    wdft::CapacitorT<double> C19 { 22.0e-9 };
-    wdft::CapacitorT<double> C17 { 22.0e-9 };
-    wdft::CapacitorT<double> C18 { 22.0e-9 };
-    wdft::ResistorT<double> R3 { 2.2e3 };
-    wdft::ResistorT<double> R11 { 22.0e3 };
-    wdft::CapacitorT<double> C26 { 22.0e-9 };
-    wdft::ResistorT<double> R22 { 100.0e3 };
-    wdft::WDFSeriesT<double, decltype(C26), decltype(R22)> outBranch { C26, R22 };
+    wdft::ResistorT<double> R16{100.0e3};
+    wdft::CapacitorT<double> C19{22.0e-9};
+    wdft::CapacitorT<double> C17{22.0e-9};
+    wdft::CapacitorT<double> C18{22.0e-9};
+    wdft::ResistorT<double> R3{2.2e3};
+    wdft::ResistorT<double> R11{22.0e3};
+    wdft::CapacitorT<double> C26{22.0e-9};
+    wdft::ResistorT<double> R22{100.0e3};
+    wdft::WDFSeriesT<double, decltype(C26), decltype(R22)> outBranch{C26, R22};
 
     struct NotchImpedance
     {
         static constexpr int NP = 8, NN = 4, UP = 0;
-        static constexpr int np[NP] = { 0, 0, 0, 1, 2, 2, 3, 1 };
-        static constexpr int nm[NP] = { rtype::kDatum, 1, 2, 3, 3, rtype::kDatum, rtype::kDatum, rtype::kDatum };
+        static constexpr int np[NP] = {0, 0, 0, 1, 2, 2, 3, 1};
+        static constexpr int nm[NP] = {rtype::kDatum, 1, 2, 3, 3, rtype::kDatum, rtype::kDatum, rtype::kDatum};
 
-        template <typename RType>
-        static double calcImpedance(RType& R)
+        template <typename RType> static double calcImpedance(RType& R)
         {
             const auto z = R.getPortImpedances(); // size 7, tuple order == port indices 1..7
             double portR[NP];
@@ -87,10 +86,9 @@ private:
         }
     };
 
-    using NotchRtype = wdft::RtypeAdaptor<double, 0, NotchImpedance, decltype(R16), decltype(C19),
-                                          decltype(C17), decltype(C18), decltype(R3), decltype(R11),
-                                          decltype(outBranch)>;
-    NotchRtype bridge { R16, C19, C17, C18, R3, R11, outBranch };
-    wdft::IdealVoltageSourceT<double, NotchRtype> src { bridge };
+    using NotchRtype = wdft::RtypeAdaptor<double, 0, NotchImpedance, decltype(R16), decltype(C19), decltype(C17),
+                                          decltype(C18), decltype(R3), decltype(R11), decltype(outBranch)>;
+    NotchRtype bridge{R16, C19, C17, C18, R3, R11, outBranch};
+    wdft::IdealVoltageSourceT<double, NotchRtype> src{bridge};
 };
 } // namespace nalr

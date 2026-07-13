@@ -74,3 +74,40 @@ dark-navy theme; recolour via the constants in `PedalLookAndFeel.h`.
 7. **Never reconstruct a WDF node voltage from a source port's voltage** — combine only passive
    ports, or you get a spurious one-sample-averaged low-pass that masquerades as ordinary bilinear
    warping (`.claude/rules/dsp.md`).
+
+## Performance (NoAmp Low Rider DI, Phase 9 probes)
+
+Measured via `PerfBenchmark`/`FeatureProfile`/`OSFidelity` (`ctest`), Apple Silicon, Release build.
+Absolute CPU % is machine-dependent — read this as relative shape, not an absolute spec.
+
+| Revision | OS factor | CPU % of realtime | Latency (samples) |
+|----------|-----------|--------------------|--------------------|
+| V1 Early | 1x        | 1.4%               | 0                  |
+| V1 Early | 2x        | 1.6%               | 49                 |
+| V1 Early | 4x        | 2.3%               | 61                 |
+| V1 Early | 8x        | 3.7%               | 65                 |
+| V1 Late  | any*      | 1.5%               | 0                  |
+| V2       | any*      | 1.6%               | 0                  |
+
+\* V1 Late / V2's zener DRIVE module has no oversampling region yet (a documented, deferred
+follow-up — see `CLAUDE.md`), so every OS-factor setting renders identically for those revisions.
+
+**HQ toggle: not added.** `FeatureProfile` A/B'd the two candidate CPU/accuracy levers per
+`dsp.md`'s "HQ / Eco mode" guidance and found neither justifies a toggle:
+
+- **Zener-clip omega solver** (`AccurateOmega` vs chowdsp's `omega4`): `AccurateOmega` costs ~2.7x
+  the CPU, but omega4's distortion floor never exceeds the level the zener's own physical curvature
+  already produces at any realistic drive (both solvers agree to 0.0 dB from small-signal up to
+  large-signal) — omega4 buys back CPU with no perceptible accuracy cost for this stage's specific
+  operating range, contradicting the generic "~-35 dB omega4 floor" expectation. Kept `AccurateOmega`
+  as the shipping default (already near-negligible in absolute per-sample terms); no toggle needed.
+- **Rail-clip ADAA** (V1 Early): ~7.6 dB less 1x aliasing for ~3.4 ns/sample extra (~0.02% of one
+  sample period) — a free win, left always-on.
+
+**`OSFidelity` confirmed the known low-OS top-octave droop** (`dsp.md` "Top-octave accuracy"): at
+1x, V1 Early's recovery filters read ~-5.7 dB @ 8 kHz / ~-13.1 dB @ 12 kHz / ~-25.7 dB @ 16 kHz
+versus the 8x reference, shrinking sharply by 4x (2x) and 8x (matching expectations for a bilinear
+discretization artifact that scales with sample rate). The wanted clip character (THD) stays flat
+across all four OS factors, confirming the droop is a pure discretization artifact, not a
+clipping-fidelity one. No prewarp/shelf is implemented yet — this is data for that follow-up
+decision, not a regression against a prior number.

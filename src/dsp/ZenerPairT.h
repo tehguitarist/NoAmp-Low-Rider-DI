@@ -125,7 +125,11 @@ private:
 //            ├─ ResistiveCurrentSource(Ig, Rf)   // ideal current source Ig with parallel Rf
 //            └─ Capacitor(Cj)
 // vOut = -(voltage across the feedback network)   (inverting; sign verified by the DC-step test).
-class ZenerFeedbackClipper
+//
+// Templated on OmegaProvider (defaulted to AccurateOmega, production-unchanged) so the Phase-9
+// FeatureProfile probe can A/B it against chowdsp::Omega::Omega (omega4) at compile time without
+// touching this class's production instantiation (dsp.md "HQ / Eco mode" / build.md FeatureProfile).
+template <typename OmegaProvider = AccurateOmega> class ZenerFeedbackClipper
 {
 public:
     ZenerFeedbackClipper() = default;
@@ -173,9 +177,9 @@ public:
 private:
     double oneOverRin = 1.0 / 10.0e3;
 
-    wdft::ResistiveCurrentSourceT<double> src{ 220.0e3 };
-    wdft::CapacitorT<double> cj{ 150.0e-12 };
-    wdft::WDFParallelT<double, decltype(src), decltype(cj)> par{ src, cj };
-    ZenerPairT<double, decltype(par)> zener{ par };
+    wdft::ResistiveCurrentSourceT<double> src{220.0e3};
+    wdft::CapacitorT<double> cj{150.0e-12};
+    wdft::WDFParallelT<double, decltype(src), decltype(cj)> par{src, cj};
+    ZenerPairT<double, decltype(par), OmegaProvider> zener{par};
 };
 } // namespace nalr

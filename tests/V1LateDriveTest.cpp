@@ -29,11 +29,15 @@ double peakOut(nalr::ZenerDriveModule& m, double amp, double f, double fs)
     for (int n = 0; n < total; ++n)
     {
         const double y = m.process(amp * std::sin(2.0 * kPi * f * (double) n / fs));
-        if (n > settle) pk = std::max(pk, std::abs(y));
+        if (n > settle)
+            pk = std::max(pk, std::abs(y));
     }
     return pk;
 }
-double gainDb(nalr::ZenerDriveModule& m, double amp, double f, double fs) { return 20.0 * std::log10(peakOut(m, amp, f, fs) / amp); }
+double gainDb(nalr::ZenerDriveModule& m, double amp, double f, double fs)
+{
+    return 20.0 * std::log10(peakOut(m, amp, f, fs) / amp);
+}
 
 // THD of a 1 kHz sine (harmonics 2..8 vs fundamental) via a direct DFT -- a solver-divergence tripwire.
 double thd(nalr::ZenerDriveModule& m, double amp, double fs)
@@ -41,8 +45,10 @@ double thd(nalr::ZenerDriveModule& m, double amp, double fs)
     const double f0 = 1000.0;
     const int N = (int) (fs / f0) * 40; // integer periods
     // settle
-    for (int n = 0; n < N; ++n) m.process(amp * std::sin(2.0 * kPi * f0 * (double) n / fs));
-    auto mag = [&](double fh) {
+    for (int n = 0; n < N; ++n)
+        m.process(amp * std::sin(2.0 * kPi * f0 * (double) n / fs));
+    auto mag = [&](double fh)
+    {
         double re = 0.0, im = 0.0;
         for (int n = 0; n < N; ++n)
         {
@@ -54,7 +60,11 @@ double thd(nalr::ZenerDriveModule& m, double amp, double fs)
     };
     const double fund = mag(f0);
     double harm = 0.0;
-    for (int h = 2; h <= 8; ++h) { const double mh = mag(f0 * h); harm += mh * mh; }
+    for (int h = 2; h <= 8; ++h)
+    {
+        const double mh = mag(f0 * h);
+        harm += mh * mh;
+    }
     return std::sqrt(harm) / fund;
 }
 } // namespace
@@ -62,7 +72,8 @@ double thd(nalr::ZenerDriveModule& m, double amp, double fs)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
@@ -93,8 +104,8 @@ int main()
     {
         std::printf("      module thresholdVolts() = %.2f V\n", drive.thresholdVolts());
         drive.setDrive(0.5);
-        const double outSmall = peakOut(drive, 0.05, 1000.0, fs);  // small: linear
-        const double outLarge = peakOut(drive, 30.0, 1000.0, fs);  // huge: hard against the zener
+        const double outSmall = peakOut(drive, 0.05, 1000.0, fs); // small: linear
+        const double outLarge = peakOut(drive, 30.0, 1000.0, fs); // huge: hard against the zener
         std::printf("      out @ 0.05 V in = %.3f V (linear) ; out @ 30 V in = %.3f V (clamped)\n", outSmall, outLarge);
         check(outLarge > 3.4 && outLarge < 4.1, "large-signal output clamps at ~+-3.9 V (zener Vth)");
         check(outSmall < 2.0, "small-signal output still linear (below the ~2.8 V knee)");
@@ -102,8 +113,8 @@ int main()
         drive.setDrive(1.0);
         const double gLin = peakOut(drive, 1.0e-4, 1000.0, fs) / 1.0e-4;
         const double outAtOnset = peakOut(drive, 2.8 / gLin, 1000.0, fs);
-        std::printf("      max-DRIVE onset: linear gain %.0fx -> knee reached ~%.1f mV in, out %.2f V\n",
-                    gLin, 1000.0 * 2.8 / gLin, outAtOnset);
+        std::printf("      max-DRIVE onset: linear gain %.0fx -> knee reached ~%.1f mV in, out %.2f V\n", gLin,
+                    1000.0 * 2.8 / gLin, outAtOnset);
         check(outAtOnset > 2.2 && outAtOnset < 3.6, "clipping onsets near the ~2.8-3.9 V knee, not early/late");
     }
 
@@ -118,13 +129,15 @@ int main()
         nalr::V1EarlyDriveStage v1e;
         v1e.prepare(fs);
         v1e.setDrive(1.0);
-        auto v1eGainDb = [&](double f) {
+        auto v1eGainDb = [&](double f)
+        {
             const int total = (int) (fs * 0.15), settle = total / 2;
             double pk = 0.0;
             for (int n = 0; n < total; ++n)
             {
                 const double y = v1e.process(1.0e-3 * std::sin(2.0 * kPi * f * (double) n / fs));
-                if (n > settle) pk = std::max(pk, std::abs(y));
+                if (n > settle)
+                    pk = std::max(pk, std::abs(y));
             }
             return 20.0 * std::log10(pk / 1.0e-3);
         };
@@ -140,7 +153,8 @@ int main()
         drive.reset();
         drive.setDrive(0.0); // 4.4x: +0.5 V in -> ~+2.2 V, still linear
         double y = 0.0;
-        for (int n = 0; n < 2000; ++n) y = drive.process(0.5);
+        for (int n = 0; n < 2000; ++n)
+            y = drive.process(0.5);
         std::printf("      DC step +0.5 V in -> %.3f V out\n", y);
         check(y > 1.5, "positive input -> positive output (net non-inverting)");
     }
@@ -150,21 +164,23 @@ int main()
     {
         bool finite = true;
         double prevThd = -1.0;
-        for (double sr : { 44100.0, 96000.0 })
+        for (double sr : {44100.0, 96000.0})
         {
             nalr::ZenerDriveModule d;
             d.setParams(nalr::ZenerDriveModule::v1LateParams());
             d.prepare(sr);
             d.setDrive(0.7);
-            for (double amp : { 0.05, 0.5, 5.0 })
+            for (double amp : {0.05, 0.5, 5.0})
             {
                 const double t = thd(d, amp, sr);
-                if (!std::isfinite(t)) finite = false;
+                if (!std::isfinite(t))
+                    finite = false;
                 std::printf("      sr %.0f amp %.2f: THD %.4f\n", sr, amp, t);
             }
             // sanity: THD at a fixed drive should be similar across sample rates
             const double t96 = thd(d, 5.0, sr);
-            if (prevThd >= 0.0) check(std::abs(t96 - prevThd) < 0.05, "THD @ 5 V stable across sample rates");
+            if (prevThd >= 0.0)
+                check(std::abs(t96 - prevThd) < 0.05, "THD @ 5 V stable across sample rates");
             prevThd = t96;
         }
         check(finite, "output finite (no NaN/Inf) across sample rates + drive levels");

@@ -29,7 +29,7 @@ class NodalCircuit
 {
 public:
     static constexpr int kDatum = -1;
-    static constexpr int kInput = -2;  // first driven input; further inputs are -3, -4, ...
+    static constexpr int kInput = -2; // first driven input; further inputs are -3, -4, ...
     static constexpr int kInput2 = -3;
     static constexpr int kMaxInputs = 4;
     static constexpr int kMaxDim = 16; // internal nodes + op-amp current unknowns
@@ -42,13 +42,13 @@ public:
     // Returns the resistor's index, for later setResistorValue() (e.g. pots). Call rebuild() after.
     int addResistor(int a, int b, double R)
     {
-        resistors.push_back({ a, b, 1.0 / R });
+        resistors.push_back({a, b, 1.0 / R});
         return (int) resistors.size() - 1;
     }
     void setResistorValue(int idx, double R) noexcept { resistors[(size_t) idx].g = 1.0 / R; }
-    void addCapacitor(int a, int b, double C) { caps.push_back({ a, b, C, 0.0, 0.0 }); }
+    void addCapacitor(int a, int b, double C) { caps.push_back({a, b, C, 0.0, 0.0}); }
     // Ideal op-amp: forces V(p) == V(nn); its output node sources whatever current is needed.
-    void addOpAmp(int pNode, int nNode, int outNode) { opamps.push_back({ pNode, nNode, outNode }); }
+    void addOpAmp(int pNode, int nNode, int outNode) { opamps.push_back({pNode, nNode, outNode}); }
     void addUnityBuffer(int inNode, int outNode) { addOpAmp(inNode, outNode, outNode); }
     void setOutputNode(int node) noexcept { outputNode = node; }
 
@@ -74,21 +74,33 @@ public:
         dim = numNodes + (int) opamps.size();
         double M[kMaxDim * kMaxDim] = {};
 
-        auto stampG = [&](int a, int b, double g) {
-            if (a >= 0) M[a * dim + a] += g;
-            if (b >= 0) M[b * dim + b] += g;
-            if (a >= 0 && b >= 0) { M[a * dim + b] -= g; M[b * dim + a] -= g; }
+        auto stampG = [&](int a, int b, double g)
+        {
+            if (a >= 0)
+                M[a * dim + a] += g;
+            if (b >= 0)
+                M[b * dim + b] += g;
+            if (a >= 0 && b >= 0)
+            {
+                M[a * dim + b] -= g;
+                M[b * dim + a] -= g;
+            }
         };
-        for (const auto& r : resistors) stampG(r.a, r.b, r.g);
-        for (const auto& c : caps) stampG(c.a, c.b, c.Gc);
+        for (const auto& r : resistors)
+            stampG(r.a, r.b, r.g);
+        for (const auto& c : caps)
+            stampG(c.a, c.b, c.Gc);
 
         for (int j = 0; j < (int) opamps.size(); ++j)
         {
             const int row = numNodes + j; // current-unknown / constraint index
             const auto& o = opamps[(size_t) j];
-            if (o.out >= 0) M[o.out * dim + row] += 1.0;         // output current enters KCL of out node
-            if (o.p >= 0) M[row * dim + o.p] += 1.0;             // constraint: V(p) - V(n) = 0
-            if (o.n >= 0) M[row * dim + o.n] -= 1.0;
+            if (o.out >= 0)
+                M[o.out * dim + row] += 1.0; // output current enters KCL of out node
+            if (o.p >= 0)
+                M[row * dim + o.p] += 1.0; // constraint: V(p) - V(n) = 0
+            if (o.n >= 0)
+                M[row * dim + o.n] -= 1.0;
         }
 
         invert(M, dim, Minv);
@@ -96,14 +108,14 @@ public:
 
     inline double process(double vin) noexcept
     {
-        const double vins[kMaxInputs] = { vin, 0.0, 0.0, 0.0 };
+        const double vins[kMaxInputs] = {vin, 0.0, 0.0, 0.0};
         return solve(vins);
     }
 
     // Two-input form (e.g. BLEND: dry on kInput, wet on kInput2).
     inline double process(double vin0, double vin1) noexcept
     {
-        const double vins[kMaxInputs] = { vin0, vin1, 0.0, 0.0 };
+        const double vins[kMaxInputs] = {vin0, vin1, 0.0, 0.0};
         return solve(vins);
     }
 
@@ -118,17 +130,23 @@ private:
         // internal node.
         for (const auto& r : resistors)
         {
-            if (isInput(r.a) && r.b >= 0) rhs[r.b] += r.g * vinOf(r.a);
-            else if (isInput(r.b) && r.a >= 0) rhs[r.a] += r.g * vinOf(r.b);
+            if (isInput(r.a) && r.b >= 0)
+                rhs[r.b] += r.g * vinOf(r.a);
+            else if (isInput(r.b) && r.a >= 0)
+                rhs[r.a] += r.g * vinOf(r.b);
         }
         // Capacitors: Norton history source (+Ieq into a, -Ieq out of b) plus, for an input-coupled
         // cap, the companion conductance term Gc*vin into the far internal node (same as a resistor).
         for (const auto& c : caps)
         {
-            if (c.a >= 0) rhs[c.a] += c.Ieq;
-            if (c.b >= 0) rhs[c.b] -= c.Ieq;
-            if (isInput(c.a) && c.b >= 0) rhs[c.b] += c.Gc * vinOf(c.a);
-            else if (isInput(c.b) && c.a >= 0) rhs[c.a] += c.Gc * vinOf(c.b);
+            if (c.a >= 0)
+                rhs[c.a] += c.Ieq;
+            if (c.b >= 0)
+                rhs[c.b] -= c.Ieq;
+            if (isInput(c.a) && c.b >= 0)
+                rhs[c.b] += c.Gc * vinOf(c.a);
+            else if (isInput(c.b) && c.a >= 0)
+                rhs[c.a] += c.Gc * vinOf(c.b);
         }
 
         double x[kMaxDim] = {};
@@ -140,9 +158,7 @@ private:
             x[i] = s;
         }
 
-        auto V = [&](int node) -> double {
-            return node == kDatum ? 0.0 : isInput(node) ? vinOf(node) : x[node];
-        };
+        auto V = [&](int node) -> double { return node == kDatum ? 0.0 : isInput(node) ? vinOf(node) : x[node]; };
 
         for (auto& c : caps) // trapezoidal cap state update: Ieq_next = 2*Gc*v - Ieq.
         {
@@ -153,25 +169,68 @@ private:
         return V(outputNode);
     }
 
-    struct Resistor { int a, b; double g; };
-    struct Cap { int a, b; double C, Gc, Ieq; };
-    struct OpAmp { int p, n, out; };
+    struct Resistor
+    {
+        int a, b;
+        double g;
+    };
+    struct Cap
+    {
+        int a, b;
+        double C, Gc, Ieq;
+    };
+    struct OpAmp
+    {
+        int p, n, out;
+    };
 
     static bool invert(const double* A, int n, double* out) noexcept
     {
         double m[kMaxDim][2 * kMaxDim] = {};
-        for (int i = 0; i < n; ++i) { for (int j = 0; j < n; ++j) m[i][j] = A[i * n + j]; m[i][n + i] = 1.0; }
+        for (int i = 0; i < n; ++i)
+        {
+            for (int j = 0; j < n; ++j)
+                m[i][j] = A[i * n + j];
+            m[i][n + i] = 1.0;
+        }
         for (int col = 0; col < n; ++col)
         {
-            int piv = col; double best = std::abs(m[col][col]);
-            for (int r = col + 1; r < n; ++r) { const double v = std::abs(m[r][col]); if (v > best) { best = v; piv = r; } }
-            if (best < 1e-300) return false;
-            if (piv != col) for (int j = 0; j < 2 * n; ++j) { const double t = m[col][j]; m[col][j] = m[piv][j]; m[piv][j] = t; }
+            int piv = col;
+            double best = std::abs(m[col][col]);
+            for (int r = col + 1; r < n; ++r)
+            {
+                const double v = std::abs(m[r][col]);
+                if (v > best)
+                {
+                    best = v;
+                    piv = r;
+                }
+            }
+            if (best < 1e-300)
+                return false;
+            if (piv != col)
+                for (int j = 0; j < 2 * n; ++j)
+                {
+                    const double t = m[col][j];
+                    m[col][j] = m[piv][j];
+                    m[piv][j] = t;
+                }
             const double d = m[col][col];
-            for (int j = 0; j < 2 * n; ++j) m[col][j] /= d;
-            for (int r = 0; r < n; ++r) { if (r == col) continue; const double f = m[r][col]; if (f != 0.0) for (int j = 0; j < 2 * n; ++j) m[r][j] -= f * m[col][j]; }
+            for (int j = 0; j < 2 * n; ++j)
+                m[col][j] /= d;
+            for (int r = 0; r < n; ++r)
+            {
+                if (r == col)
+                    continue;
+                const double f = m[r][col];
+                if (f != 0.0)
+                    for (int j = 0; j < 2 * n; ++j)
+                        m[r][j] -= f * m[col][j];
+            }
         }
-        for (int i = 0; i < n; ++i) for (int j = 0; j < n; ++j) out[i * n + j] = m[i][n + j];
+        for (int i = 0; i < n; ++i)
+            for (int j = 0; j < n; ++j)
+                out[i * n + j] = m[i][n + j];
         return true;
     }
 

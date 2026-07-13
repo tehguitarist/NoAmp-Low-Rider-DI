@@ -25,7 +25,7 @@ double measureMagnitudeDb(double fs, double freq)
 
     auto s1 = makeSeries<double>(r1, c1);
     auto p1 = makeInverter<double>(s1);
-    IdealVoltageSourceT<double, decltype(p1)> vs { p1 };
+    IdealVoltageSourceT<double, decltype(p1)> vs{p1};
 
     const int numSamples = (int) fs; // 1 second, plenty of settling + measurement window
     const int settleSamples = numSamples / 4;
@@ -72,15 +72,15 @@ int main()
 {
     bool allPass = true;
 
-    for (double fs : { 44100.0, 48000.0, 96000.0 })
+    for (double fs : {44100.0, 48000.0, 96000.0})
     {
         const double measuredFc = findMinus3dBPoint(fs);
         const double errorPct = 100.0 * std::abs(measuredFc - kFc) / kFc;
         const bool pass = errorPct < 1.0;
         allPass &= pass;
 
-        std::printf("fs=%.0f Hz: analytic fc=%.3f Hz, measured -3dB point=%.3f Hz, error=%.4f%% [%s]\n",
-                    fs, kFc, measuredFc, errorPct, pass ? "PASS" : "FAIL");
+        std::printf("fs=%.0f Hz: analytic fc=%.3f Hz, measured -3dB point=%.3f Hz, error=%.4f%% [%s]\n", fs, kFc,
+                    measuredFc, errorPct, pass ? "PASS" : "FAIL");
     }
 
     if (!allPass)

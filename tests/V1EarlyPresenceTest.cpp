@@ -47,10 +47,18 @@ cd hNotch(double w)
 
     // unknowns [J2, L1, L2, P]
     cd A[4][4] = {}, b[4] = {};
-    A[0][0] = yR16 + yC17 + yC26; A[0][2] = -yC17; A[0][3] = -yC26; b[0] = yR16; // J2 (B=1)
-    A[1][1] = yC19 + yC18 + yR3;  A[1][2] = -yC18;                  b[1] = yC19; // L1
-    A[2][0] = -yC17; A[2][1] = -yC18; A[2][2] = yC17 + yC18 + yR11;              // L2
-    A[3][0] = -yC26; A[3][3] = yC26 + yR22;                                      // P
+    A[0][0] = yR16 + yC17 + yC26;
+    A[0][2] = -yC17;
+    A[0][3] = -yC26;
+    b[0] = yR16; // J2 (B=1)
+    A[1][1] = yC19 + yC18 + yR3;
+    A[1][2] = -yC18;
+    b[1] = yC19; // L1
+    A[2][0] = -yC17;
+    A[2][1] = -yC18;
+    A[2][2] = yC17 + yC18 + yR11; // L2
+    A[3][0] = -yC26;
+    A[3][3] = yC26 + yR22; // P
 
     // Gaussian elimination with partial pivot.
     for (int c = 0; c < 4; ++c)
@@ -59,16 +67,20 @@ cd hNotch(double w)
         for (int r = c + 1; r < 4; ++r)
             if (std::abs(A[r][c]) > std::abs(A[piv][c]))
                 piv = r;
-        for (int j = 0; j < 4; ++j) std::swap(A[c][j], A[piv][j]);
+        for (int j = 0; j < 4; ++j)
+            std::swap(A[c][j], A[piv][j]);
         std::swap(b[c], b[piv]);
         const cd d = A[c][c];
-        for (int j = 0; j < 4; ++j) A[c][j] /= d;
+        for (int j = 0; j < 4; ++j)
+            A[c][j] /= d;
         b[c] /= d;
         for (int r = 0; r < 4; ++r)
         {
-            if (r == c) continue;
+            if (r == c)
+                continue;
             const cd f = A[r][c];
-            for (int j = 0; j < 4; ++j) A[r][j] -= f * A[c][j];
+            for (int j = 0; j < 4; ++j)
+                A[r][j] -= f * A[c][j];
             b[r] -= f * b[c];
         }
     }
@@ -127,7 +139,11 @@ double findNotch(double presence01, double& depthDb, bool analytic, double fs)
     for (double f = 400.0; f <= 1600.0; f *= 1.01)
     {
         const double d = at(f);
-        if (d < bestDb) { bestDb = d; bestF = f; }
+        if (d < bestDb)
+        {
+            bestDb = d;
+            bestF = f;
+        }
     }
     depthDb = bestDb;
     return bestF;
@@ -140,7 +156,11 @@ double findOpAmpPeak(double presence01, double f0, double f1, double& peakDb)
     for (double f = f0; f <= f1; f *= 1.01)
     {
         const double d = opAmpDb(f, presence01);
-        if (d > bestDb) { bestDb = d; bestF = f; }
+        if (d > bestDb)
+        {
+            bestDb = d;
+            bestF = f;
+        }
     }
     peakDb = bestDb;
     return bestF;
@@ -150,7 +170,8 @@ double findOpAmpPeak(double presence01, double f0, double f1, double& peakDb)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
@@ -162,18 +183,18 @@ int main()
     {
         using namespace nalr::rtype;
         constexpr int NP = 8, NN = 4, UP = 0;
-        const int np[NP] = { 0, 0, 0, 1, 2, 2, 3, 1 };
-        const int nm[NP] = { kDatum, 1, 2, 3, 3, kDatum, kDatum, kDatum };
+        const int np[NP] = {0, 0, 0, 1, 2, 2, 3, 1};
+        const int nm[NP] = {kDatum, 1, 2, 3, 3, kDatum, kDatum, kDatum};
         // Representative port impedances at fs=96k: caps R=1/(2*C*fs).
         auto capR = [&](double C) { return 1.0 / (2.0 * C * fs); };
         double portR[NP];
-        portR[1] = R16;                 // R16
-        portR[2] = capR(C19);           // C19
-        portR[3] = capR(C17);           // C17
-        portR[4] = capR(C18);           // C18
-        portR[5] = R3;                  // R3
-        portR[6] = R11;                 // R11
-        portR[7] = capR(C26) + R22c;    // outBranch series
+        portR[1] = R16;              // R16
+        portR[2] = capR(C19);        // C19
+        portR[3] = capR(C17);        // C17
+        portR[4] = capR(C18);        // C18
+        portR[5] = R3;               // R3
+        portR[6] = R11;              // R11
+        portR[7] = capR(C26) + R22c; // outBranch series
         const double Rup = drivingPointResistance(NP, NN, np, nm, portR, UP);
         portR[UP] = Rup;
         double S[NP * NP];
@@ -181,7 +202,8 @@ int main()
         check(std::abs(S[UP * NP + UP]) < 1e-9, "adapted up-port reflection S[up][up] == 0");
         // Passivity sanity: no |S_ij| should blow up.
         double maxAbs = 0.0;
-        for (int i = 0; i < NP * NP; ++i) maxAbs = std::max(maxAbs, std::abs(S[i]));
+        for (int i = 0; i < NP * NP; ++i)
+            maxAbs = std::max(maxAbs, std::abs(S[i]));
         check(maxAbs < 3.0 && Rup > 0.0, "scattering entries bounded and Rup > 0");
         std::printf("      Rup(up-port driving-point) = %.1f ohm\n", Rup);
     }
@@ -198,18 +220,23 @@ int main()
         int nPts = 0;
         for (double f = 20.0; f <= 20000.0; f *= std::pow(10.0, 1.0 / 24.0)) // 24 pts/decade
         {
-            for (double p : { 0.0, 0.5, 1.0 })
+            for (double p : {0.0, 0.5, 1.0})
             {
-                if (f > loSkip && f < hiSkip) continue; // near-null: dB hypersensitive to warp
+                if (f > loSkip && f < hiSkip)
+                    continue; // near-null: dB hypersensitive to warp
                 const double a = analyticDb(f, p);
                 const double w = measureWdfDb(fs, f, p);
                 // Tolerance grows with frequency (bilinear warp) and is looser very high up.
                 const double tol = (f < 8000.0) ? 0.6 : (f < 15000.0 ? 1.5 : 3.0);
-                if (std::abs(w - a) > std::abs(worst)) { worst = w - a; worstF = f; }
+                if (std::abs(w - a) > std::abs(worst))
+                {
+                    worst = w - a;
+                    worstF = f;
+                }
                 if (std::abs(w - a) > tol)
                 {
-                    std::printf("      mismatch @ %.0f Hz p=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n",
-                                f, p, w, a, tol);
+                    std::printf("      mismatch @ %.0f Hz p=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n", f, p, w, a,
+                                tol);
                     pass = false;
                 }
                 ++nPts;
@@ -230,8 +257,8 @@ int main()
         const double fA = findNotch(0.0, dA, true, fs);
         const double fW = findNotch(0.0, dW, false, fs);
         const double shoulder = analyticDb(200.0, 0.0); // op-amp gain is flat here, so this isolates notch depth
-        std::printf("      notch: analytic %.1f Hz, depth %.1f dB below 200 Hz shoulder; wdf %.1f Hz\n",
-                    fA, shoulder - dA, fW);
+        std::printf("      notch: analytic %.1f Hz, depth %.1f dB below 200 Hz shoulder; wdf %.1f Hz\n", fA,
+                    shoulder - dA, fW);
         check(fA > 800.0 / 1.26 && fA < 800.0 * 1.26, "notch frequency within 1/3 oct of 800 Hz");
         check((shoulder - dA) > 20.0, "twin-T notch is a deep stage-level null (>20 dB)");
         check(std::abs(fW - fA) / fA < 0.05, "wdf notch frequency tracks analytic");
@@ -243,8 +270,8 @@ int main()
         const double fMin = findOpAmpPeak(0.0, 200.0, 15000.0, pkMin);
         const double fMid = findOpAmpPeak(0.5, 200.0, 15000.0, pkMid);
         const double fMax = findOpAmpPeak(1.0, 200.0, 15000.0, pkMax);
-        std::printf("      op-amp peak: min %.0f Hz/%.1f dB, mid %.0f Hz/%.1f dB, max %.0f Hz/%.1f dB\n",
-                    fMin, pkMin, fMid, pkMid, fMax, pkMax);
+        std::printf("      op-amp peak: min %.0f Hz/%.1f dB, mid %.0f Hz/%.1f dB, max %.0f Hz/%.1f dB\n", fMin, pkMin,
+                    fMid, pkMid, fMax, pkMax);
         check(pkMin > 10.0 && pkMin < 14.0, "min-PRESENCE gain ~ +12 dB (10..14)");
         check(pkMid > 14.5 && pkMid < 18.5, "mid-PRESENCE gain ~ +16.5 dB (14.5..18.5)");
         check(pkMax > 32.0 && pkMax < 36.0, "max-PRESENCE peak ~ +34 dB (32..36)");
@@ -254,10 +281,11 @@ int main()
         // WDF op-amp block tracks the analytic op-amp block (independent of the notch path).
         double worst = 0.0;
         for (double f = 100.0; f <= 12000.0; f *= std::pow(10.0, 1.0 / 12.0))
-            for (double p : { 0.0, 0.5, 1.0 })
+            for (double p : {0.0, 0.5, 1.0})
             {
                 const double d = measureWdfDb(fs, f, p, /*op-amp only*/ 1) - opAmpDb(f, p);
-                if (std::abs(d) > std::abs(worst)) worst = d;
+                if (std::abs(d) > std::abs(worst))
+                    worst = d;
             }
         std::printf("      wdf op-amp vs analytic op-amp: worst delta %.2f dB\n", worst);
         check(std::abs(worst) < 1.5, "WDF op-amp block matches analytic op-amp block");

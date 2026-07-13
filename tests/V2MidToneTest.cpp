@@ -26,7 +26,11 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 
-struct CElem { int a, b; cd Y; };
+struct CElem
+{
+    int a, b;
+    cd Y;
+};
 
 // Generic complex-MNA solve: elements + one ideal op-amp (p=datum, n=nVnode, out=OUTnode). Returns
 // V(OUT) with Vin=1 on kInput(-2). n = numNodes+1 (op-amp current unknown appended). Mirrors the
@@ -41,11 +45,19 @@ cd solveMNA(const std::vector<CElem>& e, int numNodes, int nVnode, int outNode)
     {
         const int a = el.a, b = el.b;
         const cd Y = el.Y;
-        if (a >= 0) M[(size_t) (a * n + a)] += Y;
-        if (b >= 0) M[(size_t) (b * n + b)] += Y;
-        if (a >= 0 && b >= 0) { M[(size_t) (a * n + b)] -= Y; M[(size_t) (b * n + a)] -= Y; }
-        if (a < 0 && b >= 0) rhs[(size_t) b] += Y * Vk(a);
-        if (b < 0 && a >= 0) rhs[(size_t) a] += Y * Vk(b);
+        if (a >= 0)
+            M[(size_t) (a * n + a)] += Y;
+        if (b >= 0)
+            M[(size_t) (b * n + b)] += Y;
+        if (a >= 0 && b >= 0)
+        {
+            M[(size_t) (a * n + b)] -= Y;
+            M[(size_t) (b * n + a)] -= Y;
+        }
+        if (a < 0 && b >= 0)
+            rhs[(size_t) b] += Y * Vk(a);
+        if (b < 0 && a >= 0)
+            rhs[(size_t) a] += Y * Vk(b);
     }
     // Ideal op-amp: output current enters KCL(OUT); constraint V(p=datum) - V(nV) = 0 -> -V(nV) = 0.
     M[(size_t) (outNode * n + cur)] += cd(1, 0);
@@ -57,20 +69,28 @@ cd solveMNA(const std::vector<CElem>& e, int numNodes, int nVnode, int outNode)
         for (int r = col + 1; r < n; ++r)
         {
             const double v = std::abs(M[(size_t) (r * n + col)]);
-            if (v > best) { best = v; piv = r; }
+            if (v > best)
+            {
+                best = v;
+                piv = r;
+            }
         }
         if (piv != col)
         {
-            for (int j = 0; j < n; ++j) std::swap(M[(size_t) (col * n + j)], M[(size_t) (piv * n + j)]);
+            for (int j = 0; j < n; ++j)
+                std::swap(M[(size_t) (col * n + j)], M[(size_t) (piv * n + j)]);
             std::swap(rhs[(size_t) col], rhs[(size_t) piv]);
         }
         const cd d = M[(size_t) (col * n + col)];
         for (int r = 0; r < n; ++r)
         {
-            if (r == col) continue;
+            if (r == col)
+                continue;
             const cd fct = M[(size_t) (r * n + col)] / d;
-            if (fct == cd(0, 0)) continue;
-            for (int j = 0; j < n; ++j) M[(size_t) (r * n + j)] -= fct * M[(size_t) (col * n + j)];
+            if (fct == cd(0, 0))
+                continue;
+            for (int j = 0; j < n; ++j)
+                M[(size_t) (r * n + j)] -= fct * M[(size_t) (col * n + j)];
             rhs[(size_t) r] -= fct * rhs[(size_t) col];
         }
     }
@@ -89,26 +109,32 @@ cd hMid(double f, double mid01, bool low430)
     auto cl = [&](double r) { return r < kMin ? kMin : r; };
     const double rShift = low430 ? nalr::kSwitchShort : nalr::kSwitchOpen;
     const std::vector<CElem> e = {
-        { -2, 0, R(100.0e3) },              // R23 kInput -> nV
-        { 0, 1, R(100.0e3) },               // R55 feedback
-        { 0, 1, Cc(100.0e-12) },            // C11 feedback rolloff
-        { -2, 2, R(3.3e3) },                // R21 kInput -> m1
-        { 2, 3, R(cl((1.0 - mid01) * kPot)) }, // VR1 m1->wiper
-        { 3, 4, R(cl(mid01 * kPot)) },      // VR1 wiper->m2
-        { 4, 1, R(3.3e3) },                 // R62 m2 -> OUT
-        { 0, 3, Cc(10.0e-9) },              // C21 nV -> wiper (wiper leg)
-        { 0, 5, Cc(10.0e-9) },              // C19 nV -> nBL
-        { 5, 3, R(1.0e6) },                 // R27 nBL -> wiper
-        { 5, 3, R(rShift) },                // SW5B short nBL<->wiper
-        { 2, 4, Cc(10.0e-9) },              // C13 m1 -> m2 (across-pot)
-        { 6, 4, Cc(10.0e-9) },              // C36 nLbot -> m2
-        { 2, 6, R(1.0e6) },                 // R13 m1 -> nLbot
-        { 2, 6, R(rShift) },                // SW5A short m1<->nLbot
+        {-2, 0, R(100.0e3)},                 // R23 kInput -> nV
+        {0, 1, R(100.0e3)},                  // R55 feedback
+        {0, 1, Cc(100.0e-12)},               // C11 feedback rolloff
+        {-2, 2, R(3.3e3)},                   // R21 kInput -> m1
+        {2, 3, R(cl((1.0 - mid01) * kPot))}, // VR1 m1->wiper
+        {3, 4, R(cl(mid01 * kPot))},         // VR1 wiper->m2
+        {4, 1, R(3.3e3)},                    // R62 m2 -> OUT
+        {0, 3, Cc(10.0e-9)},                 // C21 nV -> wiper (wiper leg)
+        {0, 5, Cc(10.0e-9)},                 // C19 nV -> nBL
+        {5, 3, R(1.0e6)},                    // R27 nBL -> wiper
+        {5, 3, R(rShift)},                   // SW5B short nBL<->wiper
+        {2, 4, Cc(10.0e-9)},                 // C13 m1 -> m2 (across-pot)
+        {6, 4, Cc(10.0e-9)},                 // C36 nLbot -> m2
+        {2, 6, R(1.0e6)},                    // R13 m1 -> nLbot
+        {2, 6, R(rShift)},                   // SW5A short m1<->nLbot
     };
     return solveMNA(e, 7, 0, 1);
 }
-double midDb(double f, double mid01, bool low430) { return 20.0 * std::log10(std::abs(hMid(f, mid01, low430))); }
-double midEffect(double f, double mid01, bool low430) { return midDb(f, mid01, low430) - midDb(f, 0.5, low430); }
+double midDb(double f, double mid01, bool low430)
+{
+    return 20.0 * std::log10(std::abs(hMid(f, mid01, low430)));
+}
+double midEffect(double f, double mid01, bool low430)
+{
+    return midDb(f, mid01, low430) - midDb(f, 0.5, low430);
+}
 
 // --- BASS/TREBLE stage (U6B) analytic reference. Node map matches V2PeakingToneStage::build():
 // nV=0 OUT=1 T_IN=2 t1=3 tw=4 t2=5 b1=6 bw=7 b2=8 X1=9 X2=10 ; op-amp current unknown = index 11.
@@ -121,32 +147,38 @@ cd hTone(double f, double bass01, double treble01, bool bass40)
     const double r80 = bass40 ? nalr::kSwitchOpen : 100.0e3;
     const double r40 = bass40 ? 100.0e3 : nalr::kSwitchOpen;
     const std::vector<CElem> e = {
-        { -2, 2, Cc(2.0e-6) },                     // C12||C23 input coupling
-        { 2, 0, R(1.0e6) },                        // R30 direct arm
-        { 0, 1, R(1.0e6) },                        // R35 feedback
-        { 0, 1, Cc(22.0e-12) },                    // C32 feedback rolloff
-        { 2, 3, R(3.3e3) },                        // R31
-        { 3, 4, R(cl((1.0 - treble01) * kPot)) },  // VR57 t1->wiper
-        { 4, 5, R(cl(treble01 * kPot)) },          // VR57 wiper->t2
-        { 5, 1, R(3.3e3) },                        // R34
-        { 3, 5, Cc(4.7e-9) },                      // C30 across VR57
-        { 5, 1, Cc(22.0e-9) },                     // C31 t2->OUT
-        { 4, 0, Cc(1.0e-9) },                      // C29 wiper->nV
-        { 2, 6, R(3.3e3) },                        // R29
-        { 6, 7, R(cl((1.0 - bass01) * kPot)) },    // VR48 b1->wiper
-        { 7, 8, R(cl(bass01 * kPot)) },            // VR48 wiper->b2
-        { 8, 1, R(3.3e3) },                        // R33
-        { 6, 8, Cc(100.0e-9) },                    // C27 across VR48
-        { 7, 9, Cc(10.0e-9) },                     // C28 wiper->X1
-        { 7, 10, Cc(47.0e-9) },                    // C20 wiper->X2
-        { 9, 10, R(1.0e6) },                       // R4 X1<->X2
-        { 9, 0, R(r80) },                          // R32 (80 Hz) X1->nV
-        { 10, 0, R(r40) },                         // R32 (40 Hz) X2->nV
+        {-2, 2, Cc(2.0e-6)},                    // C12||C23 input coupling
+        {2, 0, R(1.0e6)},                       // R30 direct arm
+        {0, 1, R(1.0e6)},                       // R35 feedback
+        {0, 1, Cc(22.0e-12)},                   // C32 feedback rolloff
+        {2, 3, R(3.3e3)},                       // R31
+        {3, 4, R(cl((1.0 - treble01) * kPot))}, // VR57 t1->wiper
+        {4, 5, R(cl(treble01 * kPot))},         // VR57 wiper->t2
+        {5, 1, R(3.3e3)},                       // R34
+        {3, 5, Cc(4.7e-9)},                     // C30 across VR57
+        {5, 1, Cc(22.0e-9)},                    // C31 t2->OUT
+        {4, 0, Cc(1.0e-9)},                     // C29 wiper->nV
+        {2, 6, R(3.3e3)},                       // R29
+        {6, 7, R(cl((1.0 - bass01) * kPot))},   // VR48 b1->wiper
+        {7, 8, R(cl(bass01 * kPot))},           // VR48 wiper->b2
+        {8, 1, R(3.3e3)},                       // R33
+        {6, 8, Cc(100.0e-9)},                   // C27 across VR48
+        {7, 9, Cc(10.0e-9)},                    // C28 wiper->X1
+        {7, 10, Cc(47.0e-9)},                   // C20 wiper->X2
+        {9, 10, R(1.0e6)},                      // R4 X1<->X2
+        {9, 0, R(r80)},                         // R32 (80 Hz) X1->nV
+        {10, 0, R(r40)},                        // R32 (40 Hz) X2->nV
     };
     return solveMNA(e, 11, 0, 1);
 }
-double toneDb(double f, double b, double t, bool bass40) { return 20.0 * std::log10(std::abs(hTone(f, b, t, bass40))); }
-double bassEffect(double f, double b, bool bass40) { return toneDb(f, b, 0.5, bass40) - toneDb(f, 0.5, 0.5, bass40); }
+double toneDb(double f, double b, double t, bool bass40)
+{
+    return 20.0 * std::log10(std::abs(hTone(f, b, t, bass40)));
+}
+double bassEffect(double f, double b, bool bass40)
+{
+    return toneDb(f, b, 0.5, bass40) - toneDb(f, 0.5, 0.5, bass40);
+}
 
 double findExtreme(double (*fn)(double), double f0, double f1, bool wantMax, double& atF)
 {
@@ -155,7 +187,11 @@ double findExtreme(double (*fn)(double), double f0, double f1, bool wantMax, dou
     for (double f = f0; f <= f1; f *= 1.01)
     {
         const double d = fn(f);
-        if ((wantMax && d > best) || (!wantMax && d < best)) { best = d; atF = f; }
+        if ((wantMax && d > best) || (!wantMax && d < best))
+        {
+            best = d;
+            atF = f;
+        }
     }
     return best;
 }
@@ -167,16 +203,29 @@ namespace
 {
 bool gLow430 = true;
 bool gBass40 = false;
-double midBoostFn(double f) { return midEffect(f, 1.0, gLow430); }
-double midCutFn(double f) { return midEffect(f, 0.0, gLow430); }
-double bassBoostFn(double f) { return bassEffect(f, 1.0, gBass40); }
-double bassCutFn(double f) { return bassEffect(f, 0.0, gBass40); }
+double midBoostFn(double f)
+{
+    return midEffect(f, 1.0, gLow430);
+}
+double midCutFn(double f)
+{
+    return midEffect(f, 0.0, gLow430);
+}
+double bassBoostFn(double f)
+{
+    return bassEffect(f, 1.0, gBass40);
+}
+double bassCutFn(double f)
+{
+    return bassEffect(f, 0.0, gBass40);
+}
 } // namespace
 
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
@@ -186,7 +235,7 @@ int main()
     // -------------------------------------------------------------------------------------------
     std::printf("MID (FR §7 V2): analytic peaking, both MID SHIFT throws\n");
     {
-        for (bool low430 : { true, false })
+        for (bool low430 : {true, false})
         {
             gLow430 = low430;
             double fB, fC;
@@ -203,8 +252,10 @@ int main()
         }
         // Centre detent flat; the two throws must give a ~2x centre ratio (the whole point of SHIFT).
         double f430, f850;
-        gLow430 = true;  findExtreme(midBoostFn, 100.0, 3000.0, true, f430);
-        gLow430 = false; findExtreme(midBoostFn, 100.0, 3000.0, true, f850);
+        gLow430 = true;
+        findExtreme(midBoostFn, 100.0, 3000.0, true, f430);
+        gLow430 = false;
+        findExtreme(midBoostFn, 100.0, 3000.0, true, f850);
         std::printf("      centre ratio (850-throw / 430-throw) = %.2f (expect ~2)\n", f850 / f430);
         check(f850 / f430 > 1.6 && f850 / f430 < 2.4, "MID SHIFT gives ~2x centre-frequency ratio");
         check(std::abs(midDb(1000.0, 0.5, true)) < 0.3 && std::abs(midDb(200.0, 0.5, true)) < 0.3,
@@ -248,8 +299,8 @@ int main()
         mid.prepare(fs);
         double worst = 0.0, worstF = 0.0;
         for (double f = 40.0; f <= 12000.0; f *= std::pow(10.0, 1.0 / 12.0))
-            for (bool low430 : { true, false })
-                for (double m : { 0.0, 0.5, 1.0 })
+            for (bool low430 : {true, false})
+                for (double m : {0.0, 0.5, 1.0})
                 {
                     mid.setShift(low430);
                     mid.setMid(m);
@@ -258,17 +309,22 @@ int main()
                     for (int nn = 0; nn < total; ++nn)
                     {
                         const double y = mid.process(0.3 * std::sin(2.0 * kPi * f * (double) nn / fs));
-                        if (nn > settle) peak = std::max(peak, std::abs(y));
+                        if (nn > settle)
+                            peak = std::max(peak, std::abs(y));
                     }
                     const double wdfDb = 20.0 * std::log10(peak / 0.3);
                     const double aDb = midDb(f, m, low430);
                     const double d = wdfDb - aDb;
                     const double tol = (f < 8000.0) ? 0.7 : 1.6;
-                    if (std::abs(d) > std::abs(worst)) { worst = d; worstF = f; }
+                    if (std::abs(d) > std::abs(worst))
+                    {
+                        worst = d;
+                        worstF = f;
+                    }
                     if (std::abs(d) > tol)
                     {
-                        std::printf("      mismatch @ %.0f Hz m=%.1f low430=%d: wdf=%.2f analytic=%.2f (tol %.2f)\n",
-                                    f, m, (int) low430, wdfDb, aDb, tol);
+                        std::printf("      mismatch @ %.0f Hz m=%.1f low430=%d: wdf=%.2f analytic=%.2f (tol %.2f)\n", f,
+                                    m, (int) low430, wdfDb, aDb, tol);
                         pass = false;
                     }
                 }
@@ -283,9 +339,8 @@ int main()
         tone.prepare(fs);
         double worst = 0.0, worstF = 0.0;
         for (double f = 30.0; f <= 12000.0; f *= std::pow(10.0, 1.0 / 12.0))
-            for (bool bass40 : { false, true })
-                for (auto bt : { std::pair<double, double> { 0.5, 0.5 }, { 1.0, 0.5 }, { 0.0, 0.5 },
-                                 { 0.5, 1.0 }, { 0.5, 0.0 } })
+            for (bool bass40 : {false, true})
+                for (auto bt : {std::pair<double, double>{0.5, 0.5}, {1.0, 0.5}, {0.0, 0.5}, {0.5, 1.0}, {0.5, 0.0}})
                 {
                     tone.setBassShift(bass40);
                     tone.setTone(bt.first, bt.second);
@@ -297,17 +352,23 @@ int main()
                     for (int nn = 0; nn < total; ++nn)
                     {
                         const double y = tone.process(0.3 * std::sin(2.0 * kPi * f * (double) nn / fs));
-                        if (nn > settle) peak = std::max(peak, std::abs(y));
+                        if (nn > settle)
+                            peak = std::max(peak, std::abs(y));
                     }
                     const double wdfDb = 20.0 * std::log10(peak / 0.3);
                     const double aDb = toneDb(f, bt.first, bt.second, bass40);
                     const double d = wdfDb - aDb;
                     const double tol = (f < 8000.0) ? 0.7 : 1.6;
-                    if (std::abs(d) > std::abs(worst)) { worst = d; worstF = f; }
+                    if (std::abs(d) > std::abs(worst))
+                    {
+                        worst = d;
+                        worstF = f;
+                    }
                     if (std::abs(d) > tol)
                     {
-                        std::printf("      mismatch @ %.0f Hz b=%.1f t=%.1f bass40=%d: wdf=%.2f analytic=%.2f (tol %.2f)\n",
-                                    f, bt.first, bt.second, (int) bass40, wdfDb, aDb, tol);
+                        std::printf(
+                            "      mismatch @ %.0f Hz b=%.1f t=%.1f bass40=%d: wdf=%.2f analytic=%.2f (tol %.2f)\n", f,
+                            bt.first, bt.second, (int) bass40, wdfDb, aDb, tol);
                         pass = false;
                     }
                 }

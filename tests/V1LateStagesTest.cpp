@@ -31,7 +31,11 @@ constexpr double kPi = 3.14159265358979323846;
 // trapezoidal companion. Agreement WDF<->this validates the discretisation; the §5/§6 SPICE targets
 // (separately) validate the topology. Node map matches V1LatePeakingToneStage::build():
 //   nV=0 OUT=1 T_IN=2 t1=3 tw=4 t2=5 b1=6 bw=7 b2=8 bwc=9 ; op-amp current unknown = index 10.
-struct CElem { int a, b; cd Y; };
+struct CElem
+{
+    int a, b;
+    cd Y;
+};
 
 cd hTone(double f, double bass01, double treble01)
 {
@@ -41,24 +45,24 @@ cd hTone(double f, double bass01, double treble01)
     const double kPot = 100.0e3, kMin = 0.5;
     auto cl = [&](double r) { return r < kMin ? kMin : r; };
     const std::vector<CElem> e = {
-        { -2, 2, Cc(2.2e-6) },                     // C25 (kInput -> T_IN)
-        { 2, 0, R(1.0e6) },                        // R29 direct arm
-        { 0, 1, R(1.0e6) },                        // R28 feedback
-        { 0, 1, Cc(22.0e-12) },                    // C29 feedback rolloff
-        { 2, 3, R(3.3e3) },                        // R51
-        { 3, 4, R(cl((1.0 - treble01) * kPot)) },  // VR2 t1->wiper
-        { 4, 5, R(cl(treble01 * kPot)) },          // VR2 wiper->t2
-        { 5, 1, R(3.3e3) },                        // R55
-        { 3, 5, Cc(4.7e-9) },                      // C21 across VR2 (t1-t2)
-        { 5, 1, Cc(22.0e-9) },                     // C7 across R55 (t2-OUT)
-        { 4, 0, Cc(1.0e-9) },                      // C20 wiper->nV
-        { 2, 6, R(3.3e3) },                        // R52
-        { 6, 7, R(cl((1.0 - bass01) * kPot)) },    // VR3 b1->wiper
-        { 7, 8, R(cl(bass01 * kPot)) },            // VR3 wiper->b2
-        { 8, 1, R(3.3e3) },                        // R54
-        { 6, 8, Cc(100.0e-9) },                    // C15 across VR3 (b1-b2)
-        { 7, 9, Cc(10.0e-9) },                     // C16 wiper->bwc
-        { 9, 0, R(100.0e3) },                      // R53 bwc->nV
+        {-2, 2, Cc(2.2e-6)},                    // C25 (kInput -> T_IN)
+        {2, 0, R(1.0e6)},                       // R29 direct arm
+        {0, 1, R(1.0e6)},                       // R28 feedback
+        {0, 1, Cc(22.0e-12)},                   // C29 feedback rolloff
+        {2, 3, R(3.3e3)},                       // R51
+        {3, 4, R(cl((1.0 - treble01) * kPot))}, // VR2 t1->wiper
+        {4, 5, R(cl(treble01 * kPot))},         // VR2 wiper->t2
+        {5, 1, R(3.3e3)},                       // R55
+        {3, 5, Cc(4.7e-9)},                     // C21 across VR2 (t1-t2)
+        {5, 1, Cc(22.0e-9)},                    // C7 across R55 (t2-OUT)
+        {4, 0, Cc(1.0e-9)},                     // C20 wiper->nV
+        {2, 6, R(3.3e3)},                       // R52
+        {6, 7, R(cl((1.0 - bass01) * kPot))},   // VR3 b1->wiper
+        {7, 8, R(cl(bass01 * kPot))},           // VR3 wiper->b2
+        {8, 1, R(3.3e3)},                       // R54
+        {6, 8, Cc(100.0e-9)},                   // C15 across VR3 (b1-b2)
+        {7, 9, Cc(10.0e-9)},                    // C16 wiper->bwc
+        {9, 0, R(100.0e3)},                     // R53 bwc->nV
     };
     const int n = 11;
     std::vector<cd> M((size_t) n * n, cd(0, 0)), rhs((size_t) n, cd(0, 0));
@@ -67,11 +71,19 @@ cd hTone(double f, double bass01, double treble01)
     {
         const int a = el.a, b = el.b;
         const cd Y = el.Y;
-        if (a >= 0) M[(size_t) (a * n + a)] += Y;
-        if (b >= 0) M[(size_t) (b * n + b)] += Y;
-        if (a >= 0 && b >= 0) { M[(size_t) (a * n + b)] -= Y; M[(size_t) (b * n + a)] -= Y; }
-        if (a < 0 && b >= 0) rhs[(size_t) b] += Y * Vk(a);
-        if (b < 0 && a >= 0) rhs[(size_t) a] += Y * Vk(b);
+        if (a >= 0)
+            M[(size_t) (a * n + a)] += Y;
+        if (b >= 0)
+            M[(size_t) (b * n + b)] += Y;
+        if (a >= 0 && b >= 0)
+        {
+            M[(size_t) (a * n + b)] -= Y;
+            M[(size_t) (b * n + a)] -= Y;
+        }
+        if (a < 0 && b >= 0)
+            rhs[(size_t) b] += Y * Vk(a);
+        if (b < 0 && a >= 0)
+            rhs[(size_t) a] += Y * Vk(b);
     }
     // Ideal op-amp (p = datum, n = nV(0), out = OUT(1)); current unknown at index 10.
     M[(size_t) (1 * n + 10)] += cd(1, 0); // op-amp output current enters KCL(OUT)
@@ -84,33 +96,47 @@ cd hTone(double f, double bass01, double treble01)
         for (int r = col + 1; r < n; ++r)
         {
             const double v = std::abs(M[(size_t) (r * n + col)]);
-            if (v > best) { best = v; piv = r; }
+            if (v > best)
+            {
+                best = v;
+                piv = r;
+            }
         }
         if (piv != col)
         {
-            for (int j = 0; j < n; ++j) std::swap(M[(size_t) (col * n + j)], M[(size_t) (piv * n + j)]);
+            for (int j = 0; j < n; ++j)
+                std::swap(M[(size_t) (col * n + j)], M[(size_t) (piv * n + j)]);
             std::swap(rhs[(size_t) col], rhs[(size_t) piv]);
         }
         const cd d = M[(size_t) (col * n + col)];
         for (int r = 0; r < n; ++r)
         {
-            if (r == col) continue;
+            if (r == col)
+                continue;
             const cd fct = M[(size_t) (r * n + col)] / d;
-            if (fct == cd(0, 0)) continue;
-            for (int j = 0; j < n; ++j) M[(size_t) (r * n + j)] -= fct * M[(size_t) (col * n + j)];
+            if (fct == cd(0, 0))
+                continue;
+            for (int j = 0; j < n; ++j)
+                M[(size_t) (r * n + j)] -= fct * M[(size_t) (col * n + j)];
             rhs[(size_t) r] -= fct * rhs[(size_t) col];
         }
     }
     return rhs[1] / M[(size_t) (1 * n + 1)]; // V(OUT), = transfer since Vin = 1
 }
 
-double toneDb(double f, double bass01, double treble01) { return 20.0 * std::log10(std::abs(hTone(f, bass01, treble01))); }
+double toneDb(double f, double bass01, double treble01)
+{
+    return 20.0 * std::log10(std::abs(hTone(f, bass01, treble01)));
+}
 
 // A tone control's EFFECT is measured relative to the flat/centre-detent curve -- the SPICE graphs in
 // reference-fr-targets.md §5/§6 are normalised so 0 dB = centre knob (their stated reading convention).
 // Measuring absolute dB is wrong for the treble region (the centre curve itself is not 0 dB there, due
 // to the C29 22p feedback pole ~7.2 kHz), and would hide the small opposite-sign bump §5 calls for.
-double effectDb(double f, double bass01, double treble01) { return toneDb(f, bass01, treble01) - toneDb(f, 0.5, 0.5); }
+double effectDb(double f, double bass01, double treble01)
+{
+    return toneDb(f, bass01, treble01) - toneDb(f, 0.5, 0.5);
+}
 
 double findEffectExtreme(double bass01, double treble01, double f0, double f1, bool wantMax, double& atF)
 {
@@ -119,7 +145,11 @@ double findEffectExtreme(double bass01, double treble01, double f0, double f1, b
     for (double f = f0; f <= f1; f *= 1.01)
     {
         const double d = effectDb(f, bass01, treble01);
-        if ((wantMax && d > best) || (!wantMax && d < best)) { best = d; atF = f; }
+        if ((wantMax && d > best) || (!wantMax && d < best))
+        {
+            best = d;
+            atF = f;
+        }
     }
     return best;
 }
@@ -142,7 +172,11 @@ double findPeak(double presence01, double f0, double f1, double& peakDb)
     for (double f = f0; f <= f1; f *= 1.01)
     {
         const double d = 20.0 * std::log10(std::abs(hPresenceOpAmp(2.0 * kPi * f, presence01)));
-        if (d > bestDb) { bestDb = d; bestF = f; }
+        if (d > bestDb)
+        {
+            bestDb = d;
+            bestF = f;
+        }
     }
     peakDb = bestDb;
     return bestF;
@@ -162,7 +196,8 @@ cd hWetBuffer(double w)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
@@ -176,15 +211,15 @@ int main()
         const double fMin = findPeak(0.0, 200.0, 15000.0, pkMin);
         const double fMid = findPeak(0.5, 200.0, 15000.0, pkMid);
         const double fMax = findPeak(1.0, 200.0, 15000.0, pkMax);
-        std::printf("      analytic peak: min %.0f Hz/%.1f dB, mid %.0f Hz/%.1f dB, max %.0f Hz/%.1f dB\n",
-                    fMin, pkMin, fMid, pkMid, fMax, pkMax);
+        std::printf("      analytic peak: min %.0f Hz/%.1f dB, mid %.0f Hz/%.1f dB, max %.0f Hz/%.1f dB\n", fMin, pkMin,
+                    fMid, pkMid, fMax, pkMax);
         check(pkMin > -0.5 && pkMin < 1.0, "min-PRESENCE ~ 0 dB (unity, Zf=0)");
         check(pkMax > 25.5 && pkMax < 29.5, "max-PRESENCE peak ~ +27.5 dB (25.5..29.5)");
         check(fMax > 6000.0 / 1.26 && fMax < 7000.0 * 1.26, "max-PRESENCE peak at 6-7 kHz");
         check(pkMax > pkMid && pkMid > pkMin, "peak level rises monotonically with PRESENCE");
 
         // DC gain must be exactly unity at every setting (C31 blocks DC -> Zg -> inf -> Ig=0).
-        for (double p : { 0.0, 0.5, 1.0 })
+        for (double p : {0.0, 0.5, 1.0})
         {
             const double dc = 20.0 * std::log10(std::abs(hPresenceOpAmp(2.0 * kPi * 0.01, p)));
             check(std::abs(dc) < 0.05, "DC gain ~ 0 dB (C31 blocks) regardless of PRESENCE");
@@ -199,7 +234,7 @@ int main()
         double worst = 0.0, worstF = 0.0;
         for (double f = 100.0; f <= 12000.0; f *= std::pow(10.0, 1.0 / 12.0))
         {
-            for (double p : { 0.0, 0.5, 1.0 })
+            for (double p : {0.0, 0.5, 1.0})
             {
                 pres.setPresence(p);
                 const int total = (int) (fs * 0.15), settle = total / 2;
@@ -207,17 +242,22 @@ int main()
                 for (int n = 0; n < total; ++n)
                 {
                     const double y = pres.processOpAmp(std::sin(2.0 * kPi * f * (double) n / fs));
-                    if (n > settle) peak = std::max(peak, std::abs(y));
+                    if (n > settle)
+                        peak = std::max(peak, std::abs(y));
                 }
                 const double wdfDb = 20.0 * std::log10(peak);
                 const double aDb = 20.0 * std::log10(std::abs(hPresenceOpAmp(2.0 * kPi * f, p)));
                 const double d = wdfDb - aDb;
                 const double tol = (f < 8000.0) ? 0.6 : 1.5;
-                if (std::abs(d) > std::abs(worst)) { worst = d; worstF = f; }
+                if (std::abs(d) > std::abs(worst))
+                {
+                    worst = d;
+                    worstF = f;
+                }
                 if (std::abs(d) > tol)
                 {
-                    std::printf("      mismatch @ %.0f Hz p=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n",
-                                f, p, wdfDb, aDb, tol);
+                    std::printf("      mismatch @ %.0f Hz p=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n", f, p, wdfDb,
+                                aDb, tol);
                     pass = false;
                 }
             }
@@ -231,13 +271,15 @@ int main()
     {
         nalr::V1LateRecoveryStage rec;
         rec.prepare(fs);
-        auto measureDb = [&](double f) {
+        auto measureDb = [&](double f)
+        {
             const int total = (int) (fs * 0.2), settle = total / 2;
             double peak = 0.0;
             for (int n = 0; n < total; ++n)
             {
                 const double y = rec.processBridgedT(std::sin(2.0 * kPi * f * (double) n / fs));
-                if (n > settle) peak = std::max(peak, std::abs(y));
+                if (n > settle)
+                    peak = std::max(peak, std::abs(y));
             }
             return 20.0 * std::log10(peak);
         };
@@ -245,7 +287,11 @@ int main()
         for (double f = 250.0; f <= 700.0; f *= 1.01)
         {
             const double d = measureDb(f);
-            if (d < bestDb) { bestDb = d; bestF = f; }
+            if (d < bestDb)
+            {
+                bestDb = d;
+                bestF = f;
+            }
         }
         std::printf("      bridged-T dip: %.1f Hz / %.1f dB\n", bestF, bestDb);
         check(bestF > 400.0 / 1.2 && bestF < 450.0 * 1.2, "dip within range of ~400-450 Hz (FR §2)");
@@ -263,13 +309,15 @@ int main()
 
         nalr::V1LateRecoveryStage rec;
         rec.prepare(fs);
-        auto measureWetDb = [&](double f) {
+        auto measureWetDb = [&](double f)
+        {
             const int total = (int) (fs * 0.15), settle = total / 2;
             double peak = 0.0;
             for (int n = 0; n < total; ++n)
             {
                 const double y = rec.processWetBuffer(0.5 * std::sin(2.0 * kPi * f * (double) n / fs));
-                if (n > settle) peak = std::max(peak, std::abs(y));
+                if (n > settle)
+                    peak = std::max(peak, std::abs(y));
             }
             return 20.0 * std::log10(peak / 0.5);
         };
@@ -290,26 +338,30 @@ int main()
         for (int n = 0; n < total; ++n)
         {
             const double y = bl.process(0.0, std::sin(2.0 * kPi * freq * (double) n / fs));
-            if (n > settle) peak = std::max(peak, std::abs(y));
+            if (n > settle)
+                peak = std::max(peak, std::abs(y));
         }
         const double gainDb = 20.0 * std::log10(peak);
         std::printf("      full-wet/full-level gain %.2f dB (R30/R4 = 220k/100k = 2.2x, expect ~+6.8 dB)\n", gainDb);
-        check(gainDb > 5.5 && gainDb < 8.0, "IC3A inverting gain ~ +6.8 dB at unity mix (R30/R4 ratio unchanged from V1e)");
+        check(gainDb > 5.5 && gainDb < 8.0,
+              "IC3A inverting gain ~ +6.8 dB at unity mix (R30/R4 ratio unchanged from V1e)");
 
         // Monotonic with LEVEL (louder as it opens), same taper convention as V1e.
         double prev = -1e9;
         bool monotonic = true;
-        for (double lvl : { 0.0, 0.25, 0.5, 0.75, 1.0 })
+        for (double lvl : {0.0, 0.25, 0.5, 0.75, 1.0})
         {
             bl.setBlendLevel(1.0, lvl);
             double pk = 0.0;
             for (int n = 0; n < total; ++n)
             {
                 const double y = bl.process(0.0, std::sin(2.0 * kPi * freq * (double) n / fs));
-                if (n > settle) pk = std::max(pk, std::abs(y));
+                if (n > settle)
+                    pk = std::max(pk, std::abs(y));
             }
             const double db = 20.0 * std::log10(pk + 1e-12);
-            if (db < prev - 0.01) monotonic = false;
+            if (db < prev - 0.01)
+                monotonic = false;
             prev = db;
         }
         check(monotonic, "LEVEL is monotonic (louder as it opens)");
@@ -321,7 +373,8 @@ int main()
         for (int n = 0; n < total; ++n)
         {
             const double y = bl.process(0.0, std::sin(2.0 * kPi * freq * (double) n / fs));
-            if (n > settle) dryOnlyPeak = std::max(dryOnlyPeak, std::abs(y));
+            if (n > settle)
+                dryOnlyPeak = std::max(dryOnlyPeak, std::abs(y));
         }
         std::printf("      blend=0 (full dry), wet-only excitation residual: %.1f dBFS\n",
                     20.0 * std::log10(dryOnlyPeak + 1e-12));
@@ -339,7 +392,11 @@ int main()
         for (double f = 20.0; f <= 4000.0; f *= 1.02)
         {
             const double d = toneDb(f, 0.5, 0.5);
-            if (std::abs(d) > std::abs(worstFlat)) { worstFlat = d; worstFlatF = f; }
+            if (std::abs(d) > std::abs(worstFlat))
+            {
+                worstFlat = d;
+                worstFlatF = f;
+            }
         }
         std::printf("      centre-detent passband flatness: worst %.2f dB @ %.0f Hz (HF rolls off above, C29)\n",
                     worstFlat, worstFlatF);
@@ -355,7 +412,8 @@ int main()
         check(fBoost > 50.0 && fBoost < 120.0, "BASS boost centre ~ 75 Hz (50..120)");
         check(fCut > 50.0 && fCut < 120.0, "BASS cut centre ~ 75 Hz (50..120)");
         // Peaking (not shelf): the boost must return toward 0 dB below its centre frequency.
-        check(effectDb(20.0, 1.0, 0.5) < bBoost - 2.0, "BASS boost returns toward 0 dB at LF extreme (peaking, not shelf)");
+        check(effectDb(20.0, 1.0, 0.5) < bBoost - 2.0,
+              "BASS boost returns toward 0 dB at LF extreme (peaking, not shelf)");
         // The characteristic small opposite-sign bump ~2-4 kHz (FR §5; absence => topology error).
         double fOpp;
         const double oppBump = findEffectExtreme(1.0, 0.5, 1500.0, 5000.0, false, fOpp);
@@ -380,8 +438,7 @@ int main()
         double worst = 0.0, worstF = 0.0;
         for (double f = 40.0; f <= 12000.0; f *= std::pow(10.0, 1.0 / 12.0))
         {
-            for (auto bt : { std::pair<double, double> { 0.5, 0.5 }, { 1.0, 0.5 }, { 0.0, 0.5 },
-                             { 0.5, 1.0 }, { 0.5, 0.0 } })
+            for (auto bt : {std::pair<double, double>{0.5, 0.5}, {1.0, 0.5}, {0.0, 0.5}, {0.5, 1.0}, {0.5, 0.0}})
             {
                 tone.setTone(bt.first, bt.second);
                 const int total = (int) (fs * 0.2), settle = total / 2;
@@ -389,17 +446,22 @@ int main()
                 for (int n = 0; n < total; ++n)
                 {
                     const double y = tone.process(0.3 * std::sin(2.0 * kPi * f * (double) n / fs));
-                    if (n > settle) peak = std::max(peak, std::abs(y));
+                    if (n > settle)
+                        peak = std::max(peak, std::abs(y));
                 }
                 const double wdfDb = 20.0 * std::log10(peak / 0.3);
                 const double aDb = toneDb(f, bt.first, bt.second);
                 const double d = wdfDb - aDb;
                 const double tol = (f < 8000.0) ? 0.7 : 1.6;
-                if (std::abs(d) > std::abs(worst)) { worst = d; worstF = f; }
+                if (std::abs(d) > std::abs(worst))
+                {
+                    worst = d;
+                    worstF = f;
+                }
                 if (std::abs(d) > tol)
                 {
-                    std::printf("      mismatch @ %.0f Hz b=%.1f t=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n",
-                                f, bt.first, bt.second, wdfDb, aDb, tol);
+                    std::printf("      mismatch @ %.0f Hz b=%.1f t=%.1f: wdf=%.2f analytic=%.2f (tol %.2f)\n", f,
+                                bt.first, bt.second, wdfDb, aDb, tol);
                     pass = false;
                 }
             }
@@ -421,10 +483,12 @@ int main()
             for (int n = 0; n < total; ++n)
             {
                 const double y = out.process(std::sin(2.0 * kPi * f * (double) n / fs));
-                if (n > settle) peak = std::max(peak, std::abs(y));
+                if (n > settle)
+                    peak = std::max(peak, std::abs(y));
             }
             const double db = 20.0 * std::log10(peak);
-            if (std::abs(db) > std::abs(worst)) worst = db;
+            if (std::abs(db) > std::abs(worst))
+                worst = db;
         }
         std::printf("      worst deviation from 0 dB: %.3f dB\n", worst);
         check(std::abs(worst) < 0.25, "flat within 0.25 dB, 80 Hz-20 kHz");

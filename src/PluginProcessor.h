@@ -52,26 +52,29 @@ public:
     juce::AudioProcessorValueTreeState apvts;
 
     float getInputLevel(int channel) const noexcept { return channel == 0 ? inputLevelL.load() : inputLevelR.load(); }
-    float getOutputLevel(int channel) const noexcept { return channel == 0 ? outputLevelL.load() : outputLevelR.load(); }
+    float getOutputLevel(int channel) const noexcept
+    {
+        return channel == 0 ? outputLevelL.load() : outputLevelR.load();
+    }
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     // Parameter IDs — shared with the editor for attachments.
-    static constexpr const char* idRevision            = "revision";
-    static constexpr const char* idDrive               = "drive";
-    static constexpr const char* idPresence             = "presence";
-    static constexpr const char* idBlend                = "blend";
-    static constexpr const char* idLevel                = "level";
-    static constexpr const char* idBass                 = "bass";
-    static constexpr const char* idTreble                = "treble";
-    static constexpr const char* idMid                   = "mid";
-    static constexpr const char* idMidShift             = "mid_shift";
-    static constexpr const char* idBassShift            = "bass_shift";
-    static constexpr const char* idInputTrim            = "input_trim";
-    static constexpr const char* idOutputTrim           = "output_trim";
-    static constexpr const char* idOversampling         = "oversampling";
-    static constexpr const char* idRenderOversampling   = "render_oversampling";
-    static constexpr const char* idBypass                = "bypass";
+    static constexpr const char* idRevision = "revision";
+    static constexpr const char* idDrive = "drive";
+    static constexpr const char* idPresence = "presence";
+    static constexpr const char* idBlend = "blend";
+    static constexpr const char* idLevel = "level";
+    static constexpr const char* idBass = "bass";
+    static constexpr const char* idTreble = "treble";
+    static constexpr const char* idMid = "mid";
+    static constexpr const char* idMidShift = "mid_shift";
+    static constexpr const char* idBassShift = "bass_shift";
+    static constexpr const char* idInputTrim = "input_trim";
+    static constexpr const char* idOutputTrim = "output_trim";
+    static constexpr const char* idOversampling = "oversampling";
+    static constexpr const char* idRenderOversampling = "render_oversampling";
+    static constexpr const char* idBypass = "bypass";
 
 private:
     // Output gain = kOutputMakeup * dbToGain(outTrimDb) / kInputRef (calibration doc §1).
@@ -82,21 +85,21 @@ private:
     int latencyForRevision(int revision) const noexcept;
 
     // Cached atomic parameter pointers (avoid string lookups on the audio thread).
-    std::atomic<float>* pRevision            = nullptr;
-    std::atomic<float>* pDrive               = nullptr;
-    std::atomic<float>* pPresence            = nullptr;
-    std::atomic<float>* pBlend               = nullptr;
-    std::atomic<float>* pLevel               = nullptr;
-    std::atomic<float>* pBass                = nullptr;
-    std::atomic<float>* pTreble              = nullptr;
-    std::atomic<float>* pMid                 = nullptr;
-    std::atomic<float>* pMidShift            = nullptr;
-    std::atomic<float>* pBassShift           = nullptr;
-    std::atomic<float>* pInputTrim           = nullptr;
-    std::atomic<float>* pOutputTrim          = nullptr;
-    std::atomic<float>* pOversampling        = nullptr;
-    std::atomic<float>* pRenderOversampling  = nullptr;
-    std::atomic<float>* pBypass              = nullptr;
+    std::atomic<float>* pRevision = nullptr;
+    std::atomic<float>* pDrive = nullptr;
+    std::atomic<float>* pPresence = nullptr;
+    std::atomic<float>* pBlend = nullptr;
+    std::atomic<float>* pLevel = nullptr;
+    std::atomic<float>* pBass = nullptr;
+    std::atomic<float>* pTreble = nullptr;
+    std::atomic<float>* pMid = nullptr;
+    std::atomic<float>* pMidShift = nullptr;
+    std::atomic<float>* pBassShift = nullptr;
+    std::atomic<float>* pInputTrim = nullptr;
+    std::atomic<float>* pOutputTrim = nullptr;
+    std::atomic<float>* pOversampling = nullptr;
+    std::atomic<float>* pRenderOversampling = nullptr;
+    std::atomic<float>* pBypass = nullptr;
 
     juce::SmoothedValue<float> inputGainSmoothed;
     juce::SmoothedValue<float> outputGainSmoothed;
@@ -113,9 +116,9 @@ private:
     bool crossfading = false;
     juce::SmoothedValue<float> revisionCrossfade;
 
-    std::atomic<float> inputLevelL { 0.0f }, inputLevelR { 0.0f };
-    std::atomic<float> outputLevelL { 0.0f }, outputLevelR { 0.0f };
-    std::atomic<bool> bypassed { false };
+    std::atomic<float> inputLevelL{0.0f}, inputLevelR{0.0f};
+    std::atomic<float> outputLevelL{0.0f}, outputLevelR{0.0f};
+    std::atomic<bool> bypassed{false};
 
     // One DSP chain per channel per revision (WDF trees hold per-channel state, so they can't be
     // shared). All revisions are pre-allocated/prepared up front (architecture.md: no audio-thread
@@ -127,9 +130,9 @@ private:
     // Pre-allocated audio-thread scratch (sized in prepareToPlay; never reallocated in processBlock).
     std::vector<double> voltsScratch;                       // active-revision volts-domain block
     std::vector<double> voltsScratchPrev;                   // fading-from-revision volts-domain block
-    std::vector<float> dryCopy;                              // DAW-domain raw input, for bypass mix
-    std::vector<float> inTrimRamp, outGainRamp, bypassRamp;  // per-block gain ramps, shared L/R
-    std::vector<float> revisionFadeRamp;                     // per-block revision-crossfade ramp
+    std::vector<float> dryCopy;                             // DAW-domain raw input, for bypass mix
+    std::vector<float> inTrimRamp, outGainRamp, bypassRamp; // per-block gain ramps, shared L/R
+    std::vector<float> revisionFadeRamp;                    // per-block revision-crossfade ramp
 
     int currentOSFactor = 1;
     int reportedLatency = 0;

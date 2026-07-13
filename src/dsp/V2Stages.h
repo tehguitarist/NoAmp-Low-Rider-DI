@@ -85,10 +85,10 @@ private:
         // C15 positive feedback) n2=2 (post-R18, C16 shunt, feeds U2B(+)) OUTa=3 shuntNode=4
         // (R17/C14 series junction).
         skA.setNumNodes(5);
-        skA.addResistor(NC::kInput, 0, 10.0e3);   // R47
-        skA.addCapacitor(0, NC::kDatum, 10.0e-9); // C42 -- NEW V2-only LP corner (§1 top-end delta)
-        skA.addResistor(0, 1, 22.0e3);            // R16
-        skA.addResistor(1, 2, 33.0e3);             // R18
+        skA.addResistor(NC::kInput, 0, 10.0e3);     // R47
+        skA.addCapacitor(0, NC::kDatum, 10.0e-9);   // C42 -- NEW V2-only LP corner (§1 top-end delta)
+        skA.addResistor(0, 1, 22.0e3);              // R16
+        skA.addResistor(1, 2, 33.0e3);              // R18
         skA.addCapacitor(2, NC::kDatum, 470.0e-12); // C16
         skA.addResistor(1, 4, 10.0e3);              // R17
         skA.addCapacitor(4, NC::kDatum, 47.0e-9);   // C14 (R17+C14 series shunt at n1)
@@ -172,8 +172,8 @@ public:
     {
         low430 = low430_;
         const double r = low430 ? kSwitchShort : kSwitchOpen;
-        net.setResistorValue(rShiftLeg, r);   // SW5B (wiper-leg twin-T)
-        net.setResistorValue(rShiftPot, r);   // SW5A (across-pot twin-T)
+        net.setResistorValue(rShiftLeg, r); // SW5B (wiper-leg twin-T)
+        net.setResistorValue(rShiftPot, r); // SW5A (across-pot twin-T)
         net.rebuild();
     }
 
@@ -190,21 +190,21 @@ private:
         net.addResistor(0, 1, 100.0e3);          // R55  feedback nV -> OUT
         net.addCapacitor(0, 1, 100.0e-12);       // C11  feedback rolloff/stability
         // Pot rail bridging input (U3B.out) to output.
-        net.addResistor(NC::kInput, 2, 3.3e3);   // R21  U3B.out -> m1
-        rMidA = net.addResistor(2, 3, 50.0e3);   // VR1  m1 -> wiper
-        rMidB = net.addResistor(3, 4, 50.0e3);   // VR1  wiper -> m2
-        net.addResistor(4, 1, 3.3e3);            // R62  m2 -> OUT
+        net.addResistor(NC::kInput, 2, 3.3e3); // R21  U3B.out -> m1
+        rMidA = net.addResistor(2, 3, 50.0e3); // VR1  m1 -> wiper
+        rMidB = net.addResistor(3, 4, 50.0e3); // VR1  wiper -> m2
+        net.addResistor(4, 1, 3.3e3);          // R62  m2 -> OUT
         // Upper twin-T: switched wiper leg to nV.
-        net.addCapacitor(0, 3, 10.0e-9);         // C21  nV -> wiper (always in the leg)
-        net.addCapacitor(0, 5, 10.0e-9);         // C19  nV -> nBL
-        net.addResistor(5, 3, 1.0e6);            // R27  nBL -> wiper (1M bridge, always present)
+        net.addCapacitor(0, 3, 10.0e-9);                 // C21  nV -> wiper (always in the leg)
+        net.addCapacitor(0, 5, 10.0e-9);                 // C19  nV -> nBL
+        net.addResistor(5, 3, 1.0e6);                    // R27  nBL -> wiper (1M bridge, always present)
         rShiftLeg = net.addResistor(5, 3, kSwitchShort); // SW5B: short nBL<->wiper (closed=430)
         // Lower twin-T: switched cap across the pot (m1 <-> m2).
-        net.addCapacitor(2, 4, 10.0e-9);         // C13  m1 -> m2 (always across the pot)
-        net.addCapacitor(6, 4, 10.0e-9);         // C36  nLbot -> m2
-        net.addResistor(2, 6, 1.0e6);            // R13  m1 -> nLbot (1M bridge, always present)
+        net.addCapacitor(2, 4, 10.0e-9);                 // C13  m1 -> m2 (always across the pot)
+        net.addCapacitor(6, 4, 10.0e-9);                 // C36  nLbot -> m2
+        net.addResistor(2, 6, 1.0e6);                    // R13  m1 -> nLbot (1M bridge, always present)
         rShiftPot = net.addResistor(2, 6, kSwitchShort); // SW5A: short m1<->nLbot (closed=430)
-        net.addOpAmp(NC::kDatum, 0, 1);          // U3A inverting (+ = VCOM, - = nV, out = OUT)
+        net.addOpAmp(NC::kDatum, 0, 1);                  // U3A inverting (+ = VCOM, - = nV, out = OUT)
         net.setOutputNode(1);
     }
 
@@ -279,29 +279,29 @@ private:
         net.setNumNodes(11);
         net.addCapacitor(NC::kInput, 2, 2.0e-6); // C12||C23 = 2u input coupling from the MID stage
         // Direct (flat) arm + inverting feedback -> centre gain -R35/R30 = -1.
-        net.addResistor(2, 0, 1.0e6);            // R30 T_IN -> nV
-        net.addResistor(0, 1, 1.0e6);            // R35 feedback nV -> OUT
-        net.addCapacitor(0, 1, 22.0e-12);        // C32 feedback rolloff (~7.2 kHz pole, as V1L C29)
+        net.addResistor(2, 0, 1.0e6);     // R30 T_IN -> nV
+        net.addResistor(0, 1, 1.0e6);     // R35 feedback nV -> OUT
+        net.addCapacitor(0, 1, 22.0e-12); // C32 feedback rolloff (~7.2 kHz pole, as V1L C29)
         // TREBLE rail (identical values to V1L L7).
-        net.addResistor(2, 3, 3.3e3);            // R31 T_IN -> t1
-        rTrebA = net.addResistor(3, 4, 50.0e3);  // VR57 t1 -> wiper
-        rTrebB = net.addResistor(4, 5, 50.0e3);  // VR57 wiper -> t2
-        net.addResistor(5, 1, 3.3e3);            // R34 t2 -> OUT
-        net.addCapacitor(3, 5, 4.7e-9);          // C30 across VR57 (t1 -> t2)
-        net.addCapacitor(5, 1, 22.0e-9);         // C31 across R34 (t2 -> OUT)
-        net.addCapacitor(4, 0, 1.0e-9);          // C29 wiper -> nV
+        net.addResistor(2, 3, 3.3e3);           // R31 T_IN -> t1
+        rTrebA = net.addResistor(3, 4, 50.0e3); // VR57 t1 -> wiper
+        rTrebB = net.addResistor(4, 5, 50.0e3); // VR57 wiper -> t2
+        net.addResistor(5, 1, 3.3e3);           // R34 t2 -> OUT
+        net.addCapacitor(3, 5, 4.7e-9);         // C30 across VR57 (t1 -> t2)
+        net.addCapacitor(5, 1, 22.0e-9);        // C31 across R34 (t2 -> OUT)
+        net.addCapacitor(4, 0, 1.0e-9);         // C29 wiper -> nV
         // BASS rail + BASS SHIFT switched wiper leg.
-        net.addResistor(2, 6, 3.3e3);            // R29 T_IN -> b1
-        rBassA = net.addResistor(6, 7, 50.0e3);  // VR48 b1 -> wiper
-        rBassB = net.addResistor(7, 8, 50.0e3);  // VR48 wiper -> b2
-        net.addResistor(8, 1, 3.3e3);            // R33 b2 -> OUT
-        net.addCapacitor(6, 8, 100.0e-9);        // C27 across VR48 (b1 -> b2)
-        net.addCapacitor(7, 9, 10.0e-9);         // C28 wiper -> X1 (80 Hz cap)
-        net.addCapacitor(7, 10, 47.0e-9);        // C20 wiper -> X2 (40 Hz cap)
-        net.addResistor(9, 10, 1.0e6);           // R4 X1 <-> X2 (bias bridge, ~inert at audio)
+        net.addResistor(2, 6, 3.3e3);              // R29 T_IN -> b1
+        rBassA = net.addResistor(6, 7, 50.0e3);    // VR48 b1 -> wiper
+        rBassB = net.addResistor(7, 8, 50.0e3);    // VR48 wiper -> b2
+        net.addResistor(8, 1, 3.3e3);              // R33 b2 -> OUT
+        net.addCapacitor(6, 8, 100.0e-9);          // C27 across VR48 (b1 -> b2)
+        net.addCapacitor(7, 9, 10.0e-9);           // C28 wiper -> X1 (80 Hz cap)
+        net.addCapacitor(7, 10, 47.0e-9);          // C20 wiper -> X2 (40 Hz cap)
+        net.addResistor(9, 10, 1.0e6);             // R4 X1 <-> X2 (bias bridge, ~inert at audio)
         rBass80 = net.addResistor(9, 0, 100.0e3);  // R32 (80 Hz throw): X1 -> nV
         rBass40 = net.addResistor(10, 0, 100.0e3); // R32 (40 Hz throw): X2 -> nV
-        net.addOpAmp(NC::kDatum, 0, 1);          // U6B inverting (+ = VCOM, - = nV, out = OUT)
+        net.addOpAmp(NC::kDatum, 0, 1);            // U6B inverting (+ = VCOM, - = nV, out = OUT)
         net.setOutputNode(1);
     }
 
@@ -357,15 +357,15 @@ private:
         // nodes: vb50=0(wet, via C2) vw50=1(=VR51 top) vw51=2(=U3B(+), no-drop R36) vbot51=3
         // uminus=4 uout=5.
         net.setNumNodes(6);
-        rBlendA = net.addResistor(NC::kInput, 1, 50.0e3);   // VR50 a(dry, direct)->wiper
-        net.addCapacitor(NC::kInput2, 0, 1.0e-6);           // C2 wet coupling
-        rBlendB = net.addResistor(0, 1, 50.0e3);            // VR50 wiper->b(wet)
-        rLevelA = net.addResistor(1, 2, 50.0e3);            // VR51 top(=wiper50)->wiper51
-        rLevelB = net.addResistor(2, 3, 50.0e3);            // VR51 wiper51->bottom
-        net.addResistor(3, NC::kDatum, 1.0e3);              // R39 bottom->VCOM
-        net.addResistor(4, NC::kDatum, 10.0e3);             // R67 (-)->VCOM
-        net.addResistor(4, 5, 22.0e3);                      // R63 feedback (-)->OUT
-        net.addOpAmp(2, 4, 5);                               // U3B non-inverting (+ = wiper51, - = 4)
+        rBlendA = net.addResistor(NC::kInput, 1, 50.0e3); // VR50 a(dry, direct)->wiper
+        net.addCapacitor(NC::kInput2, 0, 1.0e-6);         // C2 wet coupling
+        rBlendB = net.addResistor(0, 1, 50.0e3);          // VR50 wiper->b(wet)
+        rLevelA = net.addResistor(1, 2, 50.0e3);          // VR51 top(=wiper50)->wiper51
+        rLevelB = net.addResistor(2, 3, 50.0e3);          // VR51 wiper51->bottom
+        net.addResistor(3, NC::kDatum, 1.0e3);            // R39 bottom->VCOM
+        net.addResistor(4, NC::kDatum, 10.0e3);           // R67 (-)->VCOM
+        net.addResistor(4, 5, 22.0e3);                    // R63 feedback (-)->OUT
+        net.addOpAmp(2, 4, 5);                            // U3B non-inverting (+ = wiper51, - = 4)
         net.setOutputNode(5);
     }
 

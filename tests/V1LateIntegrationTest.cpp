@@ -61,8 +61,8 @@ double excite(long n)
 {
     const double t = (double) n / kFs;
     const double sweepHz = 60.0 + 4000.0 * (0.5 + 0.5 * std::sin(2.0 * kPi * 0.5 * t));
-    return 0.35 * std::sin(2.0 * kPi * 110.0 * t) + 0.15 * std::sin(2.0 * kPi * 880.0 * t)
-         + 0.10 * std::sin(2.0 * kPi * sweepHz * t);
+    return 0.35 * std::sin(2.0 * kPi * 110.0 * t) + 0.15 * std::sin(2.0 * kPi * 880.0 * t) +
+           0.10 * std::sin(2.0 * kPi * sweepHz * t);
 }
 } // namespace
 
@@ -81,8 +81,9 @@ int main()
         nalr::V1LateDSP dsp;
         dsp.prepare(kFs, 256);
         bool ok = true;
-        const double steps[5] = { 0.0, 0.25, 0.5, 0.75, 1.0 };
-        auto run = [&](int nSamples) {
+        const double steps[5] = {0.0, 0.25, 0.5, 0.75, 1.0};
+        auto run = [&](int nSamples)
+        {
             std::vector<double> buf((size_t) nSamples);
             for (int i = 0; i < nSamples; ++i)
                 buf[(size_t) i] = excite(i);
@@ -93,7 +94,7 @@ int main()
         {
             for (double s : steps)
             {
-                double p[6] = { 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 };
+                double p[6] = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
                 p[which] = s;
                 dsp.setParams(p[0], p[1], p[2], p[3], p[4], p[5]);
                 dsp.reset();
@@ -102,7 +103,7 @@ int main()
         };
         for (int k = 0; k < 6; ++k)
             sweepKnob(k);
-        for (double corner : { 0.0, 1.0 })
+        for (double corner : {0.0, 1.0})
         {
             dsp.setParams(corner, corner, corner, corner, corner, corner);
             dsp.reset();
@@ -139,7 +140,8 @@ int main()
         dsp.reset();
         const double gainDb = magnitudeDb(dsp, 1000.0, 0.3);
         std::printf("      dry-path 1 kHz gain = %.2f dB (near-unity: input buffer + BLEND/LEVEL loading + "
-                    "tone/output stages)\n", gainDb);
+                    "tone/output stages)\n",
+                    gainDb);
         check(std::isfinite(gainDb) && gainDb > -12.0 && gainDb < 6.0, "dry path is near-unity and stable");
     }
 
@@ -170,12 +172,15 @@ int main()
     // --- 5. §8 combined PRESENCE+DRIVE voicing checkpoints (BLEND 100%) ----------------------------
     std::printf("FR §8 combined PRESENCE+DRIVE voicing checkpoints:\n");
     {
-        struct Panel { double presence, drive, lowBumpDb, notchDb, highBumpDb; };
+        struct Panel
+        {
+            double presence, drive, lowBumpDb, notchDb, highBumpDb;
+        };
         const Panel panels[] = {
-            { 0.0, 0.0, 0.0, -35.0, 0.0 },
-            { 0.5, 0.3, 12.0, -20.0, 15.5 },
-            { 0.5, 0.5, 17.0, -15.0, 21.0 },
-            { 0.5, 1.0, 37.0, -5.0, 41.0 }, // notch fills toward +5 dB per the FR §8 note
+            {0.0, 0.0, 0.0, -35.0, 0.0},
+            {0.5, 0.3, 12.0, -20.0, 15.5},
+            {0.5, 0.5, 17.0, -15.0, 21.0},
+            {0.5, 1.0, 37.0, -5.0, 41.0}, // notch fills toward +5 dB per the FR §8 note
         };
         for (const auto& pnl : panels)
         {

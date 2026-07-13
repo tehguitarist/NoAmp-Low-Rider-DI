@@ -22,8 +22,16 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr int IN = nalr::NodalCircuit::kInput, GND = nalr::NodalCircuit::kDatum;
 
 // --- generic complex MNA reference (mirrors NodalCircuit, single complex solve, Vin = 1) ---------
-struct E { int a, b; double val; bool isCap; };
-struct O { int p, n, out; };
+struct E
+{
+    int a, b;
+    double val;
+    bool isCap;
+};
+struct O
+{
+    int p, n, out;
+};
 
 cd mnaSolve(double f, int numNodes, const std::vector<E>& els, const std::vector<O>& ops, int outNode)
 {
@@ -35,36 +43,52 @@ cd mnaSolve(double f, int numNodes, const std::vector<E>& els, const std::vector
     for (const auto& e : els)
     {
         const cd y = e.isCap ? cd(0.0, w * e.val) : cd(1.0 / e.val, 0.0);
-        if (e.a >= 0) at(e.a, e.a) += y;
-        if (e.b >= 0) at(e.b, e.b) += y;
-        if (e.a >= 0 && e.b >= 0) { at(e.a, e.b) -= y; at(e.b, e.a) -= y; }
-        if (e.a == IN && e.b >= 0) rhs[(size_t) e.b] += y; // Vin = 1
-        if (e.b == IN && e.a >= 0) rhs[(size_t) e.a] += y;
+        if (e.a >= 0)
+            at(e.a, e.a) += y;
+        if (e.b >= 0)
+            at(e.b, e.b) += y;
+        if (e.a >= 0 && e.b >= 0)
+        {
+            at(e.a, e.b) -= y;
+            at(e.b, e.a) -= y;
+        }
+        if (e.a == IN && e.b >= 0)
+            rhs[(size_t) e.b] += y; // Vin = 1
+        if (e.b == IN && e.a >= 0)
+            rhs[(size_t) e.a] += y;
     }
     for (int j = 0; j < (int) ops.size(); ++j)
     {
         const int row = numNodes + j;
         const auto& o = ops[(size_t) j];
-        if (o.out >= 0) at(o.out, row) += 1.0;
-        if (o.p >= 0) at(row, o.p) += 1.0;
-        if (o.n >= 0) at(row, o.n) -= 1.0;
+        if (o.out >= 0)
+            at(o.out, row) += 1.0;
+        if (o.p >= 0)
+            at(row, o.p) += 1.0;
+        if (o.n >= 0)
+            at(row, o.n) -= 1.0;
     }
     // Gaussian elimination.
     for (int c = 0; c < dim; ++c)
     {
         int piv = c;
         for (int r = c + 1; r < dim; ++r)
-            if (std::abs(at(r, c)) > std::abs(at(piv, c))) piv = r;
-        for (int j = 0; j < dim; ++j) std::swap(at(c, j), at(piv, j));
+            if (std::abs(at(r, c)) > std::abs(at(piv, c)))
+                piv = r;
+        for (int j = 0; j < dim; ++j)
+            std::swap(at(c, j), at(piv, j));
         std::swap(rhs[(size_t) c], rhs[(size_t) piv]);
         const cd d = at(c, c);
-        for (int j = 0; j < dim; ++j) at(c, j) /= d;
+        for (int j = 0; j < dim; ++j)
+            at(c, j) /= d;
         rhs[(size_t) c] /= d;
         for (int r = 0; r < dim; ++r)
         {
-            if (r == c) continue;
+            if (r == c)
+                continue;
             const cd fct = at(r, c);
-            for (int j = 0; j < dim; ++j) at(r, j) -= fct * at(c, j);
+            for (int j = 0; j < dim; ++j)
+                at(r, j) -= fct * at(c, j);
             rhs[(size_t) r] -= fct * rhs[(size_t) c];
         }
     }
@@ -75,30 +99,33 @@ cd mnaSolve(double f, int numNodes, const std::vector<E>& els, const std::vector
 cd hE5a(double f)
 {
     return mnaSolve(f, 5,
-                    { { IN, 0, 10.0e3, false }, { 0, GND, 22.0e3, false }, { 0, 1, 22.0e3, false },
-                      { 1, 2, 22.0e3, false }, { 2, GND, 470.0e-12, true }, { 1, 4, 10.0e3, false },
-                      { 4, GND, 47.0e-9, true }, { 1, 3, 10.0e-9, true } },
-                    { { 2, 3, 3 } }, 3);
+                    {{IN, 0, 10.0e3, false},
+                     {0, GND, 22.0e3, false},
+                     {0, 1, 22.0e3, false},
+                     {1, 2, 22.0e3, false},
+                     {2, GND, 470.0e-12, true},
+                     {1, 4, 10.0e3, false},
+                     {4, GND, 47.0e-9, true},
+                     {1, 3, 10.0e-9, true}},
+                    {{2, 3, 3}}, 3);
 }
 cd hE5b(double f)
 {
-    return mnaSolve(f, 3,
-                    { { IN, 0, 33.0e3, false }, { 0, 1, 33.0e3, false }, { 0, 2, 2.2e-9, true },
-                      { 1, GND, 1.0e-9, true } },
-                    { { 1, 2, 2 } }, 2);
+    return mnaSolve(f, 3, {{IN, 0, 33.0e3, false}, {0, 1, 33.0e3, false}, {0, 2, 2.2e-9, true}, {1, GND, 1.0e-9, true}},
+                    {{1, 2, 2}}, 2);
 }
 cd hE5c(double f)
 {
-    return mnaSolve(f, 2,
-                    { { IN, 0, 22.0e3, false }, { IN, 1, 22.0e-9, true }, { 0, 1, 47.0e-9, true },
-                      { 1, GND, 6.2e3, false } },
-                    {}, 0);
+    return mnaSolve(
+        f, 2, {{IN, 0, 22.0e3, false}, {IN, 1, 22.0e-9, true}, {0, 1, 47.0e-9, true}, {1, GND, 6.2e3, false}}, {}, 0);
 }
-cd hRecovery(double f) { return hE5a(f) * hE5b(f) * hE5c(f); }
+cd hRecovery(double f)
+{
+    return hE5a(f) * hE5b(f) * hE5c(f);
+}
 
 // --- WDF/nodal measurement (steady-state sine peak) ---------------------------------------------
-template <typename ProcessFn>
-double measureDb(double fs, double freq, ProcessFn&& proc)
+template <typename ProcessFn> double measureDb(double fs, double freq, ProcessFn&& proc)
 {
     const int total = (int) (fs * 0.35);
     const int settle = total / 2;
@@ -107,7 +134,8 @@ double measureDb(double fs, double freq, ProcessFn&& proc)
     {
         const double x = std::sin(2.0 * kPi * freq * (double) n / fs);
         const double y = proc(x);
-        if (n > settle) peak = std::max(peak, std::abs(y));
+        if (n > settle)
+            peak = std::max(peak, std::abs(y));
     }
     return 20.0 * std::log10(peak);
 }
@@ -116,7 +144,11 @@ double measureDb(double fs, double freq, ProcessFn&& proc)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) { std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg); pass &= ok; };
+    auto check = [&](bool ok, const char* msg)
+    {
+        std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
+        pass &= ok;
+    };
     const double fs = 96000.0;
 
     // -------------------------------------------------------------------------------------------
@@ -155,7 +187,11 @@ int main()
             const double meas = measureDb(fs, f, [&](double x) { return rec.process(x); });
             const double fa = (fs / kPi) * std::tan(kPi * f / fs);
             const double ref = 20.0 * std::log10(std::abs(hRecovery(fa)));
-            if (std::abs(meas - ref) > std::abs(worst)) { worst = meas - ref; worstF = f; }
+            if (std::abs(meas - ref) > std::abs(worst))
+            {
+                worst = meas - ref;
+                worstF = f;
+            }
         }
         std::printf("      worst warp-compensated delta %.2f dB @ %.0f Hz\n", worst, worstF);
         check(std::abs(worst) < 0.6, "nodal recovery matches complex-MNA reference (warp-compensated)");
@@ -170,7 +206,11 @@ int main()
         for (double f = 100.0; f <= 2000.0; f *= 1.01)
         {
             const double d = 20.0 * std::log10(std::abs(hE5c(f)));
-            if (d < dipDb) { dipDb = d; dipF = f; }
+            if (d < dipDb)
+            {
+                dipDb = d;
+                dipF = f;
+            }
         }
         // spot-check the nodal bridged-T at the dip frequency too
         const double dipMeas = measureDb(fs, dipF, [&](double x) { return rec.processBridgedT(x); });
@@ -187,8 +227,12 @@ int main()
         nalr::V1EarlyPresenceStage pres;
         nalr::V1EarlyDriveStage drv;
         nalr::V1EarlyRecoveryStage rec;
-        inbuf.prepare(fs); pres.prepare(fs); drv.prepare(fs); rec.prepare(fs);
-        pres.setPresence(0.0); drv.setDrive(0.0);
+        inbuf.prepare(fs);
+        pres.prepare(fs);
+        drv.prepare(fs);
+        rec.prepare(fs);
+        pres.setPresence(0.0);
+        drv.setDrive(0.0);
         auto chain = [&](double x) { return rec.process(drv.process(pres.process(inbuf.process(x)))); };
 
         // Sample the response; report shape features. Normalise to the ~3 kHz high bump.
@@ -198,7 +242,11 @@ int main()
         for (double f = 500.0; f <= 1200.0; f *= 1.01)
         {
             const double d = at(f);
-            if (d < notchDb) { notchDb = d; notchF = f; }
+            if (d < notchDb)
+            {
+                notchDb = d;
+                notchF = f;
+            }
         }
         const double lf = at(25.0) - ref3k;
         const double bump90 = at(90.0) - ref3k;
@@ -206,9 +254,14 @@ int main()
         // HF -40 dB point (relative to 3k bump), search upward.
         double hf40 = 20000.0;
         for (double f = 3000.0; f <= 20000.0; f *= 1.01)
-            if (at(f) - ref3k <= -40.0) { hf40 = f; break; }
-        std::printf("      LF@25Hz %.1f dB, bump@90Hz %+.1f dB, notch %.1f dB @ %.0f Hz, -40dB@ %.0f Hz (all re 3kHz)\n",
-                    lf, bump90, notchRel, notchF, hf40);
+            if (at(f) - ref3k <= -40.0)
+            {
+                hf40 = f;
+                break;
+            }
+        std::printf(
+            "      LF@25Hz %.1f dB, bump@90Hz %+.1f dB, notch %.1f dB @ %.0f Hz, -40dB@ %.0f Hz (all re 3kHz)\n", lf,
+            bump90, notchRel, notchF, hf40);
         check(notchF > 800.0 / 1.26 && notchF < 800.0 * 1.26, "full-path notch at ~800 Hz (1/3 oct)");
         check(notchRel < -34.0, "full-path notch reaches §1 depth (~ -35 dB re 3 kHz bump)");
         check(hf40 > 10000.0 && hf40 < 13000.0, "HF -40 dB point ~ 11-12 kHz (§1)");

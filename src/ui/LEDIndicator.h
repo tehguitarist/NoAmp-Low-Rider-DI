@@ -26,7 +26,7 @@ public:
 
     void paint(juce::Graphics& g) override
     {
-        const auto b  = getLocalBounds().toFloat();
+        const auto b = getLocalBounds().toFloat();
         const float r = juce::jmin(b.getWidth(), b.getHeight()) * 0.5f - 0.5f;
         const float cx = b.getCentreX(), cy = b.getCentreY();
 
@@ -45,11 +45,8 @@ public:
             g.fillEllipse(cx - r * 1.7f, cy - r * 1.7f, r * 3.4f, r * 3.4f);
 
             // LED body
-            juce::ColourGradient grad(juce::Colour(0xFF88FFAAu),
-                                       cx - r * 0.3f, cy - r * 0.35f,
-                                       juce::Colour(PedalLookAndFeel::cLEDActive),
-                                       cx + r * 0.5f, cy + r * 0.5f,
-                                       true);
+            juce::ColourGradient grad(juce::Colour(0xFF88FFAAu), cx - r * 0.3f, cy - r * 0.35f,
+                                      juce::Colour(PedalLookAndFeel::cLEDActive), cx + r * 0.5f, cy + r * 0.5f, true);
             g.setGradientFill(grad);
             g.fillEllipse(cx - r, cy - r, r * 2.0f, r * 2.0f);
         }
@@ -63,6 +60,6 @@ public:
     }
 
 private:
-    bool isOn { true };
+    bool isOn{true};
     juce::Image offImage, onImage;
 };

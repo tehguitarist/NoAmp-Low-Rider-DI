@@ -39,16 +39,16 @@ namespace nalr
 // Constants that differ between the CH34-9 (V1L) and CH40 (V2) module respins.
 struct ZenerDriveParams
 {
-    double R23;   // stage-A input series R (V1L R23 10k / V2 R12 10k)
-    double R25;   // stage-A feedback fixed R (V1L R25 22k / V2 R14 22k)
-    double Rpot;  // DRIVE pot value (100k both)
-    double R17;   // stage-B input series R (V1L R17 10k / V2 R15 10k)
-    double Rf;    // stage-B feedback R (V1L R102 220k / V2 R903 220k)
-    double Cj;    // zener pair effective junction capacitance (fit; sets §4 HF rolloff)
-    double Vz;    // zener breakdown voltage
-    double Vf;    // forward drop
-    double Vzt;   // knee softness (fit)
-    double Iref;  // current pinning the clamp at Vth = Vz + Vf
+    double R23;  // stage-A input series R (V1L R23 10k / V2 R12 10k)
+    double R25;  // stage-A feedback fixed R (V1L R25 22k / V2 R14 22k)
+    double Rpot; // DRIVE pot value (100k both)
+    double R17;  // stage-B input series R (V1L R17 10k / V2 R15 10k)
+    double Rf;   // stage-B feedback R (V1L R102 220k / V2 R903 220k)
+    double Cj;   // zener pair effective junction capacitance (fit; sets §4 HF rolloff)
+    double Vz;   // zener breakdown voltage
+    double Vf;   // forward drop
+    double Vzt;  // knee softness (fit)
+    double Iref; // current pinning the clamp at Vth = Vz + Vf
 };
 
 class ZenerDriveModule
@@ -95,8 +95,8 @@ public:
         // Cj 220 pF: the pair's two junction caps in series ~= half a DZ23 device (~450 pF) -> ~225 pF
         // (dsp.md's "~100-225 pF" range). Its ~3.3 kHz corner (< V1E's C28 ~4.8 kHz) is what makes V1L
         // roll off MORE at the top than V1E (FR §4 / §1). Fit parameter -- refine vs captures (Phase 10).
-        return { /*R23*/ 10.0e3, /*R25*/ 22.0e3, /*Rpot*/ 100.0e3, /*R17*/ 10.0e3, /*Rf*/ 220.0e3,
-                 /*Cj*/ 220.0e-12, /*Vz*/ 3.3, /*Vf*/ 0.65, /*Vzt*/ 0.20, /*Iref*/ 5.0e-3 };
+        return {/*R23*/ 10.0e3,   /*R25*/ 22.0e3, /*Rpot*/ 100.0e3, /*R17*/ 10.0e3, /*Rf*/ 220.0e3,
+                /*Cj*/ 220.0e-12, /*Vz*/ 3.3,     /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3};
     }
 
     // The CH40 (V2) respin. netlists.md V4: R12/R14/R15/R903 sit in the CH34-9's R23/R25/R17/Rf roles
@@ -111,6 +111,6 @@ public:
 private:
     ZenerDriveParams prm = v1LateParams();
     double drive01 = 0.5, gainAmag = 4.4;
-    ZenerFeedbackClipper clipB;
+    ZenerFeedbackClipper<> clipB;
 };
 } // namespace nalr

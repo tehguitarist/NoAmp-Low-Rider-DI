@@ -63,8 +63,7 @@ public:
     // Pot positions in [0,1] (V1 Early taper is identity — circuit.md, all B100k linear). Change-gated
     // so an unchanged block skips the stage's impedance recompute (setPresence/setDrive propagate; the
     // nodal stages rebuild). Shared across channels: call with the same values on every V1EarlyDSP.
-    void setParams(double drive, double presence01, double blend, double level, double bass,
-                   double treble) noexcept
+    void setParams(double drive, double presence01, double blend, double level, double bass, double treble) noexcept
     {
         if (changed(presence01, lastPresence))
         {
@@ -103,7 +102,7 @@ public:
         for (int i = 0; i < n; ++i)
         {
             const double inb = input.process(data[i]);
-            dryTap[(size_t) i] = inb;   // buffered dry tap (feeds BLEND's dry leg)
+            dryTap[(size_t) i] = inb; // buffered dry tap (feeds BLEND's dry leg)
             data[i] = presence.process(inb);
         }
 

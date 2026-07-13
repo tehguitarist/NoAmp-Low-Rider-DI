@@ -24,8 +24,8 @@
 // Domain: real volts (double), same convention as V1EarlyDSP/V1LateDSP — the processor scales DAW
 // float <-> volts with kInputRef either side (Calibration.h); this class never sees the DAW domain.
 
-#include "V1EarlyStages.h"   // V1EarlyInputBuffer, reused verbatim (netlists.md V1 == E1/L1)
-#include "V1LateStages.h"    // V1LatePresenceStage, reused verbatim (netlists.md reuse map)
+#include "V1EarlyStages.h" // V1EarlyInputBuffer, reused verbatim (netlists.md V1 == E1/L1)
+#include "V1LateStages.h"  // V1LatePresenceStage, reused verbatim (netlists.md reuse map)
 #include "V2Stages.h"
 #include "ZenerDriveModule.h"
 #include "../utils/ChangeGate.h"
@@ -70,8 +70,8 @@ public:
     // throw, false = "80 Hz" throw (== V1 Late). Change-gated so an unchanged block skips the stage's
     // impedance recompute / matrix rebuild. Shared across channels: call with the same values on every
     // V2DSP.
-    void setParams(double driveKnob, double presence01, double blend, double level, double mid01,
-                   bool midShiftLow430, double bass, double treble, bool bassShift40) noexcept
+    void setParams(double driveKnob, double presence01, double blend, double level, double mid01, bool midShiftLow430,
+                   double bass, double treble, bool bassShift40) noexcept
     {
         if (changed(presence01, lastPresence))
         {
@@ -145,8 +145,8 @@ private:
     V2PeakingToneStage tone;
     V2OutputStage output;
 
-    double lastDrive = -1.0, lastPresence = -1.0, lastBlend = -1.0, lastLevel = -1.0, lastMid = -1.0,
-           lastBass = -1.0, lastTreble = -1.0;
+    double lastDrive = -1.0, lastPresence = -1.0, lastBlend = -1.0, lastLevel = -1.0, lastMid = -1.0, lastBass = -1.0,
+           lastTreble = -1.0;
     int lastMidShift = -1, lastBassShift = -1;
 };
 } // namespace nalr

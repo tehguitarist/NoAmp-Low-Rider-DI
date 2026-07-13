@@ -18,8 +18,16 @@ namespace
 constexpr double kPi = 3.14159265358979323846;
 constexpr int IN = nalr::NodalCircuit::kInput, GND = nalr::NodalCircuit::kDatum;
 
-struct E { int a, b; double val; bool isCap; };
-struct O { int p, n, out; };
+struct E
+{
+    int a, b;
+    double val;
+    bool isCap;
+};
+struct O
+{
+    int p, n, out;
+};
 
 cd mnaSolve(double f, int numNodes, const std::vector<E>& els, const std::vector<O>& ops, int outNode)
 {
@@ -30,35 +38,51 @@ cd mnaSolve(double f, int numNodes, const std::vector<E>& els, const std::vector
     for (const auto& e : els)
     {
         const cd y = e.isCap ? cd(0.0, w * e.val) : cd(1.0 / e.val, 0.0);
-        if (e.a >= 0) at(e.a, e.a) += y;
-        if (e.b >= 0) at(e.b, e.b) += y;
-        if (e.a >= 0 && e.b >= 0) { at(e.a, e.b) -= y; at(e.b, e.a) -= y; }
-        if (e.a == IN && e.b >= 0) rhs[(size_t) e.b] += y;
-        if (e.b == IN && e.a >= 0) rhs[(size_t) e.a] += y;
+        if (e.a >= 0)
+            at(e.a, e.a) += y;
+        if (e.b >= 0)
+            at(e.b, e.b) += y;
+        if (e.a >= 0 && e.b >= 0)
+        {
+            at(e.a, e.b) -= y;
+            at(e.b, e.a) -= y;
+        }
+        if (e.a == IN && e.b >= 0)
+            rhs[(size_t) e.b] += y;
+        if (e.b == IN && e.a >= 0)
+            rhs[(size_t) e.a] += y;
     }
     for (int j = 0; j < (int) ops.size(); ++j)
     {
         const int row = numNodes + j;
         const auto& o = ops[(size_t) j];
-        if (o.out >= 0) at(o.out, row) += 1.0;
-        if (o.p >= 0) at(row, o.p) += 1.0;
-        if (o.n >= 0) at(row, o.n) -= 1.0;
+        if (o.out >= 0)
+            at(o.out, row) += 1.0;
+        if (o.p >= 0)
+            at(row, o.p) += 1.0;
+        if (o.n >= 0)
+            at(row, o.n) -= 1.0;
     }
     for (int c = 0; c < dim; ++c)
     {
         int piv = c;
         for (int r = c + 1; r < dim; ++r)
-            if (std::abs(at(r, c)) > std::abs(at(piv, c))) piv = r;
-        for (int j = 0; j < dim; ++j) std::swap(at(c, j), at(piv, j));
+            if (std::abs(at(r, c)) > std::abs(at(piv, c)))
+                piv = r;
+        for (int j = 0; j < dim; ++j)
+            std::swap(at(c, j), at(piv, j));
         std::swap(rhs[(size_t) c], rhs[(size_t) piv]);
         const cd d = at(c, c);
-        for (int j = 0; j < dim; ++j) at(c, j) /= d;
+        for (int j = 0; j < dim; ++j)
+            at(c, j) /= d;
         rhs[(size_t) c] /= d;
         for (int r = 0; r < dim; ++r)
         {
-            if (r == c) continue;
+            if (r == c)
+                continue;
             const cd fct = at(r, c);
-            for (int j = 0; j < dim; ++j) at(r, j) -= fct * at(c, j);
+            for (int j = 0; j < dim; ++j)
+                at(r, j) -= fct * at(c, j);
             rhs[(size_t) r] -= fct * rhs[(size_t) c];
         }
     }
@@ -68,16 +92,26 @@ cd mnaSolve(double f, int numNodes, const std::vector<E>& els, const std::vector
 std::vector<E> toneEls(double bass, double treble)
 {
     auto cl = [](double r) { return r < 0.5 ? 0.5 : r; };
-    return { { IN, 9, 2.2e-6, true }, { 9, 2, 10.0e-9, true }, { 2, 3, 10.0e3, false },
-             { 3, 4, cl((1.0 - treble) * 100.0e3), false }, { 4, 5, cl(treble * 100.0e3), false },
-             { 5, 1, 10.0e-9, true }, { 4, 0, 3.3e3, false }, { 9, 6, 10.0e3, false },
-             { 6, 7, cl((1.0 - bass) * 100.0e3), false }, { 7, 8, cl(bass * 100.0e3), false },
-             { 8, 1, 10.0e3, false }, { 6, 7, 22.0e-9, true }, { 8, 7, 22.0e-9, true },
-             { 7, 0, 10.0e3, false }, { 0, 1, 1.0e6, false }, { 0, 1, 22.0e-12, true } };
+    return {{IN, 9, 2.2e-6, true},
+            {9, 2, 10.0e-9, true},
+            {2, 3, 10.0e3, false},
+            {3, 4, cl((1.0 - treble) * 100.0e3), false},
+            {4, 5, cl(treble * 100.0e3), false},
+            {5, 1, 10.0e-9, true},
+            {4, 0, 3.3e3, false},
+            {9, 6, 10.0e3, false},
+            {6, 7, cl((1.0 - bass) * 100.0e3), false},
+            {7, 8, cl(bass * 100.0e3), false},
+            {8, 1, 10.0e3, false},
+            {6, 7, 22.0e-9, true},
+            {8, 7, 22.0e-9, true},
+            {7, 0, 10.0e3, false},
+            {0, 1, 1.0e6, false},
+            {0, 1, 22.0e-12, true}};
 }
 double refDb(double f, double bass, double treble)
 {
-    return 20.0 * std::log10(std::abs(mnaSolve(f, 10, toneEls(bass, treble), { { GND, 0, 1 } }, 1)));
+    return 20.0 * std::log10(std::abs(mnaSolve(f, 10, toneEls(bass, treble), {{GND, 0, 1}}, 1)));
 }
 
 double measureDb(nalr::V1EarlyToneStackStage& st, double fs, double freq)
@@ -88,7 +122,8 @@ double measureDb(nalr::V1EarlyToneStackStage& st, double fs, double freq)
     {
         const double x = std::sin(2.0 * kPi * freq * (double) n / fs);
         const double y = st.process(x);
-        if (n > settle) peak = std::max(peak, std::abs(y));
+        if (n > settle)
+            peak = std::max(peak, std::abs(y));
     }
     return 20.0 * std::log10(peak);
 }
@@ -97,7 +132,11 @@ double measureDb(nalr::V1EarlyToneStackStage& st, double fs, double freq)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) { std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg); pass &= ok; };
+    auto check = [&](bool ok, const char* msg)
+    {
+        std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
+        pass &= ok;
+    };
     const double fs = 96000.0;
 
     nalr::V1EarlyToneStackStage st;
@@ -110,13 +149,18 @@ int main()
         for (double bt = 0.0; bt <= 1.0; bt += 0.5)
             for (double tt = 0.0; tt <= 1.0; tt += 0.5)
             {
-                st.setTone(bt, tt); st.reset();
+                st.setTone(bt, tt);
+                st.reset();
                 for (double f = 30.0; f <= 16000.0; f *= std::pow(10.0, 1.0 / 12.0))
                 {
                     const double meas = measureDb(st, fs, f);
                     const double fa = (fs / kPi) * std::tan(kPi * f / fs);
                     const double delta = meas - refDb(fa, bt, tt);
-                    if (std::abs(delta) > std::abs(worst)) { worst = delta; worstF = f; }
+                    if (std::abs(delta) > std::abs(worst))
+                    {
+                        worst = delta;
+                        worstF = f;
+                    }
                 }
             }
         std::printf("      worst warp-compensated delta %.3f dB @ %.0f Hz\n", worst, worstF);

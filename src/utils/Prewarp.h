@@ -28,7 +28,7 @@ namespace pedal::dsp
  * is negligible — do NOT prewarp those (the oversampler handles it). Prewarp only the base-rate
  * linear stages.
  */
-inline double prewarpCapacitance (double cNominal, double cornerHz, double fs)
+inline double prewarpCapacitance(double cNominal, double cornerHz, double fs)
 {
     constexpr double kMaxTheta = 1.55; // < pi/2; keeps tan() finite if a corner nears Nyquist
     double theta = M_PI * cornerHz / fs;
@@ -36,6 +36,6 @@ inline double prewarpCapacitance (double cNominal, double cornerHz, double fs)
         theta = kMaxTheta;
     if (theta < 1.0e-9)
         return cNominal; // corner far below Nyquist: no warping, no correction
-    return cNominal * theta / std::tan (theta);
+    return cNominal * theta / std::tan(theta);
 }
 } // namespace pedal::dsp

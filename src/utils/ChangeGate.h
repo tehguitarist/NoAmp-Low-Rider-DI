@@ -9,8 +9,8 @@
 // compare instead of `!=` (bit-identical to `!=` for the finite, non-NaN pot values these gates see).
 namespace nalr
 {
-    [[nodiscard]] inline bool changed(double a, double b) noexcept
-    {
-        return std::memcmp(&a, &b, sizeof(double)) != 0;
-    }
+[[nodiscard]] inline bool changed(double a, double b) noexcept
+{
+    return std::memcmp(&a, &b, sizeof(double)) != 0;
 }
+} // namespace nalr

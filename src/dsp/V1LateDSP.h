@@ -64,8 +64,7 @@ public:
     // Pot positions in [0,1] (V1 Late taper is identity — circuit.md, all B100k linear). Change-gated
     // so an unchanged block skips the stage's impedance recompute. Shared across channels: call with
     // the same values on every V1LateDSP.
-    void setParams(double driveKnob, double presence01, double blend, double level, double bass,
-                   double treble) noexcept
+    void setParams(double driveKnob, double presence01, double blend, double level, double bass, double treble) noexcept
     {
         if (changed(presence01, lastPresence))
         {
@@ -103,13 +102,13 @@ public:
     {
         for (int i = 0; i < n; ++i)
         {
-            const double inb = input.process(data[i]);          // L1: input buffer -> dry tap
-            const double notched = presence.processNotch(inb);  // L2: twin-T notch
+            const double inb = input.process(data[i]);               // L1: input buffer -> dry tap
+            const double notched = presence.processNotch(inb);       // L2: twin-T notch
             const double presenced = presence.processOpAmp(notched); // L3: PRESENCE pot-in-feedback
-            const double clipped = drive.process(presenced);    // L4: CH34-9 DRIVE + zener clip
-            const double wet = recovery.process(clipped);       // L5: S-Ks + bridged-T + wet buffer
-            const double b = blendLevel.process(inb, wet);      // L6: BLEND(dry,wet) -> LEVEL
-            data[i] = output.process(tone.process(b));           // L7 tone -> L8 output
+            const double clipped = drive.process(presenced);         // L4: CH34-9 DRIVE + zener clip
+            const double wet = recovery.process(clipped);            // L5: S-Ks + bridged-T + wet buffer
+            const double b = blendLevel.process(inb, wet);           // L6: BLEND(dry,wet) -> LEVEL
+            data[i] = output.process(tone.process(b));               // L7 tone -> L8 output
         }
     }
 

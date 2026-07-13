@@ -328,3 +328,42 @@ target_compile_definitions(OfflineRender
 target_link_libraries(OfflineRender
     PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp juce::juce_audio_formats
     PUBLIC juce::juce_recommended_config_flags)
+
+# --- Phase 9: performance & fidelity probes (build.md) -------------------------------------------
+# All three are registered as FINITE-ONLY ctest gates (assert no NaN/Inf; do NOT gate on absolute
+# CPU % or hardcoded dB thresholds — CI speed varies and this build has no prewarp/shelf yet to hit
+# a prior numeric target). Their printed tables are the human-readable data behind the README
+# performance table and the HQ-toggle decision recorded in CLAUDE.md.
+
+# 9 — PerfBenchmark: CPU % of realtime + getLatencySamples() per OS factor x revision.
+juce_add_console_app(PerfBenchmark PRODUCT_NAME "PerfBenchmark")
+target_sources(PerfBenchmark PRIVATE tests/PerfBenchmark.cpp)
+target_compile_definitions(PerfBenchmark
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(PerfBenchmark
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME PerfBenchmark COMMAND PerfBenchmark)
+
+# 9 — FeatureProfile: per performance-affecting feature, CPU cost AND accuracy delta together
+# (AccurateOmega vs chowdsp omega4 in the zener DRIVE clip; RailClip ADAA on/off) — drives the
+# HQ-toggle decision (dsp.md "HQ / Eco mode").
+juce_add_console_app(FeatureProfile PRODUCT_NAME "FeatureProfile")
+target_sources(FeatureProfile PRIVATE tests/FeatureProfile.cpp)
+target_compile_definitions(FeatureProfile
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(FeatureProfile
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME FeatureProfile COMMAND FeatureProfile)
+
+# 9 — OSFidelity: how close 1x/2x/4x are to 8x (FR fidelity + harmonic-vs-aliasing decomposition),
+# V1-Early-only (the only revision with an oversampling region today — dsp.md "Top-octave accuracy").
+juce_add_console_app(OSFidelity PRODUCT_NAME "OSFidelity")
+target_sources(OSFidelity PRIVATE tests/OSFidelity.cpp)
+target_compile_definitions(OSFidelity
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(OSFidelity
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME OSFidelity COMMAND OSFidelity)

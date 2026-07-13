@@ -6,28 +6,26 @@
 namespace
 {
 constexpr float kTrimRangeDb = 24.0f;
-constexpr double kBypassRampSeconds = 0.005; // ~5 ms crossfade, architecture.md "Bypass"
+constexpr double kBypassRampSeconds = 0.005;        // ~5 ms crossfade, architecture.md "Bypass"
 constexpr double kRevisionCrossfadeSeconds = 0.030; // Phase 7: longer than bypass's 5ms — the three
-                                                     // revisions differ enough in level/spectrum
-                                                     // (different clip elements, tone topologies)
-                                                     // that a fast fade could still read as a bump.
-}
+                                                    // revisions differ enough in level/spectrum
+                                                    // (different clip elements, tone topologies)
+                                                    // that a fast fade could still read as a bump.
+} // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { idRevision, 1 }, "Revision",
-        juce::StringArray { "V1 Early", "V1 Late", "V2" }, 0));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idRevision, 1}, "Revision",
+                                                                  juce::StringArray{"V1 Early", "V1 Late", "V2"}, 0));
 
     // Pot controls — 0..1 linear (all pots on this pedal are B100k / linear, circuit.md gotcha).
     // Taper (identity for all revisions) is applied in DSP, not here.
     auto addPot = [&params](const char* id, const char* name)
     {
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID { id, 1 }, name,
-            juce::NormalisableRange<float> { 0.0f, 1.0f }, 0.5f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{id, 1}, name,
+                                                                     juce::NormalisableRange<float>{0.0f, 1.0f}, 0.5f));
     };
     addPot(idDrive, "Drive");
     addPot(idPresence, "Presence");
@@ -37,54 +35,50 @@ juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcesso
     addPot(idTreble, "Treble");
     addPot(idMid, "Mid"); // V2-only; no-op on V1 revisions (Phase 6.3), UI hides it
 
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { idMidShift, 1 }, "Mid Shift",
-        juce::StringArray { "500 Hz", "1000 Hz" }, 0));
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { idBassShift, 1 }, "Bass Shift",
-        juce::StringArray { "40 Hz", "80 Hz" }, 0));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idMidShift, 1}, "Mid Shift",
+                                                                  juce::StringArray{"500 Hz", "1000 Hz"}, 0));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idBassShift, 1}, "Bass Shift",
+                                                                  juce::StringArray{"40 Hz", "80 Hz"}, 0));
 
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { idInputTrim, 1 }, "Input Trim",
-        juce::NormalisableRange<float> { -kTrimRangeDb, kTrimRangeDb }, 0.0f));
-    params.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { idOutputTrim, 1 }, "Output Trim",
-        juce::NormalisableRange<float> { -kTrimRangeDb, kTrimRangeDb }, 0.0f));
+    params.push_back(
+        std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{idInputTrim, 1}, "Input Trim",
+                                                    juce::NormalisableRange<float>{-kTrimRangeDb, kTrimRangeDb}, 0.0f));
+    params.push_back(
+        std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{idOutputTrim, 1}, "Output Trim",
+                                                    juce::NormalisableRange<float>{-kTrimRangeDb, kTrimRangeDb}, 0.0f));
 
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { idOversampling, 1 }, "Oversampling",
-        juce::StringArray { "1x", "2x", "4x", "8x" }, 2));
-    params.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { idRenderOversampling, 1 }, "Render Oversampling",
-        juce::StringArray { "1x", "2x", "4x", "8x" }, 3));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idOversampling, 1}, "Oversampling",
+                                                                  juce::StringArray{"1x", "2x", "4x", "8x"}, 2));
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idRenderOversampling, 1},
+                                                                  "Render Oversampling",
+                                                                  juce::StringArray{"1x", "2x", "4x", "8x"}, 3));
 
-    params.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { idBypass, 1 }, "Bypass", false));
+    params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{idBypass, 1}, "Bypass", false));
 
-    return { params.begin(), params.end() };
+    return {params.begin(), params.end()};
 }
 
 NoAmpLowRiderDIAudioProcessor::NoAmpLowRiderDIAudioProcessor()
     : AudioProcessor(BusesProperties()
-                          .withInput("Input", juce::AudioChannelSet::stereo(), true)
-                          .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
+                         .withInput("Input", juce::AudioChannelSet::stereo(), true)
+                         .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
-    pRevision           = apvts.getRawParameterValue(idRevision);
-    pDrive              = apvts.getRawParameterValue(idDrive);
-    pPresence           = apvts.getRawParameterValue(idPresence);
-    pBlend              = apvts.getRawParameterValue(idBlend);
-    pLevel              = apvts.getRawParameterValue(idLevel);
-    pBass               = apvts.getRawParameterValue(idBass);
-    pTreble             = apvts.getRawParameterValue(idTreble);
-    pMid                = apvts.getRawParameterValue(idMid);
-    pMidShift           = apvts.getRawParameterValue(idMidShift);
-    pBassShift          = apvts.getRawParameterValue(idBassShift);
-    pInputTrim          = apvts.getRawParameterValue(idInputTrim);
-    pOutputTrim         = apvts.getRawParameterValue(idOutputTrim);
-    pOversampling       = apvts.getRawParameterValue(idOversampling);
+    pRevision = apvts.getRawParameterValue(idRevision);
+    pDrive = apvts.getRawParameterValue(idDrive);
+    pPresence = apvts.getRawParameterValue(idPresence);
+    pBlend = apvts.getRawParameterValue(idBlend);
+    pLevel = apvts.getRawParameterValue(idLevel);
+    pBass = apvts.getRawParameterValue(idBass);
+    pTreble = apvts.getRawParameterValue(idTreble);
+    pMid = apvts.getRawParameterValue(idMid);
+    pMidShift = apvts.getRawParameterValue(idMidShift);
+    pBassShift = apvts.getRawParameterValue(idBassShift);
+    pInputTrim = apvts.getRawParameterValue(idInputTrim);
+    pOutputTrim = apvts.getRawParameterValue(idOutputTrim);
+    pOversampling = apvts.getRawParameterValue(idOversampling);
     pRenderOversampling = apvts.getRawParameterValue(idRenderOversampling);
-    pBypass             = apvts.getRawParameterValue(idBypass);
+    pBypass = apvts.getRawParameterValue(idBypass);
 }
 
 void NoAmpLowRiderDIAudioProcessor::runRevision(int revision, int channel, double* data, int numSamples) noexcept
@@ -99,9 +93,9 @@ void NoAmpLowRiderDIAudioProcessor::runRevision(int revision, int channel, doubl
 
 int NoAmpLowRiderDIAudioProcessor::latencyForRevision(int revision) const noexcept
 {
-    return revision == 0 ? dspEarly[0].getLatencySamples()
-         : revision == 1 ? dspLate[0].getLatencySamples()
-                          : dspV2[0].getLatencySamples();
+    return revision == 0   ? dspEarly[0].getLatencySamples()
+           : revision == 1 ? dspLate[0].getLatencySamples()
+                           : dspV2[0].getLatencySamples();
 }
 
 float NoAmpLowRiderDIAudioProcessor::outputGainFor(float outTrimDb) const noexcept
@@ -208,14 +202,12 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     for (auto& d : dspEarly)
     {
         d.setOversamplingFactor(wantFactor);
-        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(),
-                    pTreble->load());
+        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(), pTreble->load());
     }
     for (auto& d : dspLate)
     {
         d.setOversamplingFactor(wantFactor);
-        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(),
-                    pTreble->load());
+        d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(), pTreble->load());
     }
     for (auto& d : dspV2)
     {
@@ -272,17 +264,25 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         for (int i = 0; i < numSamples; ++i)
         {
             const double wdfOut = crossfading
-                ? (voltsScratch[(size_t) i] * (double) revisionFadeRamp[(size_t) i]
-                   + voltsScratchPrev[(size_t) i] * (1.0 - (double) revisionFadeRamp[(size_t) i]))
-                : voltsScratch[(size_t) i];
+                                      ? (voltsScratch[(size_t) i] * (double) revisionFadeRamp[(size_t) i] +
+                                         voltsScratchPrev[(size_t) i] * (1.0 - (double) revisionFadeRamp[(size_t) i]))
+                                      : voltsScratch[(size_t) i];
             const float processed = (float) wdfOut * outGainRamp[(size_t) i];
             const float mix = bypassRamp[(size_t) i];
             data[i] = processed * (1.0f - mix) + dryCopy[(size_t) i] * mix;
             peakOut = juce::jmax(peakOut, std::abs(data[i]));
         }
 
-        if (ch == 0) { inputLevelL.store(peakIn); outputLevelL.store(peakOut); }
-        else if (ch == 1) { inputLevelR.store(peakIn); outputLevelR.store(peakOut); }
+        if (ch == 0)
+        {
+            inputLevelL.store(peakIn);
+            outputLevelL.store(peakOut);
+        }
+        else if (ch == 1)
+        {
+            inputLevelR.store(peakIn);
+            outputLevelR.store(peakOut);
+        }
     }
 
     // Report OS-factor/revision latency changes to the host (only when it actually changed — the call

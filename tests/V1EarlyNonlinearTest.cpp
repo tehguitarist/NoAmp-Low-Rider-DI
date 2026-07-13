@@ -46,8 +46,8 @@ AliasResult measureAliasing(std::vector<double>& samples, double fs, double f0)
     const double a0 = 0.35875, a1 = 0.48829, a2 = 0.14128, a3 = 0.01168;
     for (int n = 0; n < N; ++n)
     {
-        const double w = a0 - a1 * std::cos(2.0 * kPi * n / (N - 1)) + a2 * std::cos(4.0 * kPi * n / (N - 1))
-                         - a3 * std::cos(6.0 * kPi * n / (N - 1));
+        const double w = a0 - a1 * std::cos(2.0 * kPi * n / (N - 1)) + a2 * std::cos(4.0 * kPi * n / (N - 1)) -
+                         a3 * std::cos(6.0 * kPi * n / (N - 1));
         buf[(size_t) n] = (float) (samples[(size_t) n] / peak * w);
     }
 
@@ -59,7 +59,8 @@ AliasResult measureAliasing(std::vector<double>& samples, double fs, double f0)
     const int hiBin = (int) std::floor(20000.0 / binHz);
     const int guard = 8;
 
-    auto isHarmonic = [&](int bin) {
+    auto isHarmonic = [&](int bin)
+    {
         const double f = bin * binHz;
         const double ratio = f / f0;
         const double nearest = std::round(ratio);
@@ -83,7 +84,7 @@ AliasResult measureAliasing(std::vector<double>& samples, double fs, double f0)
             worstBin = b;
         }
     }
-    return { 20.0 * std::log10(worst / fundMag), worstBin * binHz };
+    return {20.0 * std::log10(worst / fundMag), worstBin * binHz};
 }
 
 // Drive the region with a steady sine and capture N frame-aligned steady-state samples.
@@ -99,7 +100,8 @@ std::vector<double> captureRegion(double fs, double f0, double amp, int factor, 
 
     std::vector<double> block((size_t) N);
     int phase = 0;
-    auto fillBlock = [&]() {
+    auto fillBlock = [&]()
+    {
         for (int n = 0; n < N; ++n)
             block[(size_t) n] = amp * std::sin(2.0 * kPi * f0 * (double) (phase++) / fs);
     };
@@ -131,7 +133,8 @@ double dcSettle(double drive01, double amp, double sign)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
@@ -183,7 +186,7 @@ int main()
     // --- (2) Aliasing at 4x OS < -70 dBFS ---
     std::printf("Aliasing vs OS factor (full-drive %.0f Hz, ADAA on):\n", f0);
     double alias1x = 0.0, alias4x = 0.0;
-    for (int factor : { 1, 2, 4, 8 })
+    for (int factor : {1, 2, 4, 8})
     {
         auto cap = captureRegion(fs, f0, 0.1, factor, true, N);
         auto r = measureAliasing(cap, fs, f0);

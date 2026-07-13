@@ -51,7 +51,7 @@ double refOut(double vIn, double Rin, double Rf, double Vth, double Vt, double I
 }
 
 // Settle DC through the WDF (charges Cj), return the steady output.
-double wdfDC(nalr::ZenerFeedbackClipper& c, double vIn)
+double wdfDC(nalr::ZenerFeedbackClipper<>& c, double vIn)
 {
     double y = 0.0;
     for (int n = 0; n < 4000; ++n)
@@ -62,7 +62,7 @@ double wdfDC(nalr::ZenerFeedbackClipper& c, double vIn)
 // Low-amplitude sine gain (peak/peak) at a frequency — for the Cj rolloff corner.
 double acGainDb(double fs, double freq, double amp, double Cj)
 {
-    nalr::ZenerFeedbackClipper c;
+    nalr::ZenerFeedbackClipper<> c;
     c.setParams(10.0e3, 220.0e3, Cj);
     c.prepare(fs);
     const int total = (int) (fs * 0.2), settle = total / 2;
@@ -100,7 +100,7 @@ double cornerHz(double fs, double Cj)
 // THD via coherent-sampling DFT (no leakage): K integer cycles over N samples => f0 = K*fs/N.
 double measureTHD(double fs, double f0Target, double amp, double& thdOut, double& fundOut)
 {
-    nalr::ZenerFeedbackClipper c;
+    nalr::ZenerFeedbackClipper<> c;
     c.setParams(10.0e3, 220.0e3, 150.0e-12);
     c.prepare(fs);
 
@@ -171,7 +171,7 @@ int main()
     // ------------------------------------------------------------ 2. DC transfer vs exact reference
     const double Rin = 10.0e3, Rf = 220.0e3, Cj = 150.0e-12;
     const double Vz = 3.3, Vf = 0.65, Vzt = 0.20, Iref = 5.0e-3, Vth = Vz + Vf;
-    nalr::ZenerFeedbackClipper clip;
+    nalr::ZenerFeedbackClipper<> clip;
     clip.setParams(Rin, Rf, Cj, Vz, Vf, Vzt, Iref);
     clip.prepare(96000.0);
 
@@ -216,7 +216,7 @@ int main()
     bool thdOk = true;
     double lastThd = 0.0;
     bool monotone = true;
-    for (double amp : { 0.05, 0.5, 5.0 }) // below / around / above knee
+    for (double amp : {0.05, 0.5, 5.0}) // below / around / above knee
     {
         double t44 = 0, f44 = 0, t96 = 0, f96 = 0;
         measureTHD(44100.0, 1000.0, amp, t44, f44);

@@ -15,27 +15,30 @@ struct Setting
     float normalizedValue;
 };
 
-bool nearlyEqual(float a, float b, float eps = 1.0e-4f) { return std::abs(a - b) < eps; }
+bool nearlyEqual(float a, float b, float eps = 1.0e-4f)
+{
+    return std::abs(a - b) < eps;
+}
 } // namespace
 
 int main()
 {
     const Setting settings[] = {
-        { NoAmpLowRiderDIAudioProcessor::idRevision, 1.0f },            // V2 (index 2 of 3)
-        { NoAmpLowRiderDIAudioProcessor::idDrive, 0.73f },
-        { NoAmpLowRiderDIAudioProcessor::idPresence, 0.12f },
-        { NoAmpLowRiderDIAudioProcessor::idBlend, 0.91f },
-        { NoAmpLowRiderDIAudioProcessor::idLevel, 0.4f },
-        { NoAmpLowRiderDIAudioProcessor::idBass, 0.6f },
-        { NoAmpLowRiderDIAudioProcessor::idTreble, 0.2f },
-        { NoAmpLowRiderDIAudioProcessor::idMid, 0.85f },
-        { NoAmpLowRiderDIAudioProcessor::idMidShift, 1.0f },            // "1000 Hz"
-        { NoAmpLowRiderDIAudioProcessor::idBassShift, 1.0f },           // "80 Hz"
-        { NoAmpLowRiderDIAudioProcessor::idInputTrim, 0.75f },
-        { NoAmpLowRiderDIAudioProcessor::idOutputTrim, 0.25f },
-        { NoAmpLowRiderDIAudioProcessor::idOversampling, 1.0f },        // "8x"
-        { NoAmpLowRiderDIAudioProcessor::idRenderOversampling, 0.0f },  // "1x"
-        { NoAmpLowRiderDIAudioProcessor::idBypass, 1.0f },
+        {NoAmpLowRiderDIAudioProcessor::idRevision, 1.0f}, // V2 (index 2 of 3)
+        {NoAmpLowRiderDIAudioProcessor::idDrive, 0.73f},
+        {NoAmpLowRiderDIAudioProcessor::idPresence, 0.12f},
+        {NoAmpLowRiderDIAudioProcessor::idBlend, 0.91f},
+        {NoAmpLowRiderDIAudioProcessor::idLevel, 0.4f},
+        {NoAmpLowRiderDIAudioProcessor::idBass, 0.6f},
+        {NoAmpLowRiderDIAudioProcessor::idTreble, 0.2f},
+        {NoAmpLowRiderDIAudioProcessor::idMid, 0.85f},
+        {NoAmpLowRiderDIAudioProcessor::idMidShift, 1.0f},  // "1000 Hz"
+        {NoAmpLowRiderDIAudioProcessor::idBassShift, 1.0f}, // "80 Hz"
+        {NoAmpLowRiderDIAudioProcessor::idInputTrim, 0.75f},
+        {NoAmpLowRiderDIAudioProcessor::idOutputTrim, 0.25f},
+        {NoAmpLowRiderDIAudioProcessor::idOversampling, 1.0f},       // "8x"
+        {NoAmpLowRiderDIAudioProcessor::idRenderOversampling, 0.0f}, // "1x"
+        {NoAmpLowRiderDIAudioProcessor::idBypass, 1.0f},
     };
 
     NoAmpLowRiderDIAudioProcessor proc1;

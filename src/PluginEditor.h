@@ -16,8 +16,7 @@
 // SHIFT value readouts on top, reflowing between the V1 (Early/Late share one layout) and V2
 // arrangements when the `revision` parameter changes. Element positions/sizes below come from the
 // user's exact texture-pixel measurements (ui/positions.csv, 1900x1450 canvas), not estimates.
-class NoAmpLowRiderDIAudioProcessorEditor final : public juce::AudioProcessorEditor,
-                                                   private juce::Timer
+class NoAmpLowRiderDIAudioProcessorEditor final : public juce::AudioProcessorEditor, private juce::Timer
 {
 public:
     explicit NoAmpLowRiderDIAudioProcessorEditor(NoAmpLowRiderDIAudioProcessor&);
@@ -45,10 +44,10 @@ private:
     static constexpr int kBaseW = 612;
     static constexpr int kBaseH = 381;
     static constexpr int kMargin = 10;
-    static constexpr int kPanelW = 74;   // Monarch's side-panel column width (just fits a 70px knob)
-    static constexpr int kColGap = 8;    // gap between side panel and pedal face
-    static constexpr int kOSH = 24;      // oversampling strip height
-    static constexpr int kFaceGap = 10;  // gap between pedal face and OS strip
+    static constexpr int kPanelW = 74;  // Monarch's side-panel column width (just fits a 70px knob)
+    static constexpr int kColGap = 8;   // gap between side panel and pedal face
+    static constexpr int kOSH = 24;     // oversampling strip height
+    static constexpr int kFaceGap = 10; // gap between pedal face and OS strip
     float currentScale = 1.0f;
     int lastRevision = -1;
     juce::Rectangle<int> faceBounds;
@@ -65,13 +64,13 @@ private:
     // ── OS strip ─────────────────────────────────────────────────────────────
     juce::Label osLabel, osLiveLabel, osRenderLabel, uiSizeLabel, versionLabel;
     juce::ComboBox osRealtimeBox, osRenderBox;
-    juce::TextButton scaleButton { "100%" };
+    juce::TextButton scaleButton{"100%"};
     std::unique_ptr<juce::ComboBoxParameterAttachment> osRealtimeAttach, osRenderAttach;
     juce::ApplicationProperties appProps;
 
     // ── Bypass + LED (BYPASS caption is code-drawn; ACTIVE is baked into the texture) ──────────
     juce::TextButton bypassButton;
-    juce::Label bypassLabel { {}, "BYPASS" };
+    juce::Label bypassLabel{{}, "BYPASS"};
     LEDIndicator ledIndicator;
     std::unique_ptr<juce::ButtonParameterAttachment> bypassAttach;
 
@@ -81,8 +80,8 @@ private:
 
     // ── Pedal-face knobs (all revisions; names are baked into the texture) ──────────────────────
     juce::Slider levelSlider, blendSlider, trebleSlider, bassSlider, driveSlider, presenceSlider, midSlider;
-    std::unique_ptr<juce::SliderParameterAttachment> levelAttach, blendAttach, trebleAttach,
-        bassAttach, driveAttach, presenceAttach, midAttach;
+    std::unique_ptr<juce::SliderParameterAttachment> levelAttach, blendAttach, trebleAttach, bassAttach, driveAttach,
+        presenceAttach, midAttach;
 
     // ── V2-only SHIFT pushbuttons (SHIFT/Hz captions are baked; these show the live "500/1000"-
     // style numbers with the active one highlighted) ────────────────────────────────────────────
