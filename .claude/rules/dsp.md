@@ -261,14 +261,23 @@ Two fixes, a real trade-off:
   Recommended over prewarp-alone whenever the deficit is audible; prewarp-alone is the zero-CPU
   fallback. (The two are complementary, not exclusive.)
 
-- **Low-OS top-octave restore (a cheap third option, complements both).** Even with prewarp, at LOW
-  oversampling the tone caps' bilinear Nyquist zero still droops the top octave (reference: 1× ≈
-  −4 dB @8k / −10 @12k / −21 @16k; 2× ≈ a quarter of that in dB; 4×/8× negligible — measure with
-  `OSFidelity`). The droop is essentially POT-INDEPENDENT and scales with the OS factor, so a single
-  fixed-shape high-shelf (one biquad at base rate, gain set PER OS factor, ~0 at 4×/8× so it's
-  transparent at the default) recovers most of it — 1× to within ~±1 dB through 12 kHz. It can't
-  invert the near-Nyquist zero (16 kHz stays down — accepted, least audible). Always-on (self-
-  disables where there's no droop); makes low-OS "sound close" so high-OS only refines aliasing.
+- **Low-OS top-octave restore (a cheap third option, complements both) — IMPLEMENTED
+  (`src/dsp/TopOctaveShelf.h`).** Even with prewarp, at LOW oversampling the recovery cab-sim caps'
+  bilinear Nyquist zero still droops the top octave (this build, 48 kHz base rate: 1× ≈ −6 dB @8k /
+  −13..−16 @12k / −26..−32 @16k across the three revisions; 2× ≈ a fifth of that in dB; 4×/8×
+  negligible — measure with `OSFidelity` Part A). The droop is essentially POT-INDEPENDENT and, key
+  to the fix, its SHAPE is the same at every OS factor — only its magnitude scales (2×/4× ≈ 0.21× /
+  0.04× of 1× in dB, frequency-independent). So a single fixed-shape high-shelf (one 2nd-order RBJ
+  biquad at base rate, dB gain scaled PER OS factor, 0 at 8×) recovers most of it. The droop's
+  concave-up shape can't be inverted exactly by one biquad, so the realistic target is **±2 dB through
+  ~10 kHz** (not the ±1 dB through 12 kHz an ideal inverse would give); 12 kHz lands within ~2–5 dB,
+  16 kHz stays down (the near-Nyquist zero is uninvertible — accepted, least audible). One shared
+  tuning (corner 8 kHz, +11 dB 1× plateau, Q 0.9) serves all three revisions (their droops differ only
+  ~1–3 dB). Lives INSIDE each region (`V1EarlyDriveClipRecovery`/`ZenerDriveClipRecovery`), applied at
+  base rate after downsampling; always-on, self-disables at high OS (the shipping default is 4× live /
+  8× render, so it only engages at 1×/2×). It boosts the top octave after the clip but does NOT
+  measurably amplify aliasing (the worst alias bins fold to low-mid, below the corner — `OSFidelity`
+  Part B/C confirm). Makes low-OS "sound close" so high-OS only refines aliasing.
 
 Independent of supply-voltage / rail features (those scale amplitude headroom; prewarp corrects
 frequency) — the two never interact.

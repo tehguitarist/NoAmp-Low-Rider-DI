@@ -106,7 +106,29 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 9 COMPLETE + pre-Phase-10 items #1 and #2 DONE (2026-07-13).**
+> **CURRENT: Phase 10 A/B HARNESS BUILT + 12 real captures in hand (2026-07-13). Next: RUN + CALIBRATE.**
+> Captures in `analysis/captures/` (48k/24-bit; 3 V1E, 3 V1L, 6 V2) are **NAM-model output**
+> (level-normalized) → calibrate SHAPE-first; V1E+V2 identically staged (levels real → anchor
+> `kInputRef` off their known clip knees ±4.2 V rail / ±3.9 V zener), V1L variably staged (shape/THD/FR
+> only). Harness: `analysis/noamp_captures.py` (parse/discover/render-args — template
+> `analyze.parse_filename` mis-reads this pedal, don't use it), `analysis/offline_render.cpp` now
+> dispatches all 3 revisions (`--rev` + V2 `--mid/--mid-shift/--bass-shift`), `analysis/ab_report.py`
+> (FR/THD/NULL/LEVEL per capture + V1E drive knob-pair). **Read `analysis/README.md` before running**
+> (requirements + metric interpretation + calibration order). Not yet run end-to-end (this session's
+> env lacked numpy/scipy); `Calibration.h` constants still interim. Memory: `noamp-capture-pipeline`.
+>
+> **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
+> **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ
+> high-shelf (corner 8 kHz, +11 dB 1× plateau, Q 0.9), base-rate, inside each region
+> (`V1EarlyDriveClipRecovery`/`ZenerDriveClipRecovery`) after downsampling. Corrects the recovery caps'
+> low-OS bilinear top-octave droop; dB gain scaled per OS factor (1×:1.0, 2×:0.21, 4×:0.04, 8×:0 →
+> transparent at the 4×/8× shipping defaults). One shared tuning for all three revs (droops differ
+> ≤~3 dB). Achieves 1× net within ±2 dB through 10 kHz (raw was −6..−10), 12 kHz within ~2–5 dB, 16 kHz
+> stays down (near-Nyquist zero uninvertible). Does NOT amplify aliasing (worst alias bins fold below
+> the corner). Gated in `OSFidelity` Part A (now covers all three regions, asserted: 1× within ±3 dB
+> @8–10 kHz, ~transparent at 4×). **#4 UI layout tuning DROPPED** — user reviewed renders and is happy
+> with `layoutV1`/`layoutV2` as-is; no tuning pass needed.
+>
 > **#1 DAW listen (user):** user confirmed all three revisions react correctly by ear; the only note
 > was V1E being quieter than V1L/V2 — confirmed FAITHFUL (V1E has +6.8 dB post-blend gain and a UNITY
 > wet buffer, vs V1L's added +10.1 dB wet make-up buffer / V2's +10.1 dB LEVEL stage, plus V1E's lower
@@ -155,14 +177,12 @@ without images.
 > "1000 Hz"/bass_shift "80 Hz" (index 1); Out = index 0. Plugin is frequency-native (choice param +
 > DSP + UI all speak Hz), so In/Out lives only in the preset table — NO dsp/UI change needed.
 >
-> ## ⏸ OUTSTANDING BEFORE PHASE 10 (items #1 DAW-listen and #2 OS/ADAA-on-zener now DONE — see CURRENT)
-> 1. **Low-OS top-octave shelf / prewarp — all three revs, optional polish.** OSFidelity confirmed the
->    droop is real (data in hand); nothing implemented yet. The single deferred V1E prewarp target is
->    the fixed tone corner C29 ~7.2 kHz; the shelf is a base-rate fixed-shape high-shelf (~0 at 4×/8×).
->    Now that V1L/V2 also oversample their recovery, the same low-OS recovery droop applies there too.
-> 2. **UI layout tuning pass — user-gated.** `layoutV1`/`layoutV2` positions in `PluginEditor` are
->    first-pass eyeballed estimates awaiting the user's review of the render PNGs (normal Phase-8
->    iterate loop, not a bug).
+> ## ✅ ALL PRE-PHASE-10 ITEMS DONE — see CURRENT for #1 listen / #2 OS-ADAA / #3 shelf / #4 UI-dropped
+> One optional non-blocking remnant survives from #3: the base-rate tone-stack (BASS/TREBLE/MID) still
+> has a FIXED (OS-independent) bilinear warp the TopOctaveShelf does NOT touch — the single deferred V1E
+> prewarp target is the fixed tone corner C29 ~7.2 kHz (`utils/Prewarp.h` exists, unused). Sub-dB,
+> knob-independent; fold into Phase-10 capture calibration if a real capture shows the top octave still
+> a touch dark at high OS. Not a blocker.
 >
 > **Phase 10 itself (capture-gated, cannot start until the user provides captures):** re-anchor
 > `kInputRef`/`kOutputMakeup` per revision, fit each revision's zener Cj against captured DRIVE HF

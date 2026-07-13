@@ -74,8 +74,12 @@ clamp. `OSFidelity` Part C confirms the oversampling cuts zener aliasing by ~43 
 - **Rail-clip ADAA** (V1 Early): ~7.6 dB less 1x aliasing for ~3.4 ns/sample extra — a free win,
   left always-on.
 
-`OSFidelity` also confirmed a known low-OS top-octave droop on the recovery filters (a bilinear
-discretisation artifact, not a clip-fidelity issue) — documented in `CLAUDE.md` as a follow-up.
+**Low-OS top-octave restore.** The recovery cab-sim filters live inside the oversampled drive region,
+so at low oversampling their bilinear discretisation droops the top octave (a pure discretisation
+artifact, not a clip-fidelity issue). A base-rate high-shelf (`TopOctaveShelf`), its gain scaled per OS
+factor and transparent at 4×/8×, restores it — bringing 1× to within ~±2 dB through 10 kHz. It only
+engages when you drop below the 4× default, so the shipping sound is unaffected. Validated by
+`OSFidelity` Part A across all three revisions.
 
 ## Building
 

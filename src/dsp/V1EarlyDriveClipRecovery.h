@@ -24,6 +24,7 @@
 #include <memory>
 
 #include "RailClip.h"
+#include "TopOctaveShelf.h"
 #include "V1EarlyStages.h"
 
 namespace nalr
@@ -47,6 +48,7 @@ public:
                 /*isMaxQuality*/ true, /*useIntegerLatency*/ true);
             os[i]->initProcessing((size_t) maxBlock);
         }
+        shelf.prepare(baseFs); // base-rate low-OS top-octave restore
         applyFactor(pendingFactor);
     }
 
@@ -63,6 +65,7 @@ public:
         drive.reset();
         railClip.reset();
         recovery.reset();
+        shelf.reset();
         for (size_t i = 0; i < kNumOs; ++i)
             if (os[i] != nullptr)
                 os[i]->reset();
@@ -86,18 +89,23 @@ public:
         {
             for (int i = 0; i < n; ++i)
                 data[i] = processCoreSample(data[i]);
-            return;
+        }
+        else
+        {
+            auto& osr = *os[osIndex(activeFactor)];
+            double* channels[1] = {data};
+            juce::dsp::AudioBlock<double> block(channels, 1, (size_t) n);
+            auto up = osr.processSamplesUp(block);
+            double* d = up.getChannelPointer(0);
+            const int un = (int) up.getNumSamples();
+            for (int i = 0; i < un; ++i)
+                d[i] = processCoreSample(d[i]);
+            osr.processSamplesDown(block);
         }
 
-        auto& osr = *os[osIndex(activeFactor)];
-        double* channels[1] = {data};
-        juce::dsp::AudioBlock<double> block(channels, 1, (size_t) n);
-        auto up = osr.processSamplesUp(block);
-        double* d = up.getChannelPointer(0);
-        const int un = (int) up.getNumSamples();
-        for (int i = 0; i < un; ++i)
-            d[i] = processCoreSample(d[i]);
-        osr.processSamplesDown(block);
+        // Base-rate low-OS top-octave restore (transparent at 4x/8x — see TopOctaveShelf).
+        for (int i = 0; i < n; ++i)
+            data[i] = shelf.process(data[i]);
     }
 
     // Single-sample core at the CURRENT discretisation rate (drive -> clip -> recovery). Intended for
@@ -117,6 +125,7 @@ private:
         const double osRate = baseSampleRate * (double) factor;
         drive.prepare(osRate); // re-discretise DRIVE's C28 at the oversampled rate
         recovery.prepare(osRate);
+        shelf.setOSFactor(factor); // scale the top-octave restore for this factor (base rate)
         drive.reset();
         railClip.reset();
         recovery.reset();
@@ -127,6 +136,7 @@ private:
     V1EarlyDriveStage drive;
     RailClip railClip;
     V1EarlyRecoveryStage recovery;
+    TopOctaveShelf shelf; // base-rate low-OS top-octave restore (transparent at 4x/8x)
 
     std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};
     double baseSampleRate = 48000.0;

@@ -9,20 +9,23 @@
 // identical, same module, so V1 Late stands in for both). The region-using helpers are templated so
 // the same measurement machinery serves either.
 //
-// Part A -- FR fidelity: a coherent-sampling low-amplitude (non-clipping) sine at several test
-// frequencies through the V1E region at drive=0, comparing each factor's gain against the 8x reference.
+// Part A -- top-octave FR fidelity: a coherent-sampling low-amplitude (non-clipping) sine at several
+// test frequencies through EACH region at drive=0, comparing 1x/2x/4x against the 8x reference. With
+// TopOctaveShelf active this is the shelf's validation: ASSERTED gates that 1x net error is within
+// +-3 dB @8-10 kHz (shelf restores the droop) and that the shelf is ~transparent at 4x.
 // Part B -- V1E harmonic-vs-alias decomposition: a full-drive 997 Hz probe (windowed FFT, same method
 // as V1EarlyNonlinearTest), reporting THD (harmonic, "wanted") separately from the worst non-harmonic
 // ("aliasing") bin, at each OS factor.
 // Part C -- the SAME decomposition on the zener DRIVE region, with an ASSERTED gate that 8x aliasing is
-// well below 1x (the concrete proof the OS knob now works on V1 Late / V2, closing the deferred pass).
+// well below 1x (the concrete proof the OS knob works on V1 Late / V2).
 //
-// Registered as a mostly-FINITE ctest gate (build.md): the FR figures are informational (no prewarp/
-// shelf yet, so no prior dB target to hit), but the aliasing-REDUCTION check in Part C is a robust
-// qualitative gate (oversampling must cut aliasing) that won't flake on CI speed.
+// Registered as a mostly-FINITE ctest gate (build.md): the raw per-freq FR figures are informational,
+// but the shelf checks (Part A) and the aliasing-REDUCTION check (Part C) are robust qualitative gates
+// that won't flake on CI speed.
 
 #include "../src/dsp/V1EarlyDriveClipRecovery.h"
 #include "../src/dsp/V1LateStages.h" // V1LateRecoveryStage (the zener region's recovery type)
+#include "../src/dsp/V2Stages.h"     // V2RecoveryStage
 #include "../src/dsp/ZenerDriveClipRecovery.h"
 
 #include <juce_dsp/juce_dsp.h>
@@ -176,6 +179,47 @@ bool allFinite(const std::vector<double>& v)
             return false;
     return true;
 }
+
+// Part A helper: print a region's top-octave droop (1x/2x/4x vs the 8x reference) at drive=0, and
+// return the key net deltas for the shelf gate. This is the OS-dependent recovery-filter droop the
+// low-OS high-shelf (TopOctaveShelf, applied inside the region) targets; here we measure the region's
+// NET response so a well-tuned shelf shows up as the 1x/2x columns flattening toward 0 dB through
+// ~10-12 kHz (16 kHz stays down -- the near-Nyquist zero the shelf can't invert, dsp.md).
+struct DroopSummary
+{
+    bool finite = true;
+    double d1x8k = 0.0, d1x10k = 0.0, d4x10k = 0.0; // net dB vs 8x
+};
+
+template <typename Region, typename Config = NoConfig> DroopSummary printDroopTable(const char* name, Config cfg = {})
+{
+    const int N = 1 << 15;
+    const int osFactors[4] = {1, 2, 4, 8};
+    std::printf("\n%s -- FR vs 8x reference (drive=0, 0.02 V, no clipping):\n", name);
+    std::printf("| Test freq | 1x delta | 2x delta | 4x delta |\n");
+    std::printf("|-----------|----------|----------|----------|\n");
+    DroopSummary s;
+    for (double f0 : {1000.0, 4000.0, 6000.0, 8000.0, 10000.0, 12000.0, 16000.0})
+    {
+        double g[4];
+        for (int i = 0; i < 4; ++i)
+        {
+            g[i] = measureGainAtBin<Region>(f0, 0.02, osFactors[i], 0.0, N, cfg);
+            s.finite &= std::isfinite(g[i]);
+        }
+        const double d1 = 20.0 * std::log10(g[0] / g[3]), d2 = 20.0 * std::log10(g[1] / g[3]),
+                     d4 = 20.0 * std::log10(g[2] / g[3]);
+        std::printf("| %6.0f Hz | %+6.2f dB | %+6.2f dB | %+6.2f dB |\n", f0, d1, d2, d4);
+        if (f0 == 8000.0)
+            s.d1x8k = d1;
+        if (f0 == 10000.0)
+        {
+            s.d1x10k = d1;
+            s.d4x10k = d4;
+        }
+    }
+    return s;
+}
 } // namespace
 
 int main()
@@ -190,25 +234,29 @@ int main()
     const int N = 1 << 15;
     const int osFactors[4] = {1, 2, 4, 8};
 
-    // --- Part A: FR fidelity vs the 8x reference, low-amplitude / drive=0 (no clipping) -----------
-    std::printf("Part A -- FR fidelity vs 8x reference (drive=0, 0.02 V, no clipping):\n");
-    std::printf("| Test freq | 1x delta | 2x delta | 4x delta | 8x (ref) |\n");
-    std::printf("|-----------|----------|----------|----------|----------|\n");
-    bool frFinite = true;
-    for (double f0 : {200.0, 1000.0, 4000.0, 8000.0, 12000.0, 16000.0})
+    // --- Part A: per-region top-octave droop vs the 8x reference (drive=0, no clipping) -----------
+    // With TopOctaveShelf applied inside each region, the 1x/2x columns should be near-flat through
+    // ~12 kHz (16 kHz stays down). All three regions covered (V1E rail region + V1L/V2 zener regions).
+    std::printf("Part A -- top-octave fidelity vs 8x reference (TopOctaveShelf active):\n");
+    const DroopSummary droop[3] = {
+        printDroopTable<nalr::V1EarlyDriveClipRecovery>("V1 Early region"),
+        printDroopTable<nalr::ZenerDriveClipRecovery<nalr::V1LateRecoveryStage>>(
+            "V1 Late region", [](auto& r) { r.setDriveParams(nalr::ZenerDriveModule::v1LateParams()); }),
+        printDroopTable<nalr::ZenerDriveClipRecovery<nalr::V2RecoveryStage>>(
+            "V2 region", [](auto& r) { r.setDriveParams(nalr::ZenerDriveModule::v2Params()); })};
+    const char* regionName[3] = {"V1E", "V1L", "V2"};
+    for (int r = 0; r < 3; ++r)
     {
-        double gains[4];
-        for (int i = 0; i < 4; ++i)
-        {
-            gains[i] = measureGainAtBin<nalr::V1EarlyDriveClipRecovery>(f0, 0.02, osFactors[i], 0.0, N);
-            frFinite &= std::isfinite(gains[i]);
-        }
-        const double ref = gains[3]; // 8x
-        std::printf("| %6.0f Hz | %+6.2f dB | %+6.2f dB | %+6.2f dB | %6.3f  |\n", f0,
-                    20.0 * std::log10(gains[0] / ref), 20.0 * std::log10(gains[1] / ref),
-                    20.0 * std::log10(gains[2] / ref), ref);
+        check(droop[r].finite, "Part A gain measurements all finite");
+        // Shelf gate: at 1x the net top-octave error is pulled within ~+-3 dB @8-10 kHz (raw droop was
+        // -6..-10 dB there -- i.e. the shelf is genuinely restoring it, not overshooting).
+        char msg[96];
+        std::snprintf(msg, sizeof msg, "%s: 1x net within +-3 dB @8-10 kHz (shelf restores droop)", regionName[r]);
+        check(std::abs(droop[r].d1x8k) < 3.0 && std::abs(droop[r].d1x10k) < 3.0, msg);
+        // And the shelf is ~transparent at 4x (the region above the shipping default must be untouched).
+        std::snprintf(msg, sizeof msg, "%s: shelf transparent at 4x (net within +-1 dB @10 kHz)", regionName[r]);
+        check(std::abs(droop[r].d4x10k) < 1.0, msg);
     }
-    check(frFinite, "Part A gain measurements all finite");
 
     // --- Part B: V1E harmonic (wanted) vs non-harmonic (aliasing) decomposition, full drive --------
     std::printf("\nPart B -- V1 Early rail clip: harmonic vs aliasing (full drive, 997 Hz, re fundamental):\n");
