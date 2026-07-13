@@ -28,13 +28,13 @@ bool finiteBounded(const std::vector<double>& x, double bound)
 }
 
 // A musically-broad excitation: a couple of tones + a swept component, at ~0.6 V peak (a hot bass
-// through kInputRef ~= 3.27). Enough to push the rail clip at high drive without absurd levels.
+// through kInputRef ~= 0.87). Enough to push the rail clip at high drive without absurd levels.
 double excite(int n)
 {
     const double t = (double) n / kFs;
     const double sweepHz = 60.0 + 4000.0 * (0.5 + 0.5 * std::sin(2.0 * kPi * 0.5 * t));
-    return 0.35 * std::sin(2.0 * kPi * 110.0 * t) + 0.15 * std::sin(2.0 * kPi * 880.0 * t)
-         + 0.10 * std::sin(2.0 * kPi * sweepHz * t);
+    return 0.35 * std::sin(2.0 * kPi * 110.0 * t) + 0.15 * std::sin(2.0 * kPi * 880.0 * t) +
+           0.10 * std::sin(2.0 * kPi * sweepHz * t);
 }
 
 // Process `nBlocks` blocks of the excitation at a fixed setting/OS factor; return the concatenated
@@ -60,11 +60,12 @@ std::vector<double> run(nalr::V1EarlyDSP& dsp, int osFactor, int nBlocks)
 int main()
 {
     bool pass = true;
-    auto check = [&](bool ok, const char* msg) {
+    auto check = [&](bool ok, const char* msg)
+    {
         std::printf("  [%s] %s\n", ok ? "PASS" : "FAIL", msg);
         pass &= ok;
     };
-    const int osFactors[4] = { 1, 2, 4, 8 };
+    const int osFactors[4] = {1, 2, 4, 8};
 
     // --- 1. All-knobs sweep × OS factors: finite + bounded (no NaN/Inf/blowup) ------------------
     std::printf("All-knobs × OS-factor finite/bounded sweep:\n");
@@ -74,13 +75,14 @@ int main()
         bool ok = true;
         // Each knob stepped through 5 positions while the others sit at noon, plus all-min/all-max
         // corners — across every OS factor. The clip region makes level, not just filtering, vary.
-        const double steps[5] = { 0.0, 0.25, 0.5, 0.75, 1.0 };
+        const double steps[5] = {0.0, 0.25, 0.5, 0.75, 1.0};
         for (int os : osFactors)
         {
-            auto sweepKnob = [&](int which) {
+            auto sweepKnob = [&](int which)
+            {
                 for (double s : steps)
                 {
-                    double p[6] = { 0.5, 0.5, 0.5, 0.5, 0.5, 0.5 };
+                    double p[6] = {0.5, 0.5, 0.5, 0.5, 0.5, 0.5};
                     p[which] = s;
                     dsp.setParams(p[0], p[1], p[2], p[3], p[4], p[5]);
                     dsp.reset();
@@ -89,7 +91,7 @@ int main()
             };
             for (int k = 0; k < 6; ++k)
                 sweepKnob(k);
-            for (double corner : { 0.0, 1.0 })
+            for (double corner : {0.0, 1.0})
             {
                 dsp.setParams(corner, corner, corner, corner, corner, corner);
                 dsp.reset();
@@ -135,7 +137,7 @@ int main()
         bool ok = true;
         int n = 0;
         std::vector<double> buf((size_t) kBlock);
-        const int seq[8] = { 4, 8, 2, 1, 8, 1, 4, 2 };
+        const int seq[8] = {4, 8, 2, 1, 8, 1, 4, 2};
         for (int idx = 0; idx < 8; ++idx)
         {
             dsp.setOversamplingFactor(seq[idx]);
@@ -179,8 +181,7 @@ int main()
                     peakOut = std::max(peakOut, std::abs(v));
         }
         const double gainDb = 20.0 * std::log10(peakOut / peakIn);
-        std::printf("      dry-path 1 kHz gain = %.2f dB (expect ~ -0.9 dB: LEVEL noon + output loss)\n",
-                    gainDb);
+        std::printf("      dry-path 1 kHz gain = %.2f dB (expect ~ -0.9 dB: LEVEL noon + output loss)\n", gainDb);
         // LEVEL at noon on the loaded pan network isn't exactly unity; allow a modest window. The
         // point is: near-unity and CLEAN (no wet-path drive/notch), not an exact number.
         check(std::isfinite(gainDb) && gainDb > -6.0 && gainDb < 1.0, "dry path is near-unity and stable");

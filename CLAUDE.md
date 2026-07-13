@@ -105,22 +105,32 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 8 COMPLETE — UI wired + user-approved.** The editor/asset groundwork built ahead
-> of schedule (`docs/ui-noamp-assets.md`) needed no DSP-wiring changes post-Phase-7 — it already
-> reads the real APVTS params correctly. Verified via `UIRenderProbe` (9 PNGs: 3 revisions ×
-> 1.0/1.5/2.0x scale), reviewed and approved by the user. One tweak made: `ThreePositionSwitch`'s
-> revision labels ("V1 EARLY"/"V1 LATE"/"V2") are now stretched 30% wider — a horizontal-only
-> `AffineTransform::scale` anchored at `labelX` (so the track/lever position is untouched, only
-> glyph width) via a new `kLabelStretchX` constant; `PluginEditor.cpp`'s `kSwitchW` ratio widened
-> (2.7×→3.4× `kSwitchH`) to fit the stretched text without clipping. Knob order/pushbutton mapping
-> user-confirmed exactly matching `layoutV1`/`layoutV2` as built — no changes needed there.
+> **CURRENT: Phase 9 COMPLETE.** `PerfBenchmark`/`FeatureProfile`/`OSFidelity` built and registered
+> as `add_test()` (22/22 ctest green); README gained a "Performance" section with the measured table.
+> **FeatureProfile measured — no HQ toggle added**, contrary to the speculated carry-forward below:
+> the zener-clip omega solver (`AccurateOmega` vs chowdsp `omega4`) costs ~2.7x CPU, but omega4's
+> distortion floor never exceeds what the zener's own circuit curvature already produces at any
+> realistic drive (0.0 dB gap at real operating amplitudes; only a small, inaudible 6.7 dB gap between
+> two already-far-below-audible floors at truly tiny signal) — so `AccurateOmega` stays the shipping
+> default (already cheap in absolute per-sample terms) with no toggle needed. Rail-clip ADAA confirmed
+> a genuine free win (~7.6 dB less 1x aliasing for ~3.4 ns/sample, i.e. always-on, no toggle). To make
+> the omega A/B possible, `ZenerFeedbackClipper` (`ZenerPairT.h`) is now templated on `OmegaProvider`
+> (defaulted `AccurateOmega`, production behavior unchanged) — a small additive change; update any new
+> call site to `ZenerFeedbackClipper<>`. **OSFidelity confirmed the known low-OS top-octave droop is
+> real** (V1 Early: ~-5.7/-13.1/-25.7 dB @ 8k/12k/16k Hz at 1x vs the 8x reference, shrinking ~4x per
+> OS doubling; THD stays flat across factors, confirming pure discretisation, not a clip-fidelity
+> issue) — no prewarp/shelf is implemented yet; this is data for that follow-up decision, not a fix.
+> **`.clang-format` was silently out of sync with the actual codebase** (said `BreakBeforeBraces:
+> Attach`; every file actually used Allman/brace-on-own-line) — fixed (`Allman`, unindented access
+> modifiers, left pointer/reference alignment, spaced C-casts) and ran a real pass across
+> `src/`+`tests/` (whitespace/brace-shape only — verified via diff and a full rebuild; 22/22 tests
+> still pass). No factory-preset work done (9.x still open/optional).
 > **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed a DAW listen of any revision** —
-> carried forward from Phase 3/4/5.4/6/7; worth doing before/alongside Phase 9.
-> **⏸ NEXT: Phase 9 (Probes, CI, polish — Sonnet 5/low)** per build-plan.md: `PerfBenchmark`,
-> `OSFidelity`, `FeatureProfile` exes + `add_test()` registration + README perf table + clang-format
-> pass. HQ toggle only if `FeatureProfile` shows a real lever (likely only V1L/V2 zener omega
-> matters — see the 5.3 carry-forward below). Optional 9.x: factory presets from `docs/presets.csv`
-> (V1 Early/Late share settings, V2 adds its extra params).
+> carried forward from Phase 3/4/5.4/6/7/8; still nobody's done this.
+> **⏸ NEXT: Phase 10 (capture validation) — BLOCKED until the user provides real-pedal captures.**
+> Nothing to prepare beyond what's already in `docs/validation-and-capture.md`. Optional side task
+> whenever: 9.x factory presets from `docs/presets.csv` (V1 Early/Late share settings, V2 adds its
+> extra params) — never done, low priority, no dependency on Phase 10.
 > **Durable gotchas from Phase 6 (still relevant to future NodalCircuit/switch-stage work):**
 > (1) **Switch modelling is NOT `setSMatrixData()`** — V2's MID/BASS-SHIFT stages are NodalCircuit
 > (MNA), so "switched topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) +
@@ -138,10 +148,13 @@ without images.
 > `kInput` if nothing drops voltage before it — and when a series R develops no drop into a high-Z
 > (+) input, skip the redundant node entirely (V1LateOutputStage/V2BlendLevelStage/V2OutputStage
 > pattern) rather than modelling an inert buffer stage.
-> **Carry-forward from 5.3 (still relevant):** the two DRIVE stages (CH34-9/CH40, both revisions)
-> are CASCADED not simultaneous (the wiper is a stiff source); Cj=220pF fit (V1L and, provisionally,
-> V2); stage-A op-amp RAIL clip deferred alongside zener OS/ADAA to a later pass (unscheduled
-> follow-up, flag before Phase 9's HQ/perf pass).
+> **Carry-forward from 5.3 — STILL OPEN, unscheduled (Phase 9 did NOT close this):** the two DRIVE
+> stages (CH34-9/CH40, both revisions) are CASCADED not simultaneous (the wiper is a stiff source);
+> Cj=220pF fit (V1L and, provisionally, V2); V1L/V2's zener DRIVE module still has NO oversampling or
+> ADAA region (`PerfBenchmark`/`OSFidelity` explicitly document every OS-factor setting rendering
+> identically for V1L/V2 until this lands); stage-A op-amp RAIL clip is deferred alongside it, same
+> unscheduled follow-up. Phase 9's `FeatureProfile` only profiled the omega SOLVER in isolation (see
+> "Current step" above) — that's resolved (no HQ toggle needed); the OS/ADAA gap itself is untouched.
 
 ## Project-specific carry-forwards
 
@@ -234,9 +247,12 @@ without images.
   — record it as the single deferred prewarp target, to be tuned with the low-OS shelf against
   `OSFidelity` (don't perturb the gated 1.5 stage blind now).
 - **Phase 3 (integration) facts for Phase 10 calibration.** (1) Provisional constants in
-  `src/dsp/Calibration.h`: **kInputRef = 3.27 V/FS** (calibration §1 worked example, NOT measured),
-  **kOutputMakeup = 1.0** (interim). Both re-anchored from captures in Phase 10 — don't treat as
-  final. (2) **LEVEL is modelled INSIDE the DSP** (the pedal's LEVEL pot, in V1EarlyBlendLevelStage),
+  `src/dsp/Calibration.h`: **kInputRef = 0.87 V/FS** (2026-07-13, user request: carried over from
+  the author's prior same-template project, monarch-of-tone's real-capture-calibrated
+  `circuitVoltsPerFS` — a different circuit's own clip-onset anchor, so still NOT measured for THIS
+  pedal; a better-grounded provisional stand-in than the old 3.27 doc worked-example, not a final
+  value), **kOutputMakeup = 1.0** (interim). Both re-anchored from NoAmp's own captures in Phase 10 —
+  don't treat as final. (2) **LEVEL is modelled INSIDE the DSP** (the pedal's LEVEL pot, in V1EarlyBlendLevelStage),
   so there is NO separate `volumeGain` scalar in the processor — output gain = `kOutputMakeup ·
   dbToGain(outTrim) / kInputRef` only (`outputGainFor()`). Don't go looking for a volume taper to
   fit; LEVEL's law is the circuit. (3) Measured dry-path (blend=0) gain at LEVEL noon = **−0.70 dB**
