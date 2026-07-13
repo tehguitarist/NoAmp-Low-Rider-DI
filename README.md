@@ -4,6 +4,8 @@ A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, JUCE 8) model
 three reverse-engineered generations of the Tech 21 SansAmp Bass Driver DI (BDDI).
 As far as I'm aware this is the first BDDI plugin to accurately model all three revisions, each of which have it's huge proponents. As far as I could find, it's also the only accurate BDDI plugin that still works on modern PCs outside captures.
 
+![image](image.png)
+
 ## What it is
 
 Rather than model one fixed circuit, this plugin lets you pick **which era of the pedal** you're
