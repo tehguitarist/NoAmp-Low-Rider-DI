@@ -1,0 +1,139 @@
+#pragma once
+
+// V1 Late / V2 oversampled nonlinear region: the CH34-9/CH40 zener DRIVE module (ZenerDriveModule —
+// stage-A rail clip + stage-B zener clip + Cj HF rolloff) -> the revision's recovery Sallen-Key LPFs
+// (+ V1L's bridged-T + wet make-up buffer). The direct analogue of V1Early's V1EarlyDriveClipRecovery,
+// generalised over the recovery-stage type because V1 Late and V2 share the module but differ in the
+// recovery network (V1LateRecoveryStage vs V2RecoveryStage).
+//
+// Why this grouping (dsp.md "Oversampling" + "Top-octave accuracy"): the module's two hard clips (the
+// stage-A rail and the stage-B zener) are the aliasing sources, so the region is oversampled; and it
+// is EXTENDED to span the downstream linear recovery stages because they carry the audible-band HF
+// cab-sim corners (~8-12 kHz) whose bilinear warp the oversampling also fixes. Everything upstream
+// (input/twin-T/PRESENCE) and downstream (BLEND/LEVEL/[MID]/tone/output) stays at base rate — those
+// block boundaries are clean op-amp outputs, so the region is a self-contained sub-chain driven by the
+// PRESENCE output and feeding BLEND's wet leg.
+//
+// The zener has no closed-form antiderivative (dsp.md), so it relies on OS + AccurateOmega for
+// anti-aliasing; only the stage-A rail is ADAA'd (setADAA, forwarded to ZenerDriveModule::railA).
+// Because the recovery caps live inside this oversampled region they are NOT prewarped (the
+// oversampler discretises them at the high rate). At 1x OS this region runs at base rate and both the
+// clips alias and the recovery top octave warps — a known, bounded limitation addressed by the OS
+// factor (and the low-OS shelf follow-up), per dsp.md.
+//
+// One instance per audio channel (the oversampler is mono). The processor owns two per revision,
+// selects the OS factor (live vs render) and calls setOversamplingFactor() at block start. Identical
+// oversampler lifecycle to V1EarlyDriveClipRecovery: one juce oversampler per non-unity factor,
+// pre-allocated in prepare() so a runtime factor change never allocates on the audio thread.
+
+#include <juce_dsp/juce_dsp.h>
+
+#include <array>
+#include <memory>
+
+#include "ZenerDriveModule.h"
+
+namespace nalr
+{
+template <typename RecoveryStage> class ZenerDriveClipRecovery
+{
+public:
+    ZenerDriveClipRecovery() = default;
+
+    // The CH34-9 (V1L) vs CH40 (V2) module constants — call once before prepare()/first block.
+    void setDriveParams(const ZenerDriveParams& p) { drive.setParams(p); }
+
+    void prepare(double baseFs, int maxBlock)
+    {
+        baseSampleRate = baseFs;
+        for (size_t i = 0; i < kNumOs; ++i)
+        {
+            const size_t stages = i + 1; // os[0]=2x(1 stage), os[1]=4x, os[2]=8x
+            os[i] = std::make_unique<juce::dsp::Oversampling<double>>(
+                1, stages, juce::dsp::Oversampling<double>::filterHalfBandFIREquiripple,
+                /*isMaxQuality*/ true, /*useIntegerLatency*/ true);
+            os[i]->initProcessing((size_t) maxBlock);
+        }
+        applyFactor(pendingFactor);
+    }
+
+    // factor in {1,2,4,8}; applied at the next processBlock (one-block gap on change, per dsp.md).
+    void setOversamplingFactor(int factor) noexcept { pendingFactor = factor; }
+
+    void setDrive(double drive01) noexcept { drive.setDrive(drive01); }
+    void setRailVoltages(double vNeg, double vPos) noexcept { drive.setRailVoltages(vNeg, vPos); }
+    void setADAA(bool on) noexcept { drive.setADAA(on); }
+
+    void reset() noexcept
+    {
+        drive.reset();
+        recovery.reset();
+        for (size_t i = 0; i < kNumOs; ++i)
+            if (os[i] != nullptr)
+                os[i]->reset();
+    }
+
+    // Latency this region contributes, in base-rate samples (0 at 1x). Feed setLatencySamples().
+    int getLatencySamples() const noexcept
+    {
+        if (activeFactor == 1)
+            return 0;
+        return (int) std::lround(os[osIndex(activeFactor)]->getLatencyInSamples());
+    }
+
+    // Process one base-rate mono block in place. data has n <= maxBlock samples (volts domain).
+    void processBlock(double* data, int n) noexcept
+    {
+        if (pendingFactor != activeFactor)
+            applyFactor(pendingFactor);
+
+        if (activeFactor == 1)
+        {
+            for (int i = 0; i < n; ++i)
+                data[i] = processCoreSample(data[i]);
+            return;
+        }
+
+        auto& osr = *os[osIndex(activeFactor)];
+        double* channels[1] = {data};
+        juce::dsp::AudioBlock<double> block(channels, 1, (size_t) n);
+        auto up = osr.processSamplesUp(block);
+        double* d = up.getChannelPointer(0);
+        const int un = (int) up.getNumSamples();
+        for (int i = 0; i < un; ++i)
+            d[i] = processCoreSample(d[i]);
+        osr.processSamplesDown(block);
+    }
+
+    // Single-sample core at the CURRENT discretisation rate (drive+clip -> recovery). Used for the 1x
+    // path and by base-rate probes (DC-step polarity test).
+    inline double processCoreSample(double x) noexcept { return recovery.process(drive.process(x)); }
+
+    int getActiveFactor() const noexcept { return activeFactor; }
+
+private:
+    static constexpr size_t kNumOs = 3; // 2x, 4x, 8x
+
+    static size_t osIndex(int factor) noexcept { return factor == 2 ? 0u : (factor == 4 ? 1u : 2u); }
+
+    void applyFactor(int factor) noexcept
+    {
+        activeFactor = factor;
+        const double osRate = baseSampleRate * (double) factor;
+        drive.prepare(osRate); // re-discretise the zener Cj at the oversampled rate
+        recovery.prepare(osRate);
+        drive.reset();
+        recovery.reset();
+        if (factor > 1)
+            os[osIndex(factor)]->reset();
+    }
+
+    ZenerDriveModule drive;
+    RecoveryStage recovery;
+
+    std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};
+    double baseSampleRate = 48000.0;
+    int pendingFactor = 4; // default live/render factor; processor overrides via setOversamplingFactor
+    int activeFactor = 0;  // 0 = not yet prepared -> first applyFactor always runs
+};
+} // namespace nalr

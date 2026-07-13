@@ -106,8 +106,29 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 9 COMPLETE.** `PerfBenchmark`/`FeatureProfile`/`OSFidelity` built and registered
-> as `add_test()` (22/22 ctest green); README gained a "Performance" section with the measured table.
+> **CURRENT: Phase 9 COMPLETE + pre-Phase-10 items #1 and #2 DONE (2026-07-13).**
+> **#1 DAW listen (user):** user confirmed all three revisions react correctly by ear; the only note
+> was V1E being quieter than V1L/V2 — confirmed FAITHFUL (V1E has +6.8 dB post-blend gain and a UNITY
+> wet buffer, vs V1L's added +10.1 dB wet make-up buffer / V2's +10.1 dB LEVEL stage, plus V1E's lower
+> +40 dB DRIVE ceiling vs +48 dB). The Phase-3/4/5.4/6/7/8 HARD-BREAK "nobody has listened" is closed.
+> **#2 OS/ADAA on the V1L/V2 zener DRIVE (2026-07-13):** `ZenerDriveClipRecovery.h` (templated on the
+> recovery-stage type) is the V1L/V2 analogue of `V1EarlyDriveClipRecovery` — oversamples the zener
+> module + downstream recovery; `V1LateDSP`/`V2DSP` now use it (2-loop processBlock w/ buffered dry tap,
+> like V1E), so `setOversamplingFactor`/`setADAA`/`getLatencySamples` are LIVE (no longer no-ops).
+> `ZenerDriveModule` gained the stage-A op-amp RAIL clip (`railA`, ADAA'd; the zener is NOT ADAA'd —
+> relies on OS+AccurateOmega). **Gate: `OSFidelity` Part C — zener aliasing drops 42.9 dB (1x -51.8 →
+> 8x -94.7 dB) while wanted THD stays flat ~-5.3 dB.** `V1LateIntegrationTest`/`V2IntegrationTest` are
+> now JUCE console apps (OS region needs juce::dsp). **DURABLE clip-behaviour change:** the stage-A rail
+> current-limits the zener (stage B is inverting, I_g=V_w/(R_wb+R17)), so the clip is now DRIVE-DEPENDENT
+> — max-drive ceiling dropped 3.85→3.54 V (rail caps V_w at 4.2 V → only ~420 µA into the zener even at
+> max, so it sits just below its rated knee), and mid-drive is softer still (~3.06 V). This is more
+> faithful, but the symmetric ±4.2 V rail is a placeholder — real V1L stage A self-biases at ~0.69·VCC
+> (asymmetric +2.6/−5.8 V), a Phase-10 calibration lever affecting mid-drive softness + even harmonics.
+> All 23 ctest green. `PerfBenchmark`/`OSFidelity`/README performance table updated (V1L/V2 now scale
+> with OS: 1.4→7.8% CPU, 0→65-sample latency).
+>
+> **Prior Phase 9:** `PerfBenchmark`/`FeatureProfile`/`OSFidelity` built and registered
+> as `add_test()`; README gained a "Performance" section with the measured table.
 > **FeatureProfile measured — no HQ toggle added**, contrary to the speculated carry-forward below:
 > the zener-clip omega solver (`AccurateOmega` vs chowdsp `omega4`) costs ~2.7x CPU, but omega4's
 > distortion floor never exceeds what the zener's own circuit curvature already produces at any
@@ -134,21 +155,12 @@ without images.
 > "1000 Hz"/bass_shift "80 Hz" (index 1); Out = index 0. Plugin is frequency-native (choice param +
 > DSP + UI all speak Hz), so In/Out lives only in the preset table — NO dsp/UI change needed.
 >
-> ## ⏸ OUTSTANDING BEFORE PHASE 10 (tackle in this order; none block each other except as noted)
-> 1. **DAW listen — user action, do FIRST.** Nobody has confirmed a listen of any revision (open
->    HARD-BREAK carried from Phase 3/4/5.4/6/7/8). De-risks everything below; if the drive stage
->    sounds wrong by ear, the OS work is premature.
-> 2. **OS/ADAA on the V1L/V2 zener DRIVE module.** Currently base-rate no-ops
->    (`setOversamplingFactor`/`setADAA` inert in `V1LateDSP`/`V2DSP`), so the OS knob does nothing on
->    those two revisions and the zener hard-clip aliases at base rate. Three sub-parts: (a) oversample
->    the zener region + its downstream recovery (mirror `V1EarlyDriveClipRecovery`); (b) add the
->    stage-A op-amp RAIL clip (currently ABSENT on V1L/V2 — see `ZenerDriveModule.h`); (c) ADAA that
->    rail clip — NOT the zener (dsp.md: zener relies on OS + AccurateOmega, no closed-form
->    antiderivative). Closes the 5.3 carry-forward below.
-> 3. **Low-OS top-octave shelf / prewarp — all three revs, optional polish.** OSFidelity confirmed the
+> ## ⏸ OUTSTANDING BEFORE PHASE 10 (items #1 DAW-listen and #2 OS/ADAA-on-zener now DONE — see CURRENT)
+> 1. **Low-OS top-octave shelf / prewarp — all three revs, optional polish.** OSFidelity confirmed the
 >    droop is real (data in hand); nothing implemented yet. The single deferred V1E prewarp target is
 >    the fixed tone corner C29 ~7.2 kHz; the shelf is a base-rate fixed-shape high-shelf (~0 at 4×/8×).
-> 4. **UI layout tuning pass — user-gated.** `layoutV1`/`layoutV2` positions in `PluginEditor` are
+>    Now that V1L/V2 also oversample their recovery, the same low-OS recovery droop applies there too.
+> 2. **UI layout tuning pass — user-gated.** `layoutV1`/`layoutV2` positions in `PluginEditor` are
 >    first-pass eyeballed estimates awaiting the user's review of the render PNGs (normal Phase-8
 >    iterate loop, not a bug).
 >
@@ -173,13 +185,11 @@ without images.
 > `kInput` if nothing drops voltage before it — and when a series R develops no drop into a high-Z
 > (+) input, skip the redundant node entirely (V1LateOutputStage/V2BlendLevelStage/V2OutputStage
 > pattern) rather than modelling an inert buffer stage.
-> **Carry-forward from 5.3 — STILL OPEN, unscheduled (Phase 9 did NOT close this):** the two DRIVE
-> stages (CH34-9/CH40, both revisions) are CASCADED not simultaneous (the wiper is a stiff source);
-> Cj=220pF fit (V1L and, provisionally, V2); V1L/V2's zener DRIVE module still has NO oversampling or
-> ADAA region (`PerfBenchmark`/`OSFidelity` explicitly document every OS-factor setting rendering
-> identically for V1L/V2 until this lands); stage-A op-amp RAIL clip is deferred alongside it, same
-> unscheduled follow-up. Phase 9's `FeatureProfile` only profiled the omega SOLVER in isolation (see
-> "Current step" above) — that's resolved (no HQ toggle needed); the OS/ADAA gap itself is untouched.
+> **Carry-forward from 5.3 — CLOSED (2026-07-13, see CURRENT #2):** the two DRIVE stages (CH34-9/CH40)
+> are CASCADED not simultaneous (wiper = stiff source); Cj=220pF fit (V1L, and provisionally V2 —
+> `v2Params()==v1LateParams()`, still a Phase-10 fit target). The zener DRIVE module + recovery now
+> oversample (`ZenerDriveClipRecovery`) and the stage-A rail clip is added+ADAA'd. Remaining Phase-10
+> work on this stage: fit V2's Cj/knee independently, and the asymmetric stage-A rail (see CURRENT).
 
 ## Project-specific carry-forwards
 

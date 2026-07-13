@@ -5,10 +5,10 @@
 // CPU %, CI speed varies") — the printed CPU%/latency numbers are informational, read by a human and
 // transcribed into README.md, not asserted against a threshold here.
 //
-// Only V1EarlyDSP has an oversampling region (its DRIVE->recovery rail-clip is the aliaser);
-// V1LateDSP/V2DSP's zener DRIVE module is NOT YET oversampled (CLAUDE.md carry-forward: deferred
-// alongside ADAA to a later, unscheduled pass) so setOversamplingFactor() is a no-op there and every
-// factor reports identical numbers -- this is the correct, documented current state, not a probe bug.
+// All three revisions now have an oversampling region (V1E's DRIVE->recovery rail-clip; V1L/V2's zener
+// DRIVE module + recovery — ZenerDriveClipRecovery), so CPU and latency scale with the OS factor on
+// every revision. V1L/V2 cost more per factor than V1E (the zener Newton/omega solve is heavier than a
+// hard rail clamp), as the table shows.
 
 #include "../src/dsp/V1EarlyDSP.h"
 #include "../src/dsp/V1LateDSP.h"
@@ -107,38 +107,38 @@ int main()
         }
     }
 
-    // --- V1 Late: DRIVE module not yet oversampled (documented no-op) ---------------------------
+    // --- V1 Late: zener DRIVE + recovery oversampled (ZenerDriveClipRecovery) --------------------
     {
         nalr::V1LateDSP dsp;
         dsp.prepare(kFs, kBlock);
         dsp.setParams(0.6, 0.5, 0.6, 0.6, 0.5, 0.5);
         for (int os : osFactors)
         {
-            dsp.setOversamplingFactor(os); // no-op today -- see class comment
+            dsp.setOversamplingFactor(os);
             dsp.reset();
             auto r = bench(dsp);
-            std::printf("| V1 Late   | %dx*       | %17.1f%% | %18d |\n", os, r.cpuPercent, dsp.getLatencySamples());
+            std::printf("| V1 Late   | %dx        | %17.1f%% | %18d |\n", os, r.cpuPercent, dsp.getLatencySamples());
             check(r.finite, "V1 Late stays finite under sustained render");
         }
     }
 
-    // --- V2: DRIVE module not yet oversampled (documented no-op) --------------------------------
+    // --- V2: zener DRIVE + recovery oversampled (ZenerDriveClipRecovery) --------------------------
     {
         nalr::V2DSP dsp;
         dsp.prepare(kFs, kBlock);
         dsp.setParams(0.6, 0.5, 0.6, 0.6, 0.5, false, 0.5, 0.5, false);
         for (int os : osFactors)
         {
-            dsp.setOversamplingFactor(os); // no-op today -- see class comment
+            dsp.setOversamplingFactor(os);
             dsp.reset();
             auto r = bench(dsp);
-            std::printf("| V2        | %dx*       | %17.1f%% | %18d |\n", os, r.cpuPercent, dsp.getLatencySamples());
+            std::printf("| V2        | %dx        | %17.1f%% | %18d |\n", os, r.cpuPercent, dsp.getLatencySamples());
             check(r.finite, "V2 stays finite under sustained render");
         }
     }
 
-    std::printf("\n* V1 Late / V2's DRIVE module has no oversampling region yet (deferred alongside ADAA,\n");
-    std::printf("  CLAUDE.md carry-forward) -- every OS-factor row is the same base-rate render, by design.\n");
+    std::printf("\nAll three revisions oversample their DRIVE nonlinearity; V1L/V2's zener solve costs more\n");
+    std::printf("per factor than V1E's rail clamp (heavier per-sample Newton/omega work).\n");
     std::printf("\nNote: absolute CPU %% is machine-dependent (informational for the README, not gated).\n");
 
     std::printf("\n%s\n", pass ? "PerfBenchmark PASSED" : "PerfBenchmark FAILED");

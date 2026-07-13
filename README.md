@@ -50,11 +50,18 @@ Absolute CPU % is machine-dependent — read this as relative shape, not an abso
 | V1 Early | 2x        | 1.6%              | 49                |
 | V1 Early | 4x        | 2.3%              | 61                |
 | V1 Early | 8x        | 3.7%              | 65                |
-| V1 Late  | any*      | 1.5%              | 0                 |
-| V2       | any*      | 1.6%              | 0                 |
+| V1 Late  | 1x        | 1.4%              | 0                 |
+| V1 Late  | 2x        | 2.5%              | 49                |
+| V1 Late  | 4x        | 4.3%              | 61                |
+| V1 Late  | 8x        | 7.8%              | 65                |
+| V2       | 1x        | 1.5%              | 0                 |
+| V2       | 2x        | 2.5%              | 49                |
+| V2       | 4x        | 4.0%              | 61                |
+| V2       | 8x        | 7.0%              | 65                |
 
-\* V1 Late / V2's zener DRIVE module has no oversampling region yet (a documented, deferred
-follow-up — see `CLAUDE.md`), so every OS-factor setting renders identically for those revisions.
+All three revisions oversample their DRIVE nonlinearity. V1 Late / V2 cost more per factor than
+V1 Early — their zener clip is a per-sample Newton/omega solve, heavier than V1 Early's hard rail
+clamp. `OSFidelity` Part C confirms the oversampling cuts zener aliasing by ~43 dB from 1× to 8×.
 
 **No HQ toggle.** `FeatureProfile` A/B'd the two candidate CPU/accuracy levers per `dsp.md`'s
 "HQ / Eco mode" guidance and found neither justifies one:
@@ -111,8 +118,6 @@ above and copy the resulting AU/VST3 bundle into your system's plugin folder.
 ## Known Limitations
 
 - AU is macOS-only (no AU on Windows/Linux, matching the format itself)
-- The V1 Late/V2 zener drive stage has no oversampling/ADAA region yet — see the Performance
-  section and `CLAUDE.md`'s carry-forward notes
 - Reference validation against real-pedal captures (frequency response, THD-by-band, null depth)
   is not yet complete — see `docs/validation-and-capture.md`
 

@@ -4,21 +4,26 @@
 // artifacts dsp.md names: aliasing, and top-octave bilinear-cap droop in the recovery filters that
 // live inside the oversampled region (dsp.md "Top-octave accuracy").
 //
-// Scope: only V1EarlyDriveClipRecovery has an oversampling region today (V1 Late/V2's zener DRIVE
-// module is not yet oversampled -- CLAUDE.md carry-forward, deferred alongside ADAA to a later,
-// unscheduled pass). This probe is V1-Early-only by design, not an oversight.
+// Scope: BOTH oversampled regions -- V1EarlyDriveClipRecovery (rail clip) and the zener DRIVE region
+// ZenerDriveClipRecovery<V1LateRecoveryStage> (stage-A rail + stage-B zener; V2 is numerically
+// identical, same module, so V1 Late stands in for both). The region-using helpers are templated so
+// the same measurement machinery serves either.
 //
 // Part A -- FR fidelity: a coherent-sampling low-amplitude (non-clipping) sine at several test
-// frequencies through the region at drive=0, comparing each factor's gain against the 8x reference.
-// Part B -- harmonic-vs-alias decomposition: a full-drive 997 Hz probe (windowed FFT, same method as
-// V1EarlyNonlinearTest), reporting THD (harmonic, "wanted") separately from the worst non-harmonic
+// frequencies through the V1E region at drive=0, comparing each factor's gain against the 8x reference.
+// Part B -- V1E harmonic-vs-alias decomposition: a full-drive 997 Hz probe (windowed FFT, same method
+// as V1EarlyNonlinearTest), reporting THD (harmonic, "wanted") separately from the worst non-harmonic
 // ("aliasing") bin, at each OS factor.
+// Part C -- the SAME decomposition on the zener DRIVE region, with an ASSERTED gate that 8x aliasing is
+// well below 1x (the concrete proof the OS knob now works on V1 Late / V2, closing the deferred pass).
 //
-// Registered as a FINITE-ONLY ctest gate (build.md): informational numbers for the CLAUDE.md/dsp.md
-// "low-OS top-octave restore" follow-up decision, not asserted against a hardcoded dB threshold here
-// (this implementation has no prewarp/shelf yet, so exact figures aren't a prior gate to hit).
+// Registered as a mostly-FINITE ctest gate (build.md): the FR figures are informational (no prewarp/
+// shelf yet, so no prior dB target to hit), but the aliasing-REDUCTION check in Part C is a robust
+// qualitative gate (oversampling must cut aliasing) that won't flake on CI speed.
 
 #include "../src/dsp/V1EarlyDriveClipRecovery.h"
+#include "../src/dsp/V1LateStages.h" // V1LateRecoveryStage (the zener region's recovery type)
+#include "../src/dsp/ZenerDriveClipRecovery.h"
 
 #include <juce_dsp/juce_dsp.h>
 
@@ -32,10 +37,19 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kFs = 48000.0;
 constexpr double kRail = 4.2;
 
-// --- Part A: coherent-sampling FR magnitude at a single bin --------------------------------------
-double measureGainAtBin(double f0Target, double amp, int factor, double driveKnob, int N)
+// A no-op region configurator (V1E needs no drive-params); the zener region passes a lambda that
+// calls setDriveParams(). Templated so one set of helpers serves both region types.
+struct NoConfig
 {
-    nalr::V1EarlyDriveClipRecovery region;
+    template <typename R> void operator()(R&) const noexcept {}
+};
+
+// --- Part A: coherent-sampling FR magnitude at a single bin --------------------------------------
+template <typename Region, typename Config = NoConfig>
+double measureGainAtBin(double f0Target, double amp, int factor, double driveKnob, int N, Config cfg = {})
+{
+    Region region;
+    cfg(region); // e.g. setDriveParams() on the zener region; no-op for V1E
     region.prepare(kFs, N);
     region.setDrive(driveKnob);
     region.setRailVoltages(-kRail, kRail);
@@ -127,9 +141,11 @@ SpectralResult measureSpectrum(std::vector<double>& samples, double fs, double f
     return {20.0 * std::log10(std::sqrt(harmSumSq) / fundMag), 20.0 * std::log10(worstAlias / fundMag)};
 }
 
-std::vector<double> captureFullDrive(double f0, double amp, int factor, int N)
+template <typename Region, typename Config = NoConfig>
+std::vector<double> captureFullDrive(double f0, double amp, int factor, int N, Config cfg = {})
 {
-    nalr::V1EarlyDriveClipRecovery region;
+    Region region;
+    cfg(region); // e.g. setDriveParams() on the zener region; no-op for V1E
     region.prepare(kFs, N);
     region.setDrive(1.0);
     region.setRailVoltages(-kRail, kRail);
@@ -184,7 +200,7 @@ int main()
         double gains[4];
         for (int i = 0; i < 4; ++i)
         {
-            gains[i] = measureGainAtBin(f0, 0.02, osFactors[i], 0.0, N);
+            gains[i] = measureGainAtBin<nalr::V1EarlyDriveClipRecovery>(f0, 0.02, osFactors[i], 0.0, N);
             frFinite &= std::isfinite(gains[i]);
         }
         const double ref = gains[3]; // 8x
@@ -194,25 +210,22 @@ int main()
     }
     check(frFinite, "Part A gain measurements all finite");
 
-    // --- Part B: harmonic (wanted) vs non-harmonic (aliasing) decomposition, full drive ------------
-    std::printf("\nPart B -- harmonic vs aliasing decomposition (full drive, 997 Hz, re fundamental):\n");
+    // --- Part B: V1E harmonic (wanted) vs non-harmonic (aliasing) decomposition, full drive --------
+    std::printf("\nPart B -- V1 Early rail clip: harmonic vs aliasing (full drive, 997 Hz, re fundamental):\n");
     std::printf("| OS factor | THD (wanted, harmonic) | Worst alias (unwanted) |\n");
     std::printf("|-----------|-------------------------|--------------------------|\n");
     bool specFinite = true;
-    double thd8x = 0.0, alias1x = 0.0, alias8x = 0.0;
+    double alias1x = 0.0, alias8x = 0.0;
     for (int factor : osFactors)
     {
-        auto cap = captureFullDrive(997.0, 0.5, factor, N);
+        auto cap = captureFullDrive<nalr::V1EarlyDriveClipRecovery>(997.0, 0.5, factor, N);
         specFinite &= allFinite(cap);
         auto r = measureSpectrum(cap, kFs, 997.0);
         std::printf("| %dx        | %22.1f dB | %23.1f dB |\n", factor, r.thdDb, r.worstAliasDbReFund);
         if (factor == 1)
             alias1x = r.worstAliasDbReFund;
         if (factor == 8)
-        {
-            thd8x = r.thdDb;
             alias8x = r.worstAliasDbReFund;
-        }
     }
     check(specFinite, "Part B captures all finite");
     std::printf("\n  THD is the WANTED clip character -- should stay roughly constant across OS factors\n");
@@ -220,7 +233,34 @@ int main()
     std::printf("  1x (%.1f dB) to 8x (%.1f dB); a large residual gap at 1x/2x is what would motivate\n", alias1x,
                 alias8x);
     std::printf("  dsp.md's low-OS top-octave shelf follow-up.\n");
-    (void) thd8x;
+
+    // --- Part C: zener DRIVE region (V1 Late / V2) -- the deferred OS pass, now landed ---------------
+    // Same decomposition on ZenerDriveClipRecovery<V1LateRecoveryStage>. This region has TWO clips (the
+    // stage-A rail + the stage-B zener); the zener has no closed-form antiderivative so it relies on OS
+    // + AccurateOmega for anti-aliasing (only the rail is ADAA'd). The ASSERTED gate: aliasing at 8x is
+    // well below 1x -- i.e. the OS knob actually works here now (before this pass it was a no-op).
+    std::printf("\nPart C -- V1 Late/V2 zener DRIVE: harmonic vs aliasing (full drive, 997 Hz, re fundamental):\n");
+    std::printf("| OS factor | THD (wanted, harmonic) | Worst alias (unwanted) |\n");
+    std::printf("|-----------|-------------------------|--------------------------|\n");
+    auto zenerCfg = [](auto& r) { r.setDriveParams(nalr::ZenerDriveModule::v1LateParams()); };
+    bool zenerFinite = true;
+    double zAlias1x = 0.0, zAlias8x = 0.0;
+    for (int factor : osFactors)
+    {
+        auto cap =
+            captureFullDrive<nalr::ZenerDriveClipRecovery<nalr::V1LateRecoveryStage>>(997.0, 0.5, factor, N, zenerCfg);
+        zenerFinite &= allFinite(cap);
+        auto r = measureSpectrum(cap, kFs, 997.0);
+        std::printf("| %dx        | %22.1f dB | %23.1f dB |\n", factor, r.thdDb, r.worstAliasDbReFund);
+        if (factor == 1)
+            zAlias1x = r.worstAliasDbReFund;
+        if (factor == 8)
+            zAlias8x = r.worstAliasDbReFund;
+    }
+    check(zenerFinite, "Part C captures all finite");
+    std::printf("\n  zener aliasing: 1x = %.1f dB -> 8x = %.1f dB (drop of %.1f dB)\n", zAlias1x, zAlias8x,
+                zAlias1x - zAlias8x);
+    check(zAlias8x < zAlias1x - 10.0, "oversampling cuts zener aliasing by >10 dB (1x->8x) -- OS knob is live");
 
     std::printf("\n%s\n", pass ? "OSFidelity PASSED" : "OSFidelity FAILED");
     return pass ? 0 : 1;

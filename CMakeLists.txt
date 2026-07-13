@@ -294,11 +294,15 @@ target_compile_options(V1LateDriveTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME V1LateDriveTest COMMAND V1LateDriveTest)
 
 # 5.4 — V1 Late full-chain integration (src/dsp/V1LateDSP.h): all-knobs stability sweep, dry-path
-# passthrough, and the FR §1/§8 voiced end-to-end checkpoints. No OS region yet (deferred — see
-# V1LateDSP.h), so this is a pure chowdsp console exe like V1LateStagesTest, not a JUCE one.
-add_executable(V1LateIntegrationTest tests/V1LateIntegrationTest.cpp)
-target_link_libraries(V1LateIntegrationTest PRIVATE chowdsp::chowdsp_wdf)
-target_compile_options(V1LateIntegrationTest PRIVATE ${PEDAL_WARNING_FLAGS})
+# passthrough, and the FR §1/§8 voiced end-to-end checkpoints. Now a JUCE console app: the DRIVE/zener
+# module + recovery are an oversampled region (juce::dsp Oversampling — see ZenerDriveClipRecovery.h).
+juce_add_console_app(V1LateIntegrationTest PRODUCT_NAME "V1LateIntegrationTest")
+target_sources(V1LateIntegrationTest PRIVATE tests/V1LateIntegrationTest.cpp)
+target_compile_definitions(V1LateIntegrationTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V1LateIntegrationTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1LateIntegrationTest COMMAND V1LateIntegrationTest)
 
 # 6.1 — V2 recovery stage: new R47/C42 input LP corner + retuned S-K coupling, no bridged-T
@@ -320,10 +324,14 @@ add_test(NAME V2MidToneTest COMMAND V2MidToneTest)
 # + CH40 DRIVE/zener module (ZenerDriveModule::v2Params()) + Phase 6.1/6.2's recovery/MID/tone stages
 # + BLEND/LEVEL/output (V2Stages.h). Same shape as V1LateIntegrationTest: all-knobs stability sweep,
 # dry-path passthrough, FR §1 V2-column checkpoint, isolated §4 V2 DRIVE gain check, MID SHIFT sanity.
-# No OS region yet (deferred alongside V1 Late's — see V2DSP.h), so this is a pure chowdsp console exe.
-add_executable(V2IntegrationTest tests/V2IntegrationTest.cpp)
-target_link_libraries(V2IntegrationTest PRIVATE chowdsp::chowdsp_wdf)
-target_compile_options(V2IntegrationTest PRIVATE ${PEDAL_WARNING_FLAGS})
+# Now a JUCE console app: the DRIVE/zener module + recovery are an oversampled region (juce::dsp).
+juce_add_console_app(V2IntegrationTest PRODUCT_NAME "V2IntegrationTest")
+target_sources(V2IntegrationTest PRIVATE tests/V2IntegrationTest.cpp)
+target_compile_definitions(V2IntegrationTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V2IntegrationTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V2IntegrationTest COMMAND V2IntegrationTest)
 
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling

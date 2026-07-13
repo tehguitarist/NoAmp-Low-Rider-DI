@@ -100,16 +100,32 @@ int main()
     }
 
     // ------------------------------------------------------------------------------------------------
-    std::printf("Zener clip onset (+-3.9 V output clamp, netlists.md L4 / dsp.md)\n");
+    // Clip behaviour. The module has TWO series clips: stage-A's op-amp rail (V_w clamps at +-4.2 V)
+    // and stage-B's zener (output clamps at ~Vth). They INTERACT: stage B is an inverting op-amp fed
+    // I_g = V_w/(R_wb+R17), so once stage A rails, the current into the zener is limited to
+    // 4.2/(R_wb+R17). At MAX drive R_wb=0 -> R_in=10k -> ~420 uA, plenty to hold the zener at its full
+    // ~3.85 V Vth. At MID drive R_wb=50k -> R_in=60k -> only ~70 uA, BELOW the zener's breakdown
+    // current, so it clamps SOFTER/lower (~3.0 V). This drive-dependent clip hardness (softer at low
+    // DRIVE, full zener clamp at high DRIVE) is the physically-correct consequence of the stage-A rail;
+    // the exact mid-drive value depends on rail voltage + zener knee softness and is a Phase-10
+    // calibration lever (the symmetric +-4.2 V rail is a placeholder — real V1L stage A self-biases at
+    // ~0.69*VCC, an asymmetric rail; see ZenerDriveModule.h + circuit.md [○]).
+    std::printf("Clip: stage-A rail + stage-B zener, drive-dependent clamp (netlists.md L4 / dsp.md)\n");
     {
         std::printf("      module thresholdVolts() = %.2f V\n", drive.thresholdVolts());
         drive.setDrive(0.5);
         const double outSmall = peakOut(drive, 0.05, 1000.0, fs); // small: linear
-        const double outLarge = peakOut(drive, 30.0, 1000.0, fs); // huge: hard against the zener
-        std::printf("      out @ 0.05 V in = %.3f V (linear) ; out @ 30 V in = %.3f V (clamped)\n", outSmall, outLarge);
-        check(outLarge > 3.4 && outLarge < 4.1, "large-signal output clamps at ~+-3.9 V (zener Vth)");
+        const double clampMid = peakOut(drive, 30.0, 1000.0, fs); // huge: rail-current-limited zener
+        drive.setDrive(1.0);
+        const double clampMax = peakOut(drive, 30.0, 1000.0, fs); // huge: full zener clamp (~Vth)
+        std::printf("      small @ 0.05 V in (D=50%%) = %.3f V (linear)\n", outSmall);
+        std::printf("      large @ 30 V in: D=50%% = %.3f V (rail-limited) ; D=100%% = %.3f V (full clamp)\n", clampMid,
+                    clampMax);
         check(outSmall < 2.0, "small-signal output still linear (below the ~2.8 V knee)");
-        // Onset: at max drive (268x) the knee (~2.8 V) is reached by ~10 mV input.
+        check(clampMax > 3.4 && clampMax < 4.1, "max-DRIVE output clamps at the full zener Vth (~3.85 V)");
+        check(clampMid > 2.4 && clampMid < clampMax, "mid-DRIVE output rail-current-limited, softer than max");
+        check(clampMax < 4.25, "output stays below the +-4.2 V op-amp rail (zener clamps first)");
+        // Onset: at max drive (~257x) the knee (~2.8 V) is reached by ~10 mV input.
         drive.setDrive(1.0);
         const double gLin = peakOut(drive, 1.0e-4, 1000.0, fs) / 1.0e-4;
         const double outAtOnset = peakOut(drive, 2.8 / gLin, 1000.0, fs);

@@ -25,13 +25,28 @@
 // stage-B's OUTPUT at +-Vth ~= +-3.9 V (reverse breakdown + forward drop); above that the DRIVE knob
 // only sets how hard the (already mid-scooped) signal hits that clamp — the "SansAmp" character.
 //
-// SCOPE (Phase 5.3): models the LINEAR small-signal gain + the zener clip + the Cj HF rolloff. The
-// sub-audio coupling HPs (C28/C8 2.2u -> < ~7 Hz corners) are NOT modelled — they sit far below the
-// band and the chain already carries DC blocks. Stage-A op-amp RAIL saturation (+-4.2 V on V_w) is
-// ALSO deferred: at any drive the zener clamps stage-B's output first (see the module test), so the
-// rail is a second-order detail best added in Phase 6 alongside oversampling/ADAA for BOTH the rail
-// and the zener (this hard clip aliases at base rate, like V1E's rail — dsp.md).
+// SCOPE: models the LINEAR small-signal gain, the stage-A op-amp RAIL clip (railA), the stage-B
+// zener clip, and the Cj HF rolloff. The sub-audio coupling HPs (C28/C8 2.2u -> < ~7 Hz corners) are
+// NOT modelled — they sit far below the band and the chain already carries DC blocks.
+//
+// STAGE-A RAIL CLIP (added with the OS/ADAA pass): IC100A's output (the pot wiper V_w) is an op-amp
+// output and saturates at the +-4.2 V supply rails (rail-to-rail TLC2262; VCOM 4.2 V per CLAUDE.md
+// power section). It is NOT a mere second-order safety ceiling — it INTERACTS with the zener via
+// stage-B's input current. Stage B is an inverting op-amp fed I_g = V_w/(R_wb+R17); once V_w rails,
+// I_g is capped at 4.2/(R_wb+R17), so how hard the zener is driven depends on the DRIVE pot:
+//   - HIGH drive: R_wb->0, R_in->10k -> ~420 uA, ample to hold the zener at its full ~3.85 V Vth.
+//   - LOW/MID drive: R_wb large, R_in up to 110k -> tens of uA, BELOW the zener knee current, so the
+//     zener clamps softer/lower (the clip ceiling drops with DRIVE). This drive-dependent clip
+//     hardness is the physically-correct behaviour; its exact magnitude (rail voltage + zener knee)
+//     is a Phase-10 calibration lever. The rail is modelled SYMMETRIC +-4.2 V as a placeholder —
+//     real V1L stage A self-biases at ~0.69*VCC (asymmetric +2.6/-5.8 V about its op point,
+//     circuit.md [○]); fitting that asymmetry vs captures adds the even-harmonic character.
+// ABOVE the Cj corner (~3.3 kHz) Cj shunts stage-B's feedback so the zener stops clamping while V_w
+// still swings full range -> the stage-A rail is the operative clip on HF/transients. Being a hard
+// clamp it aliases at base rate, so it lives in the oversampled region (ZenerDriveClipRecovery) and
+// gets the same 1st-order ADAA as V1E's rail.
 
+#include "RailClip.h"
 #include "ZenerPairT.h"
 
 namespace nalr
@@ -67,10 +82,25 @@ public:
     void prepare(double fs)
     {
         clipB.prepare(fs); // re-discretises Cj at fs
+        railA.reset();
         setDrive(drive01);
     }
 
-    void reset() noexcept { clipB.reset(); }
+    void reset() noexcept
+    {
+        railA.reset();
+        clipB.reset();
+    }
+
+    // Stage-A op-amp rail saturation. Defaults to +-4.2 V (RailClip's own default = the locked VCOM);
+    // configurable for the asymmetric-headroom refinement (circuit.md [○]: V1L stage A self-biases at
+    // ~0.69*VCC) and Phase-10 calibration. Second-order at LF (zener dominates), operative above the Cj
+    // corner — see the class comment.
+    void setRailVoltages(double vNeg, double vPos) noexcept { railA.setRailVoltages(vNeg, vPos); }
+
+    // ADAA the stage-A rail clip (NOT the zener — dsp.md: the zener has no closed-form antiderivative
+    // and relies on OS + AccurateOmega). On by default, matching V1E's RailClip.
+    void setADAA(bool on) noexcept { railA.setADAA(on); }
 
     // drive in [0,1]. R_wa = drive*Rpot (stage-A feedback), R_wb = (1-drive)*Rpot (stage-B input),
     // complementary. At drive=0: R_wa=0 (min gain), R_wb=Rpot (max attenuation).
@@ -83,8 +113,9 @@ public:
         clipB.setInputResistance(Rwb + prm.R17);
     }
 
-    // Net non-inverting: V_w = -gainAmag*vIn (stage A inverting), then clipB inverts again.
-    inline double process(double vIn) noexcept { return clipB.process(-gainAmag * vIn); }
+    // Net non-inverting: V_w = -gainAmag*vIn (stage A inverting), rail-clamped at the op-amp supply,
+    // then clipB (stage B) inverts again and clamps at the zener.
+    inline double process(double vIn) noexcept { return clipB.process(railA.process(-gainAmag * vIn)); }
 
     double thresholdVolts() const noexcept { return clipB.thresholdVolts(); }
     double stageAGain() const noexcept { return gainAmag; }
@@ -111,6 +142,7 @@ public:
 private:
     ZenerDriveParams prm = v1LateParams();
     double drive01 = 0.5, gainAmag = 4.4;
-    ZenerFeedbackClipper<> clipB;
+    RailClip railA;               // stage-A op-amp rail saturation on the wiper node V_w
+    ZenerFeedbackClipper<> clipB; // stage-B zener-pair clip
 };
 } // namespace nalr
