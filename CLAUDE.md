@@ -124,13 +124,37 @@ without images.
 > Attach`; every file actually used Allman/brace-on-own-line) — fixed (`Allman`, unindented access
 > modifiers, left pointer/reference alignment, spaced C-casts) and ran a real pass across
 > `src/`+`tests/` (whitespace/brace-shape only — verified via diff and a full rebuild; 22/22 tests
-> still pass). No factory-preset work done (9.x still open/optional).
-> **⏸ HARD-BREAK checkpoint still open: user hasn't confirmed a DAW listen of any revision** —
-> carried forward from Phase 3/4/5.4/6/7/8; still nobody's done this.
-> **⏸ NEXT: Phase 10 (capture validation) — BLOCKED until the user provides real-pedal captures.**
-> Nothing to prepare beyond what's already in `docs/validation-and-capture.md`. Optional side task
-> whenever: 9.x factory presets from `docs/presets.csv` (V1 Early/Late share settings, V2 adds its
-> extra params) — never done, low priority, no dependency on Phase 10.
+> still pass). **9.x factory presets DONE (2026-07-13):** 36 presets from `docs/presets.csv` via an
+> embedded program interface (`getNumPrograms`/`setCurrentProgram`/`getProgramName`) reading
+> `src/FactoryPresets.h` (single source of truth: clock-face→0..1 helper `clk()`, 12 V1 rows ×
+> {Early,Late} + 12 V2 rows, grouped/prefixed names). Sets only revision+pots+V2 switches (leaves
+> trims/OS/bypass); not tied into state (raw params already persist). `tests/FactoryPresetsTest`
+> registered (23/23 ctest green). **Switch convention locked: "In" = HIGHER silk freq** → mid_shift
+> "1000 Hz"/bass_shift "80 Hz" (index 1); Out = index 0. Plugin is frequency-native (choice param +
+> DSP + UI all speak Hz), so In/Out lives only in the preset table — NO dsp/UI change needed.
+>
+> ## ⏸ OUTSTANDING BEFORE PHASE 10 (tackle in this order; none block each other except as noted)
+> 1. **DAW listen — user action, do FIRST.** Nobody has confirmed a listen of any revision (open
+>    HARD-BREAK carried from Phase 3/4/5.4/6/7/8). De-risks everything below; if the drive stage
+>    sounds wrong by ear, the OS work is premature.
+> 2. **OS/ADAA on the V1L/V2 zener DRIVE module.** Currently base-rate no-ops
+>    (`setOversamplingFactor`/`setADAA` inert in `V1LateDSP`/`V2DSP`), so the OS knob does nothing on
+>    those two revisions and the zener hard-clip aliases at base rate. Three sub-parts: (a) oversample
+>    the zener region + its downstream recovery (mirror `V1EarlyDriveClipRecovery`); (b) add the
+>    stage-A op-amp RAIL clip (currently ABSENT on V1L/V2 — see `ZenerDriveModule.h`); (c) ADAA that
+>    rail clip — NOT the zener (dsp.md: zener relies on OS + AccurateOmega, no closed-form
+>    antiderivative). Closes the 5.3 carry-forward below.
+> 3. **Low-OS top-octave shelf / prewarp — all three revs, optional polish.** OSFidelity confirmed the
+>    droop is real (data in hand); nothing implemented yet. The single deferred V1E prewarp target is
+>    the fixed tone corner C29 ~7.2 kHz; the shelf is a base-rate fixed-shape high-shelf (~0 at 4×/8×).
+> 4. **UI layout tuning pass — user-gated.** `layoutV1`/`layoutV2` positions in `PluginEditor` are
+>    first-pass eyeballed estimates awaiting the user's review of the render PNGs (normal Phase-8
+>    iterate loop, not a bug).
+>
+> **Phase 10 itself (capture-gated, cannot start until the user provides captures):** re-anchor
+> `kInputRef`/`kOutputMakeup` per revision, fit each revision's zener Cj against captured DRIVE HF
+> (`v2Params()` is currently a placeholder == `v1LateParams()`), run the four analyses. Nothing to
+> prepare beyond `docs/validation-and-capture.md`.
 > **Durable gotchas from Phase 6 (still relevant to future NodalCircuit/switch-stage work):**
 > (1) **Switch modelling is NOT `setSMatrixData()`** — V2's MID/BASS-SHIFT stages are NodalCircuit
 > (MNA), so "switched topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) +

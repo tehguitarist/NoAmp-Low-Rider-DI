@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "FactoryPresets.h"
 
 #include <algorithm>
 
@@ -302,6 +303,51 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
 juce::AudioProcessorEditor* NoAmpLowRiderDIAudioProcessor::createEditor()
 {
     return new NoAmpLowRiderDIAudioProcessorEditor(*this);
+}
+
+int NoAmpLowRiderDIAudioProcessor::getNumPrograms()
+{
+    return nalr::presets::count();
+}
+
+// Applies a factory preset (FactoryPresets.h) to the APVTS on the message thread. Sets only the voiced
+// controls — revision + the pots + the two V2 switches — leaving input/output trim, oversampling and
+// bypass at whatever the user chose (those aren't part of a tonal preset). Notifies the host so
+// automation lanes and the editor follow. NOT wired into getStateInformation: a restored session already
+// carries every raw parameter, so it reproduces exactly regardless of which program was last picked.
+void NoAmpLowRiderDIAudioProcessor::setCurrentProgram(int index)
+{
+    if (index < 0 || index >= getNumPrograms())
+        return;
+
+    currentProgram = index;
+    const auto preset = nalr::presets::at(index);
+
+    // convertTo0to1 handles both domains: pot floats (range 0..1 -> identity) and choice indices
+    // (range 0..N-1 -> index/(N-1)), so revision/mid_shift/bass_shift map correctly from their indices.
+    auto apply = [this](const char* id, float rawValue)
+    {
+        if (auto* param = apvts.getParameter(id))
+            param->setValueNotifyingHost(param->convertTo0to1(rawValue));
+    };
+
+    apply(idRevision, (float) preset.revision);
+    apply(idDrive, preset.drive);
+    apply(idPresence, preset.presence);
+    apply(idBlend, preset.blend);
+    apply(idLevel, preset.level);
+    apply(idBass, preset.bass);
+    apply(idTreble, preset.treble);
+    apply(idMid, preset.mid);
+    apply(idMidShift, (float) preset.midShift);
+    apply(idBassShift, (float) preset.bassShift);
+}
+
+const juce::String NoAmpLowRiderDIAudioProcessor::getProgramName(int index)
+{
+    if (index < 0 || index >= getNumPrograms())
+        return {};
+    return juce::String(nalr::presets::at(index).name);
 }
 
 void NoAmpLowRiderDIAudioProcessor::getStateInformation(juce::MemoryBlock& destData)

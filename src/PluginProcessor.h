@@ -40,10 +40,11 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram(int) override {}
-    const juce::String getProgramName(int) override { return {}; }
+    // Factory presets (docs/presets.csv -> src/FactoryPresets.h) exposed via the host program menu.
+    int getNumPrograms() override;
+    int getCurrentProgram() override { return currentProgram; }
+    void setCurrentProgram(int index) override;
+    const juce::String getProgramName(int index) override;
     void changeProgramName(int, const juce::String&) override {}
 
     void getStateInformation(juce::MemoryBlock& destData) override;
@@ -111,6 +112,8 @@ private:
     // (fed the same input) and their outputs are blended. A second revision change mid-crossfade
     // just retargets immediately (snap-restart) rather than queuing — this is a deliberate, rare
     // user gesture, not audio-rate automation, so that simplification is fine.
+    int currentProgram = 0; // index of the last-applied factory preset (host program menu)
+
     int activeRevision = 0;
     int fadingFromRevision = -1; // -1 = no crossfade in progress
     bool crossfading = false;

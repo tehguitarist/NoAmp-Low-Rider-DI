@@ -168,6 +168,35 @@ target_link_libraries(StateRoundTrip
 )
 add_test(NAME StateRoundTrip COMMAND StateRoundTrip)
 
+# Factory presets: applies every preset (FactoryPresets.h) through the real processor's program
+# interface and verifies clock->0..1 conversion, CSV column mapping, In/Out switch indices, the
+# V1-row Early/Late duplication, and APVTS round-trip.
+juce_add_console_app(FactoryPresetsTest PRODUCT_NAME "FactoryPresetsTest")
+target_sources(FactoryPresetsTest
+    PRIVATE
+        tests/FactoryPresetsTest.cpp
+        src/PluginProcessor.cpp
+        src/PluginEditor.cpp
+        src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
+)
+target_compile_definitions(FactoryPresetsTest
+    PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
+        JUCE_STANDALONE_APPLICATION=1
+)
+target_link_libraries(FactoryPresetsTest
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        chowdsp::chowdsp_wdf
+        NoAmpAssets
+    PUBLIC
+        juce::juce_recommended_config_flags
+)
+add_test(NAME FactoryPresetsTest COMMAND FactoryPresetsTest)
+
 # 7 — Revision-switch crossfade: drives the real processor with a continuous tone, flipping
 # `revision` every few blocks (including mid-crossfade), asserting finite output, no click-sized
 # sample-to-sample jumps, and that the revision param round-trips through state (architecture.md
