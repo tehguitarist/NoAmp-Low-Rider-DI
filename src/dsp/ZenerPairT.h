@@ -62,41 +62,65 @@ class ZenerPairT final : public wdft::RootWDF
 {
 public:
     // Vz = zener (breakdown) voltage, Vf = forward drop, Vzt = knee-softness thermal voltage,
-    // Iref = current at which the clamp voltage equals Vth = Vz + Vf.
-    ZenerPairT(Next& n, T Vz = (T) 3.3, T Vf = (T) 0.65, T Vzt = (T) 0.20, T Iref = (T) 5.0e-3) : next(n)
+    // Iref = current at which the clamp voltage equals Vth = Vz + Vf, m = per-polarity KNEE MISMATCH
+    // (asymmetry; see setZenerParameters). m defaults to 0 => symmetric (bit-identical to the old solve).
+    ZenerPairT(Next& n, T Vz = (T) 3.3, T Vf = (T) 0.65, T Vzt = (T) 0.20, T Iref = (T) 5.0e-3, T m = (T) 0) : next(n)
     {
         n.connectToParent(this);
-        setZenerParameters(Vz, Vf, Vzt, Iref);
+        setZenerParameters(Vz, Vf, Vzt, Iref, m);
     }
 
-    void setZenerParameters(T Vz, T Vf, T Vzt, T Iref)
+    // ASYMMETRY / EVEN HARMONICS (dsp.md "Asymmetric clip modes & even harmonics"): a real back-to-back
+    // zener pair is not perfectly matched (device tolerance between the two junctions) and the VCOM bias
+    // offsets the operating point, so the pedal shows measurable EVEN harmonics even in the nominally
+    // symmetric drive (Phase-10 V2 captures: H2 ~ -47 dB re fundamental, evens ~30 dB below the odds).
+    // A perfectly symmetric model produces NONE (evens at the numerical floor). We add them with a
+    // PER-POLARITY thermal-voltage mismatch: the +swing knee uses Vt*(1+m), the -swing Vt*(1-m), SAME Is.
+    // Properties (dsp.md, the recommended asym model — not a lateral bias, not a per-polarity ratio):
+    //   - m=0 => VtP==VtN==Vt, bit-identical to the matched pair (each polarity reflects 0 at a=0).
+    //   - even harmonics scale with m; ODD harmonics / THD / clamp LEVEL are ~unchanged (the mismatch is
+    //     symmetric about the mean Vt, so one half's knee sharpens as the other softens -> net preserved).
+    //   - no small-signal-gain artifact: the asymmetry acts only WHERE THE PAIR CONDUCTS; sub-knee both
+    //     halves are high-Z so each polarity still reflects ~unity. => calibrate m to the captured H2.
+    void setZenerParameters(T Vz, T Vf, T Vzt, T Iref, T m = (T) 0)
     {
         Vth = Vz + Vf;
         Vt = Vzt;
-        oneOverVt = (T) 1 / Vt;
-        Is = Iref * std::exp(-Vth * oneOverVt); // => I(Vth) ~= Iref (exp form; 2*sinh ~= exp for Vth>>Vt)
+        mismatch = m;
+        Is = Iref * std::exp(-Vth / Vt); // => I(Vth) ~= Iref (exp form; 2*sinh ~= exp for Vth>>Vt); Is is
+                                         // pinned from the NOMINAL Vt and shared by both polarities.
+        VtP = Vt * ((T) 1 + mismatch);   // +swing effective knee (softer if m>0)
+        VtN = Vt * ((T) 1 - mismatch);   // -swing effective knee (sharper if m>0)
+        oneOverVtP = (T) 1 / VtP;
+        oneOverVtN = (T) 1 / VtN;
         calcImpedance();
     }
 
     // Recomputed whenever the downstream port impedance changes (sample-rate / Cj change propagate up
-    // to here via the parallel adaptor). Mirrors DiodePairT's precompute.
+    // to here via the parallel adaptor). Mirrors DiodePairT's precompute; now per-polarity for the mismatch.
     inline void calcImpedance() override
     {
-        R_Is = next.wdf.R * Is;
-        R_Is_overVt = R_Is * oneOverVt;
-        logR_Is_overVt = std::log(R_Is_overVt);
+        R_Is = next.wdf.R * Is; // shared (Is is per-polarity-independent)
+        R_Is_overVtP = R_Is * oneOverVtP;
+        R_Is_overVtN = R_Is * oneOverVtN;
+        logR_Is_overVtP = std::log(R_Is_overVtP);
+        logR_Is_overVtN = std::log(R_Is_overVtN);
     }
 
     inline void incident(T x) noexcept { wdf.a = x; }
 
     // Werner et al. "An Improved and Generalized Diode Clipper Model for WDFs", eqn (18), antiparallel
-    // pair — solved with OmegaProvider (AccurateOmega). Odd-symmetric via the signum fold.
+    // pair — solved with OmegaProvider (AccurateOmega). Odd-symmetric fold via signum; the +/- swings use
+    // their own (VtP/VtN) knee constants so a mismatch (m != 0) makes the clip asymmetric (even harmonics).
     inline T reflected() noexcept
     {
         const T lambda = (T) ((wdf.a > (T) 0) - (wdf.a < (T) 0)); // signum(a)
-        wdf.b =
-            wdf.a + (T) 2 * lambda *
-                        (R_Is - Vt * OmegaProvider::omega(logR_Is_overVt + lambda * wdf.a * oneOverVt + R_Is_overVt));
+        const bool pos = (wdf.a >= (T) 0);
+        const T vt = pos ? VtP : VtN;
+        const T ovt = pos ? oneOverVtP : oneOverVtN;
+        const T rio = pos ? R_Is_overVtP : R_Is_overVtN;
+        const T lrio = pos ? logR_Is_overVtP : logR_Is_overVtN;
+        wdf.b = wdf.a + (T) 2 * lambda * (R_Is - vt * OmegaProvider::omega(lrio + lambda * wdf.a * ovt + rio));
         return wdf.b;
     }
 
@@ -105,8 +129,9 @@ public:
     wdft::WDFMembers<T> wdf;
 
 private:
-    T Vth{}, Vt{}, oneOverVt{}, Is{};
-    T R_Is{}, R_Is_overVt{}, logR_Is_overVt{};
+    T Vth{}, Vt{}, Is{}, mismatch{};
+    T VtP{}, VtN{}, oneOverVtP{}, oneOverVtN{};
+    T R_Is{}, R_Is_overVtP{}, R_Is_overVtN{}, logR_Is_overVtP{}, logR_Is_overVtN{};
     const Next& next;
 };
 
@@ -135,14 +160,14 @@ public:
     ZenerFeedbackClipper() = default;
 
     // Rin = stage input resistance (sets linear gain -Rf/Rin), Rf = feedback resistor,
-    // Cj = pair junction capacitance; zener knee params as in ZenerPairT.
+    // Cj = pair junction capacitance; zener knee params as in ZenerPairT (m = per-polarity asymmetry).
     void setParams(double Rin, double Rf, double Cj, double Vz = 3.3, double Vf = 0.65, double Vzt = 0.20,
-                   double Iref = 5.0e-3)
+                   double Iref = 5.0e-3, double m = 0.0)
     {
         oneOverRin = 1.0 / Rin;
         src.setResistanceValue(Rf); // parallel resistance of the current source = feedback resistor
         cj.setCapacitanceValue(Cj);
-        zener.setZenerParameters(Vz, Vf, Vzt, Iref);
+        zener.setZenerParameters(Vz, Vf, Vzt, Iref, m);
     }
 
     // Cheap update for a stage whose input resistance is set by a pot (the V1L/V2 DRIVE module's

@@ -106,16 +106,31 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 A/B HARNESS BUILT + 12 real captures in hand (2026-07-13). Next: RUN + CALIBRATE.**
-> Captures in `analysis/captures/` (48k/24-bit; 3 V1E, 3 V1L, 6 V2) are **NAM-model output**
-> (level-normalized) → calibrate SHAPE-first; V1E+V2 identically staged (levels real → anchor
-> `kInputRef` off their known clip knees ±4.2 V rail / ±3.9 V zener), V1L variably staged (shape/THD/FR
-> only). Harness: `analysis/noamp_captures.py` (parse/discover/render-args — template
-> `analyze.parse_filename` mis-reads this pedal, don't use it), `analysis/offline_render.cpp` now
-> dispatches all 3 revisions (`--rev` + V2 `--mid/--mid-shift/--bass-shift`), `analysis/ab_report.py`
-> (FR/THD/NULL/LEVEL per capture + V1E drive knob-pair). **Read `analysis/README.md` before running**
-> (requirements + metric interpretation + calibration order). Not yet run end-to-end (this session's
-> env lacked numpy/scipy); `Calibration.h` constants still interim. Memory: `noamp-capture-pipeline`.
+> **CURRENT: Phase 10 CALIBRATION IN PROGRESS on V2 (2026-07-14). Next: clip WAVESHAPE + kOutputMakeup.**
+> Full A/B harness now runs end-to-end (numpy/scipy present). Captures still 44.1k-in-48k-labeled
+> (auto-fixed by `NC.load_capture`; re-render to true 48k never landed). Read `analysis/README.md`
+> (rewritten this session: **validate STRUCTURE — FR + per-harmonic — BEFORE THD AMOUNT**; calibration
+> workflow; new `inref_scan.py`). Memory `noamp-capture-pipeline` has the full session log. Done this
+> session:
+>
+> - **HARNESS BUG FIXED:** `offline_render.cpp` wrote 24-bit INT → hard-clipped every >±1.0 FS render
+>   (output ~+18 dB hot at `kOutputMakeup=1.0`), injecting a spurious kInputRef-independent ~24 % LF THD
+>   floor that corrupted all THD/knee fits. Now **32-bit float**. Added calibration CLI overrides
+>   (`--in-ref/--out-makeup/--zener-iref/-vzt/-cj/-vz/-vf/-m`) via `setDriveParams()` on V1LateDSP/V2DSP.
+> - **`kInputRef` 0.87 → 1.3** (`Calibration.h`), fit from V2 clip onset (`inref_scan.py --metric linear`,
+>   excl. max-drive). WORKING value; the onset SHAPE still mismatches (see waveshape open item).
+> - **CLIP ASYMMETRY added** — `ZenerPairT` per-polarity knee mismatch `m` (+swing Vt(1+m)/−swing Vt(1−m),
+>   same Is; `m=0` bit-identical, 23/23 ctest green). Adds the even harmonics the pedal has but a symmetric
+>   pair lacks (V2 capture H2 ~−47/H4 ~−56 dB re fund; plugin ODD harmonics H3/H5/H7 already matched).
+>   **V2 fit `m=0.015`** (`v2Params()`, two full-wet captures). V1L `m=0` (unfit). Null didn't move (evens
+>   masked by the FR/level-limited ~−12 dB null) — correct structure fix, not a null-mover yet.
+> - **OPEN, next:** (1) clip WAVESHAPE — plugin onset too ABRUPT + max-drive THD ceiling ~24 % vs pedal
+>   ~37 % (structural; kInputRef/knee can't fix — suspects: stage-A `RailClip` hardness / zener knee at the
+>   rail-starved 70–420 µA op current). (2) `kOutputMakeup` still 1.0 (V2 ~+18 dB hot, V1E ~+8 dB → the
+>   ~10 dB gap = V2's +10.1 dB LEVEL stage). (3) V2 zener `Cj` still the V1L placeholder. (4) V1L/V1E
+>   calibration not started (kInputRef fit off V2 only, per user's "use V2 as anchor").
+> - **BLEND caveat:** judge WET-path FR/harmonics on full-wet (BL≈1.0) only — partial blend has dry+wet
+>   top-octave phase-cancellation the plugin doesn't reproduce (reads as false "too bright").
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
 > **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ

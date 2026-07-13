@@ -14,15 +14,18 @@
 
 namespace nalr
 {
-// Volts per DAW full-scale going INTO the circuit (calibration doc §1). 0.87 is carried over from
-// the author's prior same-template project (github.com/tehguitarist/monarch-of-tone's
-// `circuitVoltsPerFS`), which anchored it to that pedal's own real-capture rail-clip onset — a
-// different circuit's real-capture-derived number, not a re-derivation for THIS pedal, so it is
-// still a PROVISIONAL stand-in (a better-grounded one than the previous 3.27 doc worked-example,
-// per the user's explicit request 2026-07-13) until Phase 10 anchors it from NoAmp's own captures.
-// Changing input load must NOT move the unity point (it cancels in the linear path); it only sets
-// where the rail/zener clip engages.
-constexpr double kInputRef = 0.87;
+// Volts per DAW full-scale going INTO the circuit (calibration doc §1). Changing input load must NOT
+// move the unity point (it cancels in the linear path); it only sets where the rail/zener clip engages.
+//
+// 1.3 — Phase-10 fit (2026-07-13) from the V2 captures' clip ONSET (the user's chosen anchor rev; V2
+// staging is trustworthy). Fit via analysis/inref_scan.py, matching plugin THD-vs-input-level to the
+// pedal across the non-max-drive V2 captures with a LINEAR THD metric (the log metric over-weights the
+// captures' near-clean noise floor and biases high — it wanted 1.9). WORKING VALUE, not final: the
+// plugin's clip WAVESHAPE is still off (too-abrupt onset, too-soft saturation ceiling ~24% vs the
+// pedal's ~37% at max drive — a STRUCTURAL waveshape gap, not a kInputRef one), so no single kInputRef
+// nails the whole onset curve; 1.3 is the best compromise pending the waveshape investigation. (Prior:
+// 0.87, carried from monarch-of-tone's circuitVoltsPerFS — a different pedal's anchor.)
+constexpr double kInputRef = 1.3;
 
 // Flat output makeup (calibration doc §2). 1.0 = physically honest interim (output float == real
 // circuit output voltage at the input scale). Re-anchored to captures in Phase 10.

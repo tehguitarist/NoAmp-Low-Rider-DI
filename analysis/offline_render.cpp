@@ -13,6 +13,14 @@
 //     --bass-shift <0|1>       V2 only: BASS SHIFT — 0 = 40Hz throw, 1 = 80Hz throw (default 0)
 //     --os <1|2|4|8>           oversampling factor (default 8 — takes aliasing off the A/B table)
 //     --in-trim / --out-trim <dB>   processor trims (default 0)
+//     --in-ref <volts>         override Calibration.h's kInputRef for this render only (Phase-10
+//                               scan use — see analysis/inref_scan.py); default = nalr::kInputRef
+//     --out-makeup <gain>      override Calibration.h's kOutputMakeup for this render only;
+//                               default = nalr::kOutputMakeup
+//     --zener-iref/-vzt/-cj/-vz/-vf/-m <x>   V1L/V2 only: override the DRIVE zener params for this
+//                               render (Phase-10 fit). -m = per-polarity knee mismatch (asymmetry ->
+//                               even harmonics; 0 = symmetric). Each defaults to the revision's
+//                               v1LateParams()/v2Params() value; ignored on V1E.
 //     --block <n>              processing block length (default 512; exercises the block path)
 //
 // Switch-index convention matches analysis/noamp_captures.py: index 1 = the HIGHER silk frequency
@@ -56,11 +64,25 @@ std::string argStr(int argc, char** argv, const char* key, const char* def)
 
 float dbToGain(double db) { return (float) std::pow(10.0, db / 20.0); }
 
+// Build the zener DRIVE-module params for V1L/V2, starting from the revision default and overriding
+// only the knee fields present on the CLI (--zener-iref/-vzt/-cj/-vz/-vf). A sentinel default means
+// "leave at the revision value" so an unspecified flag is a true no-op (production behaviour).
+nalr::ZenerDriveParams zenerParamsFromArgs(int argc, char** argv, nalr::ZenerDriveParams def)
+{
+    def.Iref = argVal(argc, argv, "--zener-iref", def.Iref);
+    def.Vzt = argVal(argc, argv, "--zener-vzt", def.Vzt);
+    def.Cj = argVal(argc, argv, "--zener-cj", def.Cj);
+    def.Vz = argVal(argc, argv, "--zener-vz", def.Vz);
+    def.Vf = argVal(argc, argv, "--zener-vf", def.Vf);
+    def.m = argVal(argc, argv, "--zener-m", def.m); // per-polarity asymmetry -> even harmonics
+    return def;
+}
+
 // Shared render loop. `applyParams` sets the revision-specific pot/switch values on the constructed
 // DSP object; everything else (OS, prepare, gain staging, block loop, WAV write) is identical.
 template <typename DSP, typename SetFn>
 int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor, int block,
-              double inTrimDb, double outTrimDb, SetFn applyParams)
+              double inTrimDb, double outTrimDb, double inRef, double outMakeup, SetFn applyParams)
 {
     DSP dsp;
     dsp.setOversamplingFactor(osFactor);
@@ -69,7 +91,7 @@ int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor,
     dsp.reset();
 
     const float inTrim = dbToGain(inTrimDb);
-    const float outGain = (float) (nalr::kOutputMakeup / nalr::kInputRef) * dbToGain(outTrimDb);
+    const float outGain = (float) (outMakeup / inRef) * dbToGain(outTrimDb);
 
     float* data = fileBuf.getWritePointer(0);
     std::vector<double> volts((size_t) block, 0.0);
@@ -78,7 +100,7 @@ int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor,
     {
         const int len = juce::jmin(block, n - start);
         for (int i = 0; i < len; ++i)
-            volts[(size_t) i] = (double) (data[start + i] * inTrim) * nalr::kInputRef;
+            volts[(size_t) i] = (double) (data[start + i] * inTrim) * inRef;
         dsp.processBlock(volts.data(), len);
         for (int i = 0; i < len; ++i)
             data[start + i] = (float) volts[(size_t) i] * outGain;
@@ -111,6 +133,8 @@ int main(int argc, char** argv)
     const int    osFactor = (int) argVal(argc, argv, "--os", 8);
     const double inTrimDb = argVal(argc, argv, "--in-trim", 0.0);
     const double outTrimDb = argVal(argc, argv, "--out-trim", 0.0);
+    const double inRef     = argVal(argc, argv, "--in-ref", nalr::kInputRef);
+    const double outMakeup = argVal(argc, argv, "--out-makeup", nalr::kOutputMakeup);
     const int    block    = juce::jmax(1, (int) argVal(argc, argv, "--block", 512));
 
     juce::AudioFormatManager fmt;
@@ -129,13 +153,17 @@ int main(int argc, char** argv)
 
     if (rev == "V1E")
     {
-        runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb,
+        runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup,
                                     [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
     }
     else if (rev == "V1L")
     {
-        runRender<nalr::V1LateDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb,
-                                   [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
+        const auto zp = zenerParamsFromArgs(argc, argv, nalr::ZenerDriveModule::v1LateParams());
+        runRender<nalr::V1LateDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup,
+                                   [&](auto& d) {
+                                       d.setParams(drive, presence, blend, level, bass, treble);
+                                       d.setDriveParams(zp);
+                                   });
     }
     else if (rev == "V2")
     {
@@ -143,10 +171,12 @@ int main(int argc, char** argv)
         // = midShiftLow430 true; index 0 (BS40) = bassShift40 true.
         const bool midShiftLow430 = (midShift == 0);
         const bool bassShift40 = (bassShift == 0);
-        runRender<nalr::V2DSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb,
+        const auto zp = zenerParamsFromArgs(argc, argv, nalr::ZenerDriveModule::v2Params());
+        runRender<nalr::V2DSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup,
                                [&](auto& d) {
                                    d.setParams(drive, presence, blend, level, mid, midShiftLow430, bass, treble,
                                                bassShift40);
+                                   d.setDriveParams(zp);
                                });
     }
     else
@@ -162,12 +192,19 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "offline_render: cannot write %s\n", outFile.getFullPathName().toRawUTF8());
         return 1;
     }
+    // 32-bit FLOAT, not 24-bit int: the render is an analysis artifact whose absolute level is
+    // uncalibrated (kOutputMakeup is a Phase-10 fit target), so it routinely exceeds ±1.0 FS. A fixed-
+    // point writer would HARD-CLIP those peaks and inject spurious harmonics that corrupt the THD
+    // measurement (a kInputRef-independent ~24% low-freq floor in the loudest driven sweep — diagnosed
+    // 2026-07-13). Float write is lossless past 0 dBFS, so THD/FR/null read the true DSP output and
+    // level-matching stays entirely in the analysis layer. analyze.py loads float WAVs natively.
     juce::WavAudioFormat wav;
     std::unique_ptr<juce::AudioFormatWriter> writer(
         wav.createWriterFor(outStream, juce::AudioFormatWriterOptions{}
                                            .withSampleRate(fs)
                                            .withNumChannels(1)
-                                           .withBitsPerSample(24)));
+                                           .withBitsPerSample(32)
+                                           .withSampleFormat(juce::AudioFormatWriterOptions::SampleFormat::floatingPoint)));
     if (writer == nullptr)
     {
         std::fprintf(stderr, "offline_render: cannot create WAV writer\n");

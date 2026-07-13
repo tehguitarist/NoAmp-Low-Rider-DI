@@ -64,6 +64,8 @@ struct ZenerDriveParams
     double Vf;   // forward drop
     double Vzt;  // knee softness (fit)
     double Iref; // current pinning the clamp at Vth = Vz + Vf
+    double m;    // per-polarity knee mismatch -> even-harmonic asymmetry (fit; 0 = symmetric). See
+                 // ZenerPairT::setZenerParameters + dsp.md "Asymmetric clip modes & even harmonics".
 };
 
 class ZenerDriveModule
@@ -75,7 +77,7 @@ public:
     {
         prm = p;
         // Static stage-B feedback network (Rf/Cj/zener). Rin is a placeholder here; setDrive() sets it.
-        clipB.setParams(prm.R17 + prm.Rpot, prm.Rf, prm.Cj, prm.Vz, prm.Vf, prm.Vzt, prm.Iref);
+        clipB.setParams(prm.R17 + prm.Rpot, prm.Rf, prm.Cj, prm.Vz, prm.Vf, prm.Vzt, prm.Iref, prm.m);
         setDrive(drive01);
     }
 
@@ -127,17 +129,29 @@ public:
         // (dsp.md's "~100-225 pF" range). Its ~3.3 kHz corner (< V1E's C28 ~4.8 kHz) is what makes V1L
         // roll off MORE at the top than V1E (FR §4 / §1). Fit parameter -- refine vs captures (Phase 10).
         return {/*R23*/ 10.0e3,   /*R25*/ 22.0e3, /*Rpot*/ 100.0e3, /*R17*/ 10.0e3, /*Rf*/ 220.0e3,
-                /*Cj*/ 220.0e-12, /*Vz*/ 3.3,     /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3};
+                /*Cj*/ 220.0e-12, /*Vz*/ 3.3,     /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
+                /*m*/ 0.0}; // symmetric until fit against V1L captures (Phase 10)
     }
 
     // The CH40 (V2) respin. netlists.md V4: R12/R14/R15/R903 sit in the CH34-9's R23/R25/R17/Rf roles
     // with numerically IDENTICAL values (10k/22k/100k pot/10k/220k) -- min/max gain matches FR §4's
     // V2 column (+12.9/+48.6 dB, same as V1L, cross-validated in ZenerDriveModule.h's header comment).
     // Only the un-modelled sub-audio coupling caps (2.2u -> 1u, C4 vs C8) and the zener package
-    // (BZB984-C3V3 vs DZ23C3V3, same nominal 3.3 V back-to-back topology) differ, and circuit.md flags
-    // the resulting Cj/knee delta as unmeasured without a real capture -- kept equal to the V1L fit as
-    // a provisional placeholder (refine both independently in Phase 10 once captures exist).
-    static ZenerDriveParams v2Params() { return v1LateParams(); }
+    // (BZB984-C3V3 vs DZ23C3V3, same nominal 3.3 V back-to-back topology) differ.
+    // ASYMMETRY (m) FIT — Phase 10, 2026-07-13: the V2 captures show even harmonics (H2 ~ -47 dB, H4
+    // ~ -56 dB re fundamental) that a symmetric pair produces at the numerical floor. A per-polarity
+    // knee mismatch m = 0.015 reproduces them: fit against TWO independent full-wet captures (V0930,
+    // V1030) — plugin H2 lands within +-0.6 / +2.7 dB and H4 within +0.4 / -1.9 dB, consistent across
+    // both, with odd harmonics / THD / level unchanged (verified bit-identical at m=0). The physical
+    // source is device tolerance in the BZB984 pair + VCOM operating-point offset (circuit.md flags V2
+    // stage-A bias as nominally symmetric, so this asymmetry is device/bias, not stage-A rail). Cj/knee
+    // still the V1L fit (independent V2 refinement pending). V1L keeps m=0 until its own captures.
+    static ZenerDriveParams v2Params()
+    {
+        auto p = v1LateParams();
+        p.m = 0.015;
+        return p;
+    }
 
 private:
     ZenerDriveParams prm = v1LateParams();

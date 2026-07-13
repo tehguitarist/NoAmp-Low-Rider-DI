@@ -93,6 +93,11 @@ public:
     void setOversamplingFactor(int factor) noexcept { driveRegion.setOversamplingFactor(factor); }
     void setADAA(bool on) noexcept { driveRegion.setADAA(on); }
 
+    // Override the zener DRIVE-module parameters (default = v1LateParams(), pushed in prepare()). Used
+    // by the Phase-10 calibration harness (OfflineRender --zener-*) to scan the knee without a rebuild;
+    // the production plugin never calls this.
+    void setDriveParams(const ZenerDriveParams& p) { driveRegion.setDriveParams(p); }
+
     // Base-rate samples of latency this chain reports (only the OS region contributes; 0 at 1x).
     int getLatencySamples() const noexcept { return driveRegion.getLatencySamples(); }
 

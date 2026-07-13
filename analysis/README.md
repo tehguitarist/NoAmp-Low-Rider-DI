@@ -36,14 +36,15 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 - The template parser in `analyze.py` MIS-reads these (the `V1E`/`V2` prefix is eaten by the `V`
   volume tag; `BL`/`MS`/`BS` unhandled). **Use `noamp_captures.py` instead.**
 
-## The three tools
+## The tools
 
 | File | Role |
 |------|------|
 | `noamp_captures.py` | pedal-specific layer: `parse_noamp(name)`, `find_captures(dir)`, `render_args(parsed)` (standalone, no numpy — run directly for a parse/args inventory), plus `load_capture(path)` (numpy) which **auto-corrects the wrong-sample-rate header** — see gotcha below. |
-| `offline_render.cpp` → `OfflineRender` | mirrors `processBlock` gain staging for any revision. `--rev V1E\|V1L\|V2`, the six pots, plus V2's `--mid/--mid-shift/--bass-shift`. Build: `cmake --build build --target OfflineRender`. |
-| `ab_report.py` | the orchestrator: for each capture, renders the matching plugin setting, aligns both to the reference, and prints FR / THD / NULL / LEVEL. |
-| `analyze.py` | pedal-agnostic library (load/align, `transfer`, `harmonic_thd_curve`, `null_depth`, `linear_removed_null`, `frac_align`, the FR grid). Don't duplicate its primitives. |
+| `offline_render.cpp` → `OfflineRender` | mirrors `processBlock` gain staging for any revision. `--rev V1E\|V1L\|V2`, the six pots, plus V2's `--mid/--mid-shift/--bass-shift`. **Writes 32-bit FLOAT** (never write-clips an over-0-dBFS render — see gotcha). **Calibration overrides (Calibration.h untouched):** `--in-ref`, `--out-makeup`, and V1L/V2 zener `--zener-iref/-vzt/-cj/-vz/-vf/-m`. Build: `cmake --build build --target OfflineRender`. |
+| `ab_report.py` | the orchestrator: for each capture, renders the matching plugin setting, aligns both to the reference, and prints FR / THD / NULL / LEVEL. `--filter`, `--os`, `--csv`, `--keep-renders`. |
+| `inref_scan.py` | the **kInputRef scanner** (calibration step 1): renders each V2 capture at a grid of `--in-ref` and scores plugin-vs-pedal THD-vs-input-level. `--metric linear` (default; log biases high), `--exclude-drive-above 0.85` (skip the structurally-unreachable max-drive), `--values`. |
+| `analyze.py` | pedal-agnostic library (load/align, `transfer`, `harmonic_thd_curve` — returns per-order `Hn` for the even/odd-harmonic view, `null_depth`, `linear_removed_null`, `frac_align`, the FR grid). Don't duplicate its primitives. |
 
 ## Run it
 
@@ -83,18 +84,48 @@ aliasing is off the table — drop it to expose the low-OS behaviour deliberatel
 
 ## The calibration workflow (what to actually change, in order)
 
-This harness **reports**; it does not auto-fit the constants in `src/dsp/Calibration.h`. Do:
+This harness **reports**; it does not auto-fit the constants in `src/dsp/Calibration.h`. **Validate
+STRUCTURE before AMOUNT** (the hard-won 2026-07-13/14 lesson): get the FR shape and the per-harmonic
+structure (how many harmonics, which orders, where placed) right first; the THD *magnitude* ("amount")
+is downstream and misleading to chase on its own. Order:
 
-1. **`kInputRef` (volts/FS) — anchor from clip ONSET, not level.** Render a driven sweep at several
-   `kInputRef` values and slide until the plugin's **THD(f)-vs-input-level** curves overlay the
-   **V1E** (rail clip ±4.2 V) and **V2** (zener ±3.9 V) captures — their knees are physically known
-   and their staging is trustworthy. (A `--in-ref-scan` mode is a natural add to `ab_report.py`.)
-2. **Per-revision zener `Cj`** — fit against the V1L/V2 captured DRIVE HF rolloff (`reference-fr-
-   targets.md` §4). `v2Params()` is currently a placeholder equal to `v1LateParams()`.
-3. **`kOutputMakeup`** — cosmetic per-revision level match only (null already gain-matches). Set it
-   to level-match the identically-staged set; don't treat it as a physical anchor.
-4. **Re-run** `ab_report.py`; decompose any residual with the linear-removed floor before touching
+0. **FR shape + per-harmonic structure (do this FIRST).** Gain-match, then compare the linear FR shape
+   and the per-ORDER harmonic levels (H2..H7 re fundamental), pedal vs plugin. On V2 this immediately
+   showed: odd harmonics (H3/H5/H7) already MATCH, FR matches within ±1 dB below ~3 kHz (at FULL WET —
+   see the blend caveat below), but ALL even harmonics were MISSING (symmetric clip) → the fix was
+   clip ASYMMETRY, not a level/knee tweak. A THD-amount fit would never have surfaced that.
+1. **`kInputRef` (volts/FS) — anchor from clip ONSET, via `analysis/inref_scan.py`.** Renders each
+   V2 capture at a grid of `kInputRef` (using OfflineRender's `--in-ref` override — Calibration.h
+   untouched) and scores plugin-vs-pedal THD-vs-input-level. **Use `--metric linear` (the default),
+   NOT log** — log-space over-weights the captures' near-clean noise floor (0.3–4 % at −18/−12 dBFS is
+   the pedal's floor, not real clipping) and biases `kInputRef` HIGH. **Exclude max-drive** captures
+   (`--exclude-drive-above`, default 0.85): the plugin's clip waveshape plateaus at ~24 % THD and can't
+   reach the pedal's ~37 % at max drive (a STRUCTURAL waveshape gap — too-abrupt onset + too-soft
+   saturation — that no `kInputRef` or zener-knee value fixes; see the waveshape note below), so they'd
+   bias the fit. Anchor rev = **V2** (user's choice; its staging is trustworthy). Working value: **1.3**.
+2. **Clip asymmetry `m` (even harmonics) — `--zener-m`.** Per-polarity knee mismatch on the zener pair
+   (`ZenerPairT`, dsp.md "Asymmetric clip modes"). Sweep it and match H2/H4 re fundamental to the
+   captures. V2 fit: **m = 0.015** (H2 ~ −47 dB, H4 ~ −56 dB, consistent across two full-wet captures;
+   odd harmonics / THD / level unchanged, `m=0` is bit-identical to the old symmetric solve). Set in
+   `v2Params()`. V1L not yet fit (`m=0`).
+3. **Per-revision zener `Cj`** — fit against the V1L/V2 captured DRIVE HF rolloff (`reference-fr-
+   targets.md` §4). `v2Params()` still uses the V1L `Cj` (220 pF) placeholder.
+4. **`kOutputMakeup`** — per-revision level match only (null already gain-matches, so this is cosmetic
+   for the A/B). The clean-null gain column shows the plugin runs ~+18 dB hot on V2, ~+8 dB on V1E (a
+   ~10 dB V1E↔V2 gap = V2's extra +10.1 dB LEVEL stage). Don't treat as a physical anchor.
+5. **Re-run** `ab_report.py`; decompose any residual with the linear-removed floor before touching
    constants (a deep-linear-removed but shallow-raw null = go fix the taper, not the clip).
+
+**Two open waveshape items (the "amount" residual):** (a) the clip onset is too ABRUPT (plugin THD
+jumps clean→hot faster than the pedal's gradual onset) and (b) the deep-saturation THD ceiling is too
+LOW (~24 % vs ~37 %). Both point at the clip TRANSFER-CURVE shape (the two-cascade hard-rail + soft-
+zener model), not a constant. The stage-A `RailClip` hardness / the zener knee sharpness at the actual
+(rail-starved 70–420 µA) operating current are the suspects. Investigate after FR + evens are locked.
+
+**Blend caveat (bit us once):** judge the WET-path FR/harmonics on a **full-wet (BL≈1.0)** capture. At
+partial blend the pedal's dry+wet paths phase-CANCEL in the top octave (a BL0.50 capture rolls off ~20
+dB harder at 14 kHz than full-wet); the plugin doesn't reproduce that cancellation, so a partial-blend
+FR read looks like a huge "plugin too bright" error that is really the confound, not a plugin defect.
 
 ## Gotchas / invariants
 
@@ -109,5 +140,13 @@ This harness **reports**; it does not auto-fit the constants in `src/dsp/Calibra
   genuine 48 k, the auto-fix silently no-ops. `A.load` still loads the (48 k) reference + renders.
 - `analyze.py` hard-asserts **48 kHz** on `A.load`; the reference + plugin renders are true 48 k.
 - **Never edit `gen_test_signal.py`'s segment layout** — it invalidates every capture (append-only).
-- V1L/V2 zener DRIVE has **no oversampling/ADAA yet** (CLAUDE.md outstanding item), so `--os` does
-  nothing to their drive aliasing until that lands; the linear stages still benefit.
+- **`OfflineRender` writes 32-bit FLOAT, deliberately** (fixed 2026-07-14). It wrote 24-bit int before,
+  which hard-CLIPPED any render exceeding ±1.0 FS — and with `kOutputMakeup=1.0` the output runs ~+18 dB
+  hot on V2, so the loud driven sweeps clipped on write and injected a spurious, kInputRef-INDEPENDENT
+  ~24 % low-frequency THD floor that silently corrupted every THD/knee measurement. If you ever swap the
+  writer back to fixed-point, either calibrate `kOutputMakeup` down first or you'll reintroduce this.
+- **Judge WET-path FR/harmonics on a full-wet (BL≈1.0) capture** — at partial blend the pedal's dry+wet
+  phase-cancel in the top octave (a BL0.50 capture rolls ~20 dB harder @14 kHz than full-wet), which the
+  plugin doesn't reproduce; a partial-blend FR read then shows a false "plugin too bright" top octave.
+- The V1L/V2 zener DRIVE **is** oversampled/ADAA'd now (`ZenerDriveClipRecovery`), so `--os` affects
+  their drive aliasing too (this line previously said otherwise — stale).
