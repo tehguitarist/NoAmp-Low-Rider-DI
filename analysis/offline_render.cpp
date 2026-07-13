@@ -1,15 +1,23 @@
-// OfflineRender — runs the REAL V1 Early DSP chain plus the exact processBlock gain staging, so the
-// analysis harness (analyze.py) can A/B the plugin against real-pedal captures without a DAW
-// (docs/validation-and-capture.md §2). This MUST mirror PluginProcessor::processBlock's gain staging
-// exactly: input trim -> *kInputRef -> DSP -> *(kOutputMakeup/kInputRef) -> output trim. Calibration
-// constants come from the shared Calibration.h (single source of truth).
+// OfflineRender — runs the REAL DSP chain (any of the three revisions) plus the exact processBlock
+// gain staging, so the analysis harness (analyze.py) can A/B the plugin against real-pedal captures
+// without a DAW (docs/validation-and-capture.md §2). This MUST mirror PluginProcessor::processBlock's
+// gain staging exactly: input trim -> *kInputRef -> DSP -> *(kOutputMakeup/kInputRef) -> output trim.
+// Calibration constants come from the shared Calibration.h (single source of truth).
 //
 // Usage:
 //   offline_render <in.wav> <out.wav> [options]
+//     --rev <V1E|V1L|V2>       circuit revision (default V1E)
 //     --drive/--presence/--blend/--level/--bass/--treble <0..1>   pot positions (default 0.5)
-//     --os <1|2|4|8>            oversampling factor (default 8 — takes aliasing off the A/B table)
+//     --mid <0..1>             V2 only: MID pot (default 0.5)
+//     --mid-shift <0|1>        V2 only: MID SHIFT — 0 = 500Hz/430 throw, 1 = 1000Hz/850 throw (default 0)
+//     --bass-shift <0|1>       V2 only: BASS SHIFT — 0 = 40Hz throw, 1 = 80Hz throw (default 0)
+//     --os <1|2|4|8>           oversampling factor (default 8 — takes aliasing off the A/B table)
 //     --in-trim / --out-trim <dB>   processor trims (default 0)
-//     --block <n>               processing block length (default 512; exercises the block path)
+//     --block <n>              processing block length (default 512; exercises the block path)
+//
+// Switch-index convention matches analysis/noamp_captures.py: index 1 = the HIGHER silk frequency
+// ("In": MS1000, BS80), index 0 = the lower ("Out": MS500, BS40). The V2 DSP takes the inverse
+// booleans midShiftLow430 / bassShift40, mapped below.
 //
 // Mono: channel 0 of the input is processed (the test signal is mono; multi-channel captures are
 // mixed down by the analyzer). Output is written mono at the input sample rate.
@@ -20,10 +28,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "../src/dsp/Calibration.h"
 #include "../src/dsp/V1EarlyDSP.h"
+#include "../src/dsp/V1LateDSP.h"
+#include "../src/dsp/V2DSP.h"
 
 namespace
 {
@@ -35,26 +46,68 @@ double argVal(int argc, char** argv, const char* key, double def)
     return def;
 }
 
+std::string argStr(int argc, char** argv, const char* key, const char* def)
+{
+    for (int i = 1; i < argc - 1; ++i)
+        if (std::strcmp(argv[i], key) == 0)
+            return argv[i + 1];
+    return def;
+}
+
 float dbToGain(double db) { return (float) std::pow(10.0, db / 20.0); }
+
+// Shared render loop. `applyParams` sets the revision-specific pot/switch values on the constructed
+// DSP object; everything else (OS, prepare, gain staging, block loop, WAV write) is identical.
+template <typename DSP, typename SetFn>
+int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor, int block,
+              double inTrimDb, double outTrimDb, SetFn applyParams)
+{
+    DSP dsp;
+    dsp.setOversamplingFactor(osFactor);
+    dsp.prepare(fs, block);
+    applyParams(dsp);
+    dsp.reset();
+
+    const float inTrim = dbToGain(inTrimDb);
+    const float outGain = (float) (nalr::kOutputMakeup / nalr::kInputRef) * dbToGain(outTrimDb);
+
+    float* data = fileBuf.getWritePointer(0);
+    std::vector<double> volts((size_t) block, 0.0);
+
+    for (int start = 0; start < n; start += block)
+    {
+        const int len = juce::jmin(block, n - start);
+        for (int i = 0; i < len; ++i)
+            volts[(size_t) i] = (double) (data[start + i] * inTrim) * nalr::kInputRef;
+        dsp.processBlock(volts.data(), len);
+        for (int i = 0; i < len; ++i)
+            data[start + i] = (float) volts[(size_t) i] * outGain;
+    }
+    return 0;
+}
 } // namespace
 
 int main(int argc, char** argv)
 {
     if (argc < 3)
     {
-        std::fprintf(stderr, "usage: offline_render <in.wav> <out.wav> [--drive .. --os 8 ..]\n");
+        std::fprintf(stderr, "usage: offline_render <in.wav> <out.wav> [--rev V1E|V1L|V2 --drive .. --os 8 ..]\n");
         return 2;
     }
 
     const juce::File inFile(juce::File::getCurrentWorkingDirectory().getChildFile(argv[1]));
     const juce::File outFile(juce::File::getCurrentWorkingDirectory().getChildFile(argv[2]));
 
+    const std::string rev = argStr(argc, argv, "--rev", "V1E");
     const double drive    = argVal(argc, argv, "--drive", 0.5);
     const double presence = argVal(argc, argv, "--presence", 0.5);
     const double blend    = argVal(argc, argv, "--blend", 0.5);
     const double level    = argVal(argc, argv, "--level", 0.5);
     const double bass     = argVal(argc, argv, "--bass", 0.5);
     const double treble   = argVal(argc, argv, "--treble", 0.5);
+    const double mid      = argVal(argc, argv, "--mid", 0.5);
+    const int    midShift  = (int) argVal(argc, argv, "--mid-shift", 0);  // 1 = 1000Hz/850 throw
+    const int    bassShift = (int) argVal(argc, argv, "--bass-shift", 0); // 1 = 80Hz throw
     const int    osFactor = (int) argVal(argc, argv, "--os", 8);
     const double inTrimDb = argVal(argc, argv, "--in-trim", 0.0);
     const double outTrimDb = argVal(argc, argv, "--out-trim", 0.0);
@@ -74,26 +127,32 @@ int main(int argc, char** argv)
     juce::AudioBuffer<float> fileBuf(1, n);
     reader->read(&fileBuf, 0, n, 0, true, /*useRight*/ reader->numChannels > 1);
 
-    nalr::V1EarlyDSP dsp;
-    dsp.setOversamplingFactor(osFactor);
-    dsp.prepare(fs, block);
-    dsp.setParams(drive, presence, blend, level, bass, treble);
-    dsp.reset();
-
-    const float inTrim = dbToGain(inTrimDb);
-    const float outGain = (float) (nalr::kOutputMakeup / nalr::kInputRef) * dbToGain(outTrimDb);
-
-    float* data = fileBuf.getWritePointer(0);
-    std::vector<double> volts((size_t) block, 0.0);
-
-    for (int start = 0; start < n; start += block)
+    if (rev == "V1E")
     {
-        const int len = juce::jmin(block, n - start);
-        for (int i = 0; i < len; ++i)
-            volts[(size_t) i] = (double) (data[start + i] * inTrim) * nalr::kInputRef;
-        dsp.processBlock(volts.data(), len);
-        for (int i = 0; i < len; ++i)
-            data[start + i] = (float) volts[(size_t) i] * outGain;
+        runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb,
+                                    [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
+    }
+    else if (rev == "V1L")
+    {
+        runRender<nalr::V1LateDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb,
+                                   [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
+    }
+    else if (rev == "V2")
+    {
+        // DSP booleans are the inverse-frequency sense of the CLI index: index 0 (MS500) = 430 Hz throw
+        // = midShiftLow430 true; index 0 (BS40) = bassShift40 true.
+        const bool midShiftLow430 = (midShift == 0);
+        const bool bassShift40 = (bassShift == 0);
+        runRender<nalr::V2DSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb,
+                               [&](auto& d) {
+                                   d.setParams(drive, presence, blend, level, mid, midShiftLow430, bass, treble,
+                                               bassShift40);
+                               });
+    }
+    else
+    {
+        std::fprintf(stderr, "offline_render: unknown --rev '%s' (expected V1E|V1L|V2)\n", rev.c_str());
+        return 2;
     }
 
     outFile.deleteFile();
@@ -117,7 +176,7 @@ int main(int argc, char** argv)
     writer->writeFromAudioSampleBuffer(fileBuf, 0, n);
     writer.reset(); // flush
 
-    std::printf("offline_render: %d samples @ %.0f Hz, os=%dx, drive=%.2f -> %s\n", n, fs, osFactor,
-                drive, outFile.getFileName().toRawUTF8());
+    std::printf("offline_render: %s  %d samples @ %.0f Hz, os=%dx, drive=%.2f -> %s\n", rev.c_str(), n, fs,
+                osFactor, drive, outFile.getFileName().toRawUTF8());
     return 0;
 }

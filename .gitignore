@@ -12,3 +12,6 @@ JuceLibraryCode/
 __pycache__/
 .venv/
 analysis/pedal_results*/
+
+# Generated A/B analysis outputs
+analysis/reports/
