@@ -309,9 +309,10 @@ void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
     }
     else if (button.getComponentID() == "shiftbtn")
     {
-        // Small round pushbutton (V2's MID-SHIFT/BASS-SHIFT). Real hardware doesn't visually
-        // change with the parameter's 2-way state, only with mouse press.
-        const juce::Image& img = down ? shiftButtonDownImage : shiftButtonUpImage;
+        // Small round pushbutton (V2's MID-SHIFT/BASS-SHIFT). Shows the "down" graphic both while
+        // pressed and while latched into its 1000 Hz/80 Hz mode (button.getToggleState()).
+        const bool showDown = down || button.getToggleState();
+        const juce::Image& img = showDown ? shiftButtonDownImage : shiftButtonUpImage;
         if (img.isValid())
         {
             g.drawImage(img, b, juce::RectanglePlacement::fillDestination);
@@ -319,7 +320,7 @@ void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
         else
         {
             const float r = juce::jmin(b.getWidth(), b.getHeight()) * 0.5f;
-            g.setColour(juce::Colours::black.withAlpha(down ? 0.6f : 0.4f));
+            g.setColour(juce::Colours::black.withAlpha(showDown ? 0.6f : 0.4f));
             g.fillEllipse(b.withSizeKeepingCentre(r * 2.0f, r * 2.0f));
             g.setColour(juce::Colour(0xFF3A3A3Cu));
             g.drawEllipse(b.withSizeKeepingCentre(r * 2.0f, r * 2.0f), 1.0f);
