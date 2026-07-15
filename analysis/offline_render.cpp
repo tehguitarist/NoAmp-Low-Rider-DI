@@ -28,7 +28,11 @@
 //                           Applied to ALL revisions (V1E, V1L, V2) when set.
 //     --sat-gain <gain>     recovery-opamp small-signal saturation depth (0 = none, production default).
 //     --sat-knee <volts>    recovery saturation knee (~1-3 V; lower = softer = more harmonics).
+//     --sat-offset <volts>  DC offset injected before tanh (0 = symmetric, H2 at floor; >0 produces H2).
 //                           Applied to ALL revisions after the recovery stage.
+//     --rail-vneg <volts>   negative stage-A rail voltage (default -4.2)
+//     --rail-vpos <volts>   positive stage-A rail voltage (default +4.2)
+//                           Applied to ALL revisions (V1E, V1L, V2) when set.
 //
 // Switch-index convention matches analysis/noamp_captures.py: index 1 = the HIGHER silk frequency
 // ("In": MS1000, BS80), index 0 = the lower ("Out": MS500, BS40). The V2 DSP takes the inverse
@@ -90,15 +94,20 @@ nalr::ZenerDriveParams zenerParamsFromArgs(int argc, char** argv, nalr::ZenerDri
 template <typename DSP, typename SetFn>
 int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor, int block,
               double inTrimDb, double outTrimDb, double inRef, double outMakeup,
-              double railKnee, double satGain, double satKnee, SetFn applyParams)
+              double railKnee, double railVNeg, double railVPos,
+              double satGain, double satKnee, double satOffset, SetFn applyParams)
 {
     DSP dsp;
     dsp.setOversamplingFactor(osFactor);
     dsp.prepare(fs, block);
     if (railKnee > 0.0)
         dsp.setRailKnee(railKnee);
+    if (railVNeg != -4.2 || railVPos != 4.2)
+        dsp.setRailVoltages(railVNeg, railVPos);
     if (satGain > 0.0 && satKnee > 0.0)
         dsp.setRecoverySaturation(satGain, satKnee);
+    if (satOffset != 0.0)
+        dsp.setSaturationOffset(satOffset);
     applyParams(dsp);
     dsp.reset();
 
@@ -147,8 +156,11 @@ int main(int argc, char** argv)
     const double outTrimDb = argVal(argc, argv, "--out-trim", 0.0);
     const double inRef     = argVal(argc, argv, "--in-ref", nalr::kInputRef);
     const double railKnee  = argVal(argc, argv, "--rail-knee", 0.0);
+    const double railVNeg  = argVal(argc, argv, "--rail-vneg", -4.2);
+    const double railVPos  = argVal(argc, argv, "--rail-vpos", 4.2);
     const double satGain   = argVal(argc, argv, "--sat-gain", 0.0);
     const double satKnee   = argVal(argc, argv, "--sat-knee", 0.0);
+    const double satOffset = argVal(argc, argv, "--sat-offset", 0.0);
     // Use 0.0 as sentinel for "use per-revision default from kOutputMakeup[rev]". The caller can
     // override with --out-makeup <gain>; if not provided, each rev branch picks its own array element.
     const double outMakeupOverride = argVal(argc, argv, "--out-makeup", 0.0);
@@ -175,14 +187,14 @@ int main(int argc, char** argv)
     if (rev == "V1E")
     {
         const double outMakeup = outMakeupForRev(0);
-        runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, satGain, satKnee,
+        runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, railVNeg, railVPos, satGain, satKnee, satOffset,
                                     [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
     }
     else if (rev == "V1L")
     {
         const double outMakeup = outMakeupForRev(1);
         const auto zp = zenerParamsFromArgs(argc, argv, nalr::ZenerDriveModule::v1LateParams());
-        runRender<nalr::V1LateDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, satGain, satKnee,
+        runRender<nalr::V1LateDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, railVNeg, railVPos, satGain, satKnee, satOffset,
                                    [&](auto& d) {
                                        d.setParams(drive, presence, blend, level, bass, treble);
                                        d.setDriveParams(zp);
@@ -196,7 +208,7 @@ int main(int argc, char** argv)
         const bool midShiftLow430 = (midShift == 0);
         const bool bassShift40 = (bassShift == 0);
         const auto zp = zenerParamsFromArgs(argc, argv, nalr::ZenerDriveModule::v2Params());
-        runRender<nalr::V2DSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, satGain, satKnee,
+        runRender<nalr::V2DSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, railVNeg, railVPos, satGain, satKnee, satOffset,
                                [&](auto& d) {
                                    d.setParams(drive, presence, blend, level, mid, midShiftLow430, bass, treble,
                                                bassShift40);

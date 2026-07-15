@@ -47,13 +47,18 @@ public:
         enabled = (gain > 1.0e-6 && knee > 1.0e-6);
     }
 
-    // Process one sample: f(x) = x + satGain * (tanh(x * invK) * knee - x)
+    // DC offset injected before the tanh (simulates op-amp bias drift / asymmetry that produces
+    // even harmonics at ALL signal levels). 0 = no offset (symmetric, H2 at numerical floor).
+    void setOffset(double dcOffset) noexcept { offset = dcOffset; }
+
+    // Process one sample: f(x) = x + satGain * (tanh((x+offset) * invK) * knee - x)
     // When satGain=0: f(x) = x (passthrough, production default).
     inline double process(double x) const noexcept
     {
         if (!enabled)
             return x;
-        const double satOut = (x * invK);
+        const double xo = x + offset;
+        const double satOut = (xo * invK);
         const double tanhResult = (satOut > 10.0) ? satKnee : ((satOut < -10.0) ? -satKnee : satKnee * std::tanh(satOut));
         return x + satGain * (tanhResult - x);
     }
@@ -62,6 +67,7 @@ private:
     double satGain = 0.0;
     double satKnee = 0.0;
     double invK = 0.0;
+    double offset = 0.0;
     bool enabled = false;
 };
 } // namespace nalr

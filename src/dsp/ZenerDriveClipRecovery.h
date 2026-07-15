@@ -68,6 +68,7 @@ public:
     void setRailKnee(double kneeVolts) noexcept { drive.setRailKnee(kneeVolts); }
     void setADAA(bool on) noexcept { drive.setADAA(on); }
     void setRecoverySaturation(double gain, double knee) noexcept { saturator.setSaturation(gain, knee); }
+    void setSaturationOffset(double dcOffset) noexcept { saturator.setOffset(dcOffset); }
 
     void reset() noexcept
     {

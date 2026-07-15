@@ -117,7 +117,9 @@ public:
     void setOversamplingFactor(int factor) noexcept { driveRegion.setOversamplingFactor(factor); }
     void setADAA(bool on) noexcept { driveRegion.setADAA(on); }
     void setRailKnee(double kneeVolts) noexcept { driveRegion.setRailKnee(kneeVolts); }
+    void setRailVoltages(double vNeg, double vPos) noexcept { driveRegion.setRailVoltages(vNeg, vPos); }
     void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }
+    void setSaturationOffset(double dcOffset) noexcept { driveRegion.setSaturationOffset(dcOffset); }
 
     // Override the zener DRIVE-module parameters (default = v2Params(), pushed in prepare()). Used by
     // the Phase-10 calibration harness (analysis/zener_fit.py via OfflineRender --zener-*) to scan the

@@ -62,6 +62,7 @@ public:
     void setRailKnee(double kneeVolts) noexcept { railClip.setKneeVolts(kneeVolts); }
     void setADAA(bool on) noexcept { railClip.setADAA(on); }
     void setRecoverySaturation(double gain, double knee) noexcept { saturator.setSaturation(gain, knee); }
+    void setSaturationOffset(double dcOffset) noexcept { saturator.setOffset(dcOffset); }
 
     void reset() noexcept
     {
