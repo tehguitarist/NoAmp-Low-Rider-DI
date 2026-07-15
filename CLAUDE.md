@@ -68,8 +68,23 @@ without images.
   null, knob-tracking pass/fail) and how to
   CAPTURE the pedal so the measurement is trustworthy (bypass anchor, one-knob-at-a-time, sweep
   Volume, no truncation). The capture MATRIX, not the signal, is the usual limitation.
-- **`analysis/`** — the reusable harness: `gen_test_signal.py` (comprehensive A/B signal) +
-  `analyze.py` (load/align, FR, THD, Farina swept-THD, sub-sample null, filename parser).
+- **`analysis/`** — the reusable harness plus Phase-10 diagnostic scripts. ALWAYS write analysis
+  commands as standalone scripts in `analysis/` (never as inline Python in a tool call — inline
+  commands block the terminal on long-running harmonic/THD scans, and the output can't be
+  recovered mid-execution). Use `analyze.py` + `noamp_captures.py` as the library layer.
+  Existing analysis scripts (run from repo root with python3.11):
+  - `ab_report.py` — full A/B across all captures (FR, THD, null depth, level)
+  - `harmonic_report.py` — per-harmonic H2..H7 vs pedal (diagnostic)
+  - `sat_calibrate.py` — 3D sweep of sat-gain/sat-knee/sat-offset values
+  - `vzt_sweep.py` — zener knee softness scan
+  - `rail_knee_sweep.py` — RailClip parabolic knee scan
+  - `asymmetry_check.py` — zener asymmetry m-factor vs pedal H2
+  - `check_asym_sources.py` — asymmetric rails vs sat-offset comparison
+  - `cj_scan.py` — zener junction capacitance fit
+  - `sat_sweep.py` / `sat_sweep2.py` — recovery saturation gain/knee scans
+  - `verify_sat_fix.py` — verify calibrated saturation offset params
+  - `gen_test_signal.py` — comprehensive A/B reference signal
+  - `inref_scan.py` — kInputRef THD-vs-level fit
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
 - **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
   `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).

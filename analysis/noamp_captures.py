@@ -130,9 +130,10 @@ def load_capture(path, expect_fs=48000, cal_win=(0.5, 1.45), warn=True):
     return np.asarray(x, dtype=np.float64)
 
 
-def render_args(parsed):
+def render_args(parsed, extra_args=None):
     """Parsed setting -> flat list of offline_render CLI flags. Emits only the controls present
-    for that revision (V2-only controls are skipped on V1E/V1L). Revision selected via --rev."""
+    for that revision (V2-only controls are skipped on V1E/V1L). Revision selected via --rev.
+    Optional extra_args (list) appended at the end for calibration overrides like --sat-*."""
     args = []
     if parsed.get("rev"):
         args += ["--rev", parsed["rev"]]
@@ -146,6 +147,8 @@ def render_args(parsed):
         args += ["--mid-shift", str(parsed["mid_shift"])]
     if parsed.get("bass_shift") is not None:
         args += ["--bass-shift", str(parsed["bass_shift"])]
+    if extra_args:
+        args += extra_args
     return args
 
 
