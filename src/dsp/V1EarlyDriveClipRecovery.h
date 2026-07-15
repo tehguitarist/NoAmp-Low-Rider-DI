@@ -25,6 +25,7 @@
 
 #include "RailClip.h"
 #include "TopOctaveShelf.h"
+#include "RecoverySaturator.h"
 #include "V1EarlyStages.h"
 
 namespace nalr
@@ -60,6 +61,7 @@ public:
     void setRailVoltages(double vNeg, double vPos) noexcept { railClip.setRailVoltages(vNeg, vPos); }
     void setRailKnee(double kneeVolts) noexcept { railClip.setKneeVolts(kneeVolts); }
     void setADAA(bool on) noexcept { railClip.setADAA(on); }
+    void setRecoverySaturation(double gain, double knee) noexcept { saturator.setSaturation(gain, knee); }
 
     void reset() noexcept
     {
@@ -111,7 +113,7 @@ public:
 
     // Single-sample core at the CURRENT discretisation rate (drive -> clip -> recovery). Intended for
     // 1x/base-rate probes such as the DC-step polarity test; the oversampled path uses it internally.
-    inline double processCoreSample(double x) noexcept { return recovery.process(railClip.process(drive.process(x))); }
+    inline double processCoreSample(double x) noexcept { return saturator.process(recovery.process(railClip.process(drive.process(x)))); }
 
     int getActiveFactor() const noexcept { return activeFactor; }
 
@@ -137,6 +139,7 @@ private:
     V1EarlyDriveStage drive;
     RailClip railClip;
     V1EarlyRecoveryStage recovery;
+    RecoverySaturator saturator; // small-signal op-amp saturation (0 gain = disabled, production default)
     TopOctaveShelf shelf; // base-rate low-OS top-octave restore (transparent at 4x/8x)
 
     std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};

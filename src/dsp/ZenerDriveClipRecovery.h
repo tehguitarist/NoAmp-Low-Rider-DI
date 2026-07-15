@@ -31,6 +31,7 @@
 #include <array>
 #include <memory>
 
+#include "RecoverySaturator.h"
 #include "TopOctaveShelf.h"
 #include "ZenerDriveModule.h"
 
@@ -66,6 +67,7 @@ public:
     void setRailVoltages(double vNeg, double vPos) noexcept { drive.setRailVoltages(vNeg, vPos); }
     void setRailKnee(double kneeVolts) noexcept { drive.setRailKnee(kneeVolts); }
     void setADAA(bool on) noexcept { drive.setADAA(on); }
+    void setRecoverySaturation(double gain, double knee) noexcept { saturator.setSaturation(gain, knee); }
 
     void reset() noexcept
     {
@@ -116,7 +118,7 @@ public:
 
     // Single-sample core at the CURRENT discretisation rate (drive+clip -> recovery). Used for the 1x
     // path and by base-rate probes (DC-step polarity test).
-    inline double processCoreSample(double x) noexcept { return recovery.process(drive.process(x)); }
+    inline double processCoreSample(double x) noexcept { return saturator.process(recovery.process(drive.process(x))); }
 
     int getActiveFactor() const noexcept { return activeFactor; }
 
@@ -140,6 +142,7 @@ private:
 
     ZenerDriveModule drive;
     RecoveryStage recovery;
+    RecoverySaturator saturator; // small-signal op-amp saturation (0 gain = disabled, production default)
     TopOctaveShelf shelf; // base-rate low-OS top-octave restore (transparent at 4x/8x)
 
     std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};

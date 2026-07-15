@@ -92,6 +92,7 @@ public:
     void setOversamplingFactor(int factor) noexcept { driveRegion.setOversamplingFactor(factor); }
     void setADAA(bool on) noexcept { driveRegion.setADAA(on); }
     void setRailKnee(double kneeVolts) noexcept { driveRegion.setRailKnee(kneeVolts); }
+    void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }
 
     // Base-rate samples of latency this chain reports (only the OS region contributes; 0 at 1x).
     int getLatencySamples() const noexcept { return driveRegion.getLatencySamples(); }
