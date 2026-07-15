@@ -64,6 +64,7 @@ public:
 
     void setDrive(double drive01) noexcept { drive.setDrive(drive01); }
     void setRailVoltages(double vNeg, double vPos) noexcept { drive.setRailVoltages(vNeg, vPos); }
+    void setRailKnee(double kneeVolts) noexcept { drive.setRailKnee(kneeVolts); }
     void setADAA(bool on) noexcept { drive.setADAA(on); }
 
     void reset() noexcept

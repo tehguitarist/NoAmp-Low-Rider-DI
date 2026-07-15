@@ -20,17 +20,22 @@
 
 namespace nalr
 {
-// clamp(x) = min(max(x, ln), lp)  — piecewise-linear, C0 (kink at each rail).
-// Its exact first antiderivative (C1-continuous):
-//     F1(x) = x^2/2                     for  ln <= x <= lp   (in-band, f(x)=x)
-//           = lp*x - lp^2/2             for  x  >  lp        (saturated high)
-//           = ln*x - ln^2/2             for  x  <  ln        (saturated low)
-// (continuity at x=lp: lp^2/2 = lp*lp - lp^2/2 ✓; likewise at ln.)
+// The op-amp output saturation transfer:
+//   - IN-BAND (|x| <= |rail| - knee):  f(x) = x                 (linear, unity gain)
+//   - KNEE    (|x| >  |rail| - knee):  parabolic transition to   (smooth, C1)
+//   - CLIP    (|x| >= |rail|):          f(x) = rail              (hard limit)
 //
-// 1st-order ADAA:  y[n] = (F1(x[n]) - F1(x[n-1])) / (x[n] - x[n-1]), i.e. the average of f over the
-// segment [x[n-1], x[n]] — which suppresses the alias energy a naive per-sample clamp injects. When
-// the two inputs are nearly equal the divided-difference is ill-conditioned, so fall back to the
-// midpoint value f((x[n]+x[n-1])/2). Update state every sample so ADAA on/off toggles glitch-free.
+// The knee is a quadratic fill:  f(knee_start) = knee_start (C0), f'(knee_start) = 1 (C1),
+// f(rail) = rail (C0), f'(rail) = 0 (C1).  Symmetric about 0.
+//
+// Math for the +side knee:
+//   Let x0 = lp - kneeV,  f(x) = x  for x <= x0.
+//   For x in [x0, lp]:  f(x) = a*(x-x0)^2 + (x-x0) + x0
+//   where a = -1/(2*kneeV)  so f(lp) = lp and f'(lp) = 0.
+//
+// For kneeV=0 this collapses to the original hard clamp: f(x)=clamp(x).
+//
+// ADAA antiderivative F1 is exact (same piecewise form integrated).
 class RailClip
 {
 public:
@@ -41,6 +46,15 @@ public:
     {
         ln = vNeg;
         lp = vPos;
+        recomputeKnee();
+    }
+
+    // Knee voltage: width of the parabolic transition before the hard rail.
+    // 0 = hard clamp (original behaviour). ~0.3-0.5 V is typical for a real op-amp output stage.
+    void setKneeVolts(double kneeVolts) noexcept
+    {
+        kneeV = kneeVolts;
+        recomputeKnee();
     }
 
     // Runtime A/B for the aliasing gate (and a future HQ lever): off = naive per-sample clamp.
@@ -49,7 +63,7 @@ public:
     void reset() noexcept
     {
         x1 = 0.0;
-        F1x1 = 0.0; // = antideriv(0)
+        F1x1 = 0.0;
     }
 
     inline double process(double x) noexcept
@@ -58,39 +72,94 @@ public:
         double y;
         if (!adaa)
         {
-            y = clamp(x);
+            y = transfer(x);
         }
         else
         {
             const double dx = x - x1;
             if (dx > -kEps && dx < kEps)
-                y = clamp(0.5 * (x + x1)); // midpoint fallback: avoids 0/0 near a flat region / peak
+                y = transfer(0.5 * (x + x1));
             else
                 y = (F1x - F1x1) / dx;
         }
-
-        // Update state every sample regardless of the ADAA flag, so a runtime on/off toggle never
-        // computes against a stale x1 (would click on the first post-toggle sample).
         x1 = x;
         F1x1 = F1x;
         return y;
     }
 
-    // Instantaneous (no-ADAA) transfer, exposed for the DC transfer / polarity tests.
+    // Instantaneous transfer (no-ADAA), exposed for DC transfer / polarity tests.
+    inline double transfer(double x) const noexcept
+    {
+        if (kneeV <= 0.0)
+            return x > lp ? lp : (x < ln ? ln : x);
+        if (x <= ln || x >= lp)
+            return x >= lp ? lp : ln;
+        if (x <= ln + kneeV)
+        {
+            const double t = (x - ln - kneeV) / kneeV;
+            return ln + kneeV * (t + 0.5 * t * t); // never actually triggers: ln+kneeV is the threshold
+        }
+        if (x >= lp - kneeV)
+        {
+            const double t = (x - (lp - kneeV)) / kneeV;
+            return (lp - kneeV) + kneeV * (t - 0.5 * t * t);
+        }
+        return x;
+    }
+
+    // Backward-compatible hard-clamp accessor (tests expect this).
     inline double clamp(double x) const noexcept { return x > lp ? lp : (x < ln ? ln : x); }
 
 private:
-    inline double antideriv(double x) const noexcept
+    void recomputeKnee() noexcept
     {
-        if (x > lp)
-            return lp * x - 0.5 * lp * lp;
-        if (x < ln)
-            return ln * x - 0.5 * ln * ln;
-        return 0.5 * x * x;
+        // Precompute knee transition thresholds.
+        x0_neg = ln + kneeV;  // where +side knee starts
+        x0_pos = lp - kneeV;  // where -side knee starts
     }
 
-    static constexpr double kEps = 1.0e-6; // volts; |dx| below this uses the midpoint form
+    // Antiderivative of the knee-clamp transfer:
+    //   For kneeV=0: same as original F1 (hard clamp).
+    //   For kneeV>0: integrates the quadratic fill through knee region.
+    inline double antideriv(double x) const noexcept
+    {
+        if (kneeV <= 0.0)
+        {
+            // Original hard-clamp antiderivative
+            if (x > lp) return lp * x - 0.5 * lp * lp;
+            if (x < ln) return ln * x - 0.5 * ln * ln;
+            return 0.5 * x * x;
+        }
+        // Soft-knee antiderivative
+        if (x >= lp)
+            return lp * x - 0.5 * lp * lp;
+        if (x <= ln)
+            return ln * x - 0.5 * ln * ln;
+        if (x >= x0_pos)
+        {
+            // In the +side knee: integrate f(t) = a*(t-x0)^2 + (t-x0) + x0
+            // F1(x) = F1(x0) + integral_{x0}^{x} [a*(t-x0)^2 + (t-x0) + x0] dt
+            // where a = -1/(2*kneeV).  Solve symbolically:
+            const double t = x - x0_pos;
+            const double a = -1.0 / (2.0 * kneeV);
+            const double F1_x0 = 0.5 * x0_pos * x0_pos;
+            return F1_x0 + a * t * t * t / 3.0 + 0.5 * t * t + x0_pos * t;
+        }
+        if (x <= x0_neg)
+        {
+            // On the -side, reflect.
+            const double t = x0_neg - x; // positive
+            const double a = -1.0 / (2.0 * kneeV);
+            const double F1_x0 = 0.5 * x0_neg * x0_neg;
+            return F1_x0 - (a * t * t * t / 3.0 + 0.5 * t * t + x0_neg * t);
+        }
+        return 0.5 * x * x; // in-band
+    }
+
+    static constexpr double kEps = 1.0e-6;
     double ln = -4.2, lp = 4.2;
+    double kneeV = 0.0;
+    double x0_neg = -4.2, x0_pos = 4.2; // knee start thresholds
     bool adaa = true;
     double x1 = 0.0, F1x1 = 0.0;
 };

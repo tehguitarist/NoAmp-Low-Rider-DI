@@ -100,6 +100,10 @@ public:
     // corner — see the class comment.
     void setRailVoltages(double vNeg, double vPos) noexcept { railA.setRailVoltages(vNeg, vPos); }
 
+    // Parabolic knee width before the hard rail clamp (RailClip.h). 0 = hard clamp (original).
+    // ~0.3-0.5 V typical for a real op-amp output stage.
+    void setRailKnee(double kneeVolts) noexcept { railA.setKneeVolts(kneeVolts); }
+
     // ADAA the stage-A rail clip (NOT the zener — dsp.md: the zener has no closed-form antiderivative
     // and relies on OS + AccurateOmega). On by default, matching V1E's RailClip.
     void setADAA(bool on) noexcept { railA.setADAA(on); }

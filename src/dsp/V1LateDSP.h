@@ -92,6 +92,7 @@ public:
 
     void setOversamplingFactor(int factor) noexcept { driveRegion.setOversamplingFactor(factor); }
     void setADAA(bool on) noexcept { driveRegion.setADAA(on); }
+    void setRailKnee(double kneeVolts) noexcept { driveRegion.setRailKnee(kneeVolts); }
 
     // Override the zener DRIVE-module parameters (default = v1LateParams(), pushed in prepare()). Used
     // by the Phase-10 calibration harness (OfflineRender --zener-*) to scan the knee without a rebuild;
