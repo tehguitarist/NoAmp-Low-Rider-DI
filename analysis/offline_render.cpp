@@ -134,7 +134,13 @@ int main(int argc, char** argv)
     const double inTrimDb = argVal(argc, argv, "--in-trim", 0.0);
     const double outTrimDb = argVal(argc, argv, "--out-trim", 0.0);
     const double inRef     = argVal(argc, argv, "--in-ref", nalr::kInputRef);
-    const double outMakeup = argVal(argc, argv, "--out-makeup", nalr::kOutputMakeup);
+    // Use 0.0 as sentinel for "use per-revision default from kOutputMakeup[rev]". The caller can
+    // override with --out-makeup <gain>; if not provided, each rev branch picks its own array element.
+    const double outMakeupOverride = argVal(argc, argv, "--out-makeup", 0.0);
+    auto outMakeupForRev = [&](int revIdx) -> double
+    {
+        return (outMakeupOverride > 0.0) ? outMakeupOverride : nalr::kOutputMakeup[revIdx];
+    };
     const int    block    = juce::jmax(1, (int) argVal(argc, argv, "--block", 512));
 
     juce::AudioFormatManager fmt;
@@ -153,11 +159,13 @@ int main(int argc, char** argv)
 
     if (rev == "V1E")
     {
+        const double outMakeup = outMakeupForRev(0);
         runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup,
                                     [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
     }
     else if (rev == "V1L")
     {
+        const double outMakeup = outMakeupForRev(1);
         const auto zp = zenerParamsFromArgs(argc, argv, nalr::ZenerDriveModule::v1LateParams());
         runRender<nalr::V1LateDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup,
                                    [&](auto& d) {
@@ -167,6 +175,7 @@ int main(int argc, char** argv)
     }
     else if (rev == "V2")
     {
+        const double outMakeup = outMakeupForRev(2);
         // DSP booleans are the inverse-frequency sense of the CLI index: index 0 (MS500) = 430 Hz throw
         // = midShiftLow430 true; index 0 (BS40) = bassShift40 true.
         const bool midShiftLow430 = (midShift == 0);

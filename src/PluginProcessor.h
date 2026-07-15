@@ -78,8 +78,9 @@ public:
     static constexpr const char* idBypass = "bypass";
 
 private:
-    // Output gain = kOutputMakeup * dbToGain(outTrimDb) / kInputRef (calibration doc §1).
-    float outputGainFor(float outTrimDb) const noexcept;
+    // Output gain = kOutputMakeup[revision] * dbToGain(outTrimDb) / kInputRef (calibration doc §1).
+    // revision: 0 = V1 Early, 1 = V1 Late, 2 = V2
+    float outputGainFor(float outTrimDb, int revision) const noexcept;
 
     // Runs the given revision's pre-allocated graph for one channel, in place on `data`.
     void runRevision(int revision, int channel, double* data, int numSamples) noexcept;

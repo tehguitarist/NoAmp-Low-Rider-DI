@@ -144,13 +144,18 @@ public:
     // V1030) — plugin H2 lands within +-0.6 / +2.7 dB and H4 within +0.4 / -1.9 dB, consistent across
     // both, with odd harmonics / THD / level unchanged (verified bit-identical at m=0). The physical
     // source is device tolerance in the BZB984 pair + VCOM operating-point offset (circuit.md flags V2
-    // stage-A bias as nominally symmetric, so this asymmetry is device/bias, not stage-A rail). Cj/knee
-    // still the V1L fit (independent V2 refinement pending). V1L keeps m=0 until its own captures.
+    // stage-A bias as nominally symmetric, so this asymmetry is device/bias, not stage-A rail).
+    //
+    // Cj FIT — Phase 10, 2026-07-15: cj_scan.py against 4 V2 full-wet safe-drive captures found 10 pF
+    // the best across {10,22,33,47,68,82,100} pF (RMS HF-shape error 4.7 dB). The rising monotonic
+    // error above 10 pF confirms the BZB984-C3V3 has significantly less junction capacitance than the
+    // DZ23C3V3 (V1L's 220 pF) — plausible for a smaller-die device operating near reverse breakdown.
+    // V1L keeps Cj=220 pF (its own DZ23C3V3 fit).
     static ZenerDriveParams v2Params()
     {
-        auto p = v1LateParams();
-        p.m = 0.015;
-        return p;
+        return {/*R12*/ 10.0e3,   /*R14*/ 22.0e3, /*Rpot*/ 100.0e3, /*R15*/ 10.0e3, /*R903*/ 220.0e3,
+                /*Cj*/ 10.0e-12,  /*Vz*/ 3.3,     /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
+                /*m*/ 0.015};
     }
 
 private:

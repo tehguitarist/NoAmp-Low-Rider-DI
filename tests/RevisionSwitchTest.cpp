@@ -60,12 +60,18 @@ int main()
     bool allFinite = true;
     bool noClicks = true;
     float prevSample = 0.0f;
-    // Generous, but expressed relative to the plugin's own DAW-domain output scale (kOutputMakeup /
-    // kInputRef, architecture.md outputGainFor()) rather than a bare constant: kInputRef sets how
-    // loud the DAW-domain output legitimately gets (0.87 V/FS, 2026-07-13 calibration change, runs
-    // ~3.76x hotter than the previous 3.27 V/FS), so a fixed absolute threshold tuned under one
-    // kInputRef silently becomes too tight under another — this scales with it instead.
-    const float kClickThreshold = 1.15f * (float) (nalr::kOutputMakeup / nalr::kInputRef);
+    // Generous, but expressed relative to the plugin's own DAW-domain output scale (max(kOutputMakeup) /
+    // kInputRef, architecture.md outputGainFor()) rather than a bare constant: now that makeup is
+    // per-revision, use the maximum across all three revisions (V1E at 0.393) so the threshold works
+    // for any revision this test cycles through.
+    const float kMaxMakeup = []()
+    {
+        float m = 0.0f;
+        for (auto v : nalr::kOutputMakeup)
+            if ((float) v > m) m = (float) v;
+        return m;
+    }();
+    const float kClickThreshold = 1.15f * kMaxMakeup / (float) nalr::kInputRef;
 
     int revisionIndex = 0;
     for (int block = 0; block < numBlocks; ++block)

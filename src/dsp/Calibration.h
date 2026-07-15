@@ -27,7 +27,27 @@ namespace nalr
 // 0.87, carried from monarch-of-tone's circuitVoltsPerFS — a different pedal's anchor.)
 constexpr double kInputRef = 1.3;
 
-// Flat output makeup (calibration doc §2). 1.0 = physically honest interim (output float == real
-// circuit output voltage at the input scale). Re-anchored to captures in Phase 10.
-constexpr double kOutputMakeup = 1.0;
+// Per-revision output makeup (calibration doc §2). kOutputMakeup[revision] where revision indices are:
+//   0 = V1 Early
+//   1 = V1 Late
+//   2 = V2
+//
+// Before 2026-07-15 this was a SINGLE GLOBAL scalar, but the three revisions have structurally different
+// post-blend output levels: V1L/V2 both have an additional +10.1 dB stage (LEVEL buffer on V1L's netlist
+// V5b, V2's non-inverting LEVEL stage per netlists.md V6) that V1E structurally lacks, producing a ~10 dB
+// output gap between them at the same knob settings. A single makeup can't zero out both an 8 dB gap and
+// an 18 dB gap simultaneously — so now each revision gets its own.
+//
+// These are PROVISIONAL fit targets — iterate with analysis/ab_report.py until the LEVEL gain column
+// is even across all three revisions' clean full-wet captures.
+//
+// V1E: 0.393 — fitted from V1E's own full-wet clean captures (-8.1 dB from the old 1.0 interim).
+//              Keep this revision's own calibration.
+// V1L: 0.123 — pulled down ~10 dB from 0.393 to compensate for V1L's +10.1 dB wet make-up buffer
+//              (netlists.md V5b) that V1E structurally lacks.
+// V2:  0.123 — pulled down ~10 dB from 0.393 to compensate for V2's +10.1 dB LEVEL non-inverting
+//              stage (netlists.md V6) that V1E structurally lacks.
+//              All three revisions now target the SAME output level: the V1E anchor, with V1L/V2
+//              compensated for their structural post-blend gain stage.
+constexpr double kOutputMakeup[3] = { 0.393, 0.123, 0.123 };
 } // namespace nalr

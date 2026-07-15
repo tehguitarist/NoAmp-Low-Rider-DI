@@ -99,12 +99,15 @@ int NoAmpLowRiderDIAudioProcessor::latencyForRevision(int revision) const noexce
                            : dspV2[0].getLatencySamples();
 }
 
-float NoAmpLowRiderDIAudioProcessor::outputGainFor(float outTrimDb) const noexcept
+float NoAmpLowRiderDIAudioProcessor::outputGainFor(float outTrimDb, int revision) const noexcept
 {
-    // Fold kOutputMakeup and 1/kInputRef into the output gain so kInputRef cancels in the linear path
-    // (calibration doc §1). LEVEL/volume is modelled inside the DSP (the pedal's LEVEL pot), so the
-    // only processor-side scalars are makeup, the output trim, and the volts<->float conversion.
-    return (float) (nalr::kOutputMakeup / nalr::kInputRef) * juce::Decibels::decibelsToGain(outTrimDb);
+    // Fold per-revision kOutputMakeup and 1/kInputRef into the output gain so kInputRef cancels in
+    // the linear path (calibration doc §1). LEVEL/volume is modelled inside the DSP (the pedal's
+    // LEVEL pot), so the only processor-side scalars are makeup, the output trim, and the
+    // volts<->float conversion.
+    // revision: 0 = V1 Early, 1 = V1 Late, 2 = V2
+    const int idx = juce::jlimit(0, 2, revision);
+    return (float) (nalr::kOutputMakeup[idx] / nalr::kInputRef) * juce::Decibels::decibelsToGain(outTrimDb);
 }
 
 void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -118,7 +121,7 @@ void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samples
     revisionCrossfade.reset(sampleRate, kRevisionCrossfadeSeconds);
 
     inputGainSmoothed.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
-    outputGainSmoothed.setCurrentAndTargetValue(outputGainFor(pOutputTrim->load()));
+    outputGainSmoothed.setCurrentAndTargetValue(outputGainFor(pOutputTrim->load(), activeRevision));
     bypassMix.setCurrentAndTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
 
     // A fresh prepare (SR change, host reload) starts clean on whatever `revision` currently is —
@@ -223,7 +226,7 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     // Pre-compute the per-sample gain ramps ONCE per block so both channels see the identical ramp
     // (advancing a SmoothedValue per channel would ramp twice as fast in stereo and desync L/R).
     inputGainSmoothed.setTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
-    outputGainSmoothed.setTargetValue(outputGainFor(pOutputTrim->load()));
+    outputGainSmoothed.setTargetValue(outputGainFor(pOutputTrim->load(), activeRevision));
     bypassMix.setTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
     for (int i = 0; i < numSamples; ++i)
     {
