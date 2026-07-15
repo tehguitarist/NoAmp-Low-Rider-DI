@@ -52,6 +52,7 @@ without images.
 | `docs/reference-fr-targets.md` | any linear-stage validation (the FR gates cite its §§) |
 | `docs/calibration-and-gain-staging.md` | level/rail/makeup calibration tasks |
 | `docs/validation-and-capture.md` | capture-based validation (Phase 10) |
+| `analysis/README.md` | full A/B harness + diagnostic scripts reference (Phase 10) |
 | `docs/build-plan.md` | **start here** — the phased plan with per-task model + read-list + gates |
 
 ## Essential reading (template learnings — do not skip)
@@ -121,31 +122,35 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 CALIBRATION IN PROGRESS on V2 (2026-07-14). Next: clip WAVESHAPE + kOutputMakeup.**
-> Full A/B harness now runs end-to-end (numpy/scipy present). Captures still 44.1k-in-48k-labeled
-> (auto-fixed by `NC.load_capture`; re-render to true 48k never landed). Read `analysis/README.md`
-> (rewritten this session: **validate STRUCTURE — FR + per-harmonic — BEFORE THD AMOUNT**; calibration
-> workflow; new `inref_scan.py`). Memory `noamp-capture-pipeline` has the full session log. Done this
-> session:
+> **CURRENT: Phase 10 CALIBRATION CONTINUING — saturation offset discovered (2026-07-16).**
+> Next: wire sat params as production defaults, then wire production defaults for all three revisions,
+> then run final ab_report + ctest + commit.
 >
-> - **HARNESS BUG FIXED:** `offline_render.cpp` wrote 24-bit INT → hard-clipped every >±1.0 FS render
->   (output ~+18 dB hot at `kOutputMakeup=1.0`), injecting a spurious kInputRef-independent ~24 % LF THD
->   floor that corrupted all THD/knee fits. Now **32-bit float**. Added calibration CLI overrides
->   (`--in-ref/--out-makeup/--zener-iref/-vzt/-cj/-vz/-vf/-m`) via `setDriveParams()` on V1LateDSP/V2DSP.
-> - **`kInputRef` 0.87 → 1.3** (`Calibration.h`), fit from V2 clip onset (`inref_scan.py --metric linear`,
->   excl. max-drive). WORKING value; the onset SHAPE still mismatches (see waveshape open item).
-> - **CLIP ASYMMETRY added** — `ZenerPairT` per-polarity knee mismatch `m` (+swing Vt(1+m)/−swing Vt(1−m),
->   same Is; `m=0` bit-identical, 23/23 ctest green). Adds the even harmonics the pedal has but a symmetric
->   pair lacks (V2 capture H2 ~−47/H4 ~−56 dB re fund; plugin ODD harmonics H3/H5/H7 already matched).
->   **V2 fit `m=0.015`** (`v2Params()`, two full-wet captures). V1L `m=0` (unfit). Null didn't move (evens
->   masked by the FR/level-limited ~−12 dB null) — correct structure fix, not a null-mover yet.
-> - **OPEN, next:** (1) clip WAVESHAPE — plugin onset too ABRUPT + max-drive THD ceiling ~24 % vs pedal
->   ~37 % (structural; kInputRef/knee can't fix — suspects: stage-A `RailClip` hardness / zener knee at the
->   rail-starved 70–420 µA op current). (2) `kOutputMakeup` still 1.0 (V2 ~+18 dB hot, V1E ~+8 dB → the
->   ~10 dB gap = V2's +10.1 dB LEVEL stage). (3) V2 zener `Cj` still the V1L placeholder. (4) V1L/V1E
->   calibration not started (kInputRef fit off V2 only, per user's "use V2 as anchor").
-> - **BLEND caveat:** judge WET-path FR/harmonics on full-wet (BL≈1.0) only — partial blend has dry+wet
->   top-octave phase-cancellation the plugin doesn't reproduce (reads as false "too bright").
+> ## CALIBRATION PROGRESS (all committed as of ae9b94c)
+>
+> ### 1. Per-revision kOutputMakeup ✅
+> Changed from single scalar `0.393` to array `{0.393, 0.123, 0.123}`.
+> V2 level matching verified within ±1.5 dB by ab_report (was ~+18 dB hot).
+>
+> ### 2. V2 zener Cj fit ✅
+> cj_scan.py across {10..100 pF} found best at **10 pF** (4.7 dB RMS HF-shape error).
+> v2Params() now returns independent values instead of copying v1LateParams().
+> Note: 4.7 dB residual even at best Cj suggests remaining HF mismatch is structural
+> (coupling caps, stage-A rail asymmetry) — revisit if it confounds waveshape work.
+>
+> ### 3. Saturation offset fix discovered ✅
+> Vzt sweep ✘, RailClip knee ✘, RecoverySaturator gain ✘, asymmetric rails ✘
+> sat-offset ✅ — DC offset before recovery tanh produces H2 at ALL signal
+> levels without inflating H3. Best params: gain=0.06, knee=0.10, offset=0.10.
+> verify_sat_fix.py: at -18 dBFS, H2/H3/H4 within 2 dB of pedal (was -24 to -32 dB).
+> **NOT YET production-defaulted** — currently sat-gain=0 (disabled); needs flashing
+> into v2Params() / v1LateParams() defaults.
+>
+> ### Remaining calibration work (next session)
+> - Wire sat-gain/sat-knee/sat-offset as production defaults in ZenerDriveParams
+> - Wire sat params for V1E (its recovery uses the same RecoverySaturator)
+> - Run final ab_report.py across all 12 captures
+> - 23/23 ctest green
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
 > **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ

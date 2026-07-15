@@ -38,13 +38,32 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 
 ## The tools
 
+### Core harness
 | File | Role |
 |------|------|
-| `noamp_captures.py` | pedal-specific layer: `parse_noamp(name)`, `find_captures(dir)`, `render_args(parsed)` (standalone, no numpy — run directly for a parse/args inventory), plus `load_capture(path)` (numpy) which **auto-corrects the wrong-sample-rate header** — see gotcha below. |
-| `offline_render.cpp` → `OfflineRender` | mirrors `processBlock` gain staging for any revision. `--rev V1E\|V1L\|V2`, the six pots, plus V2's `--mid/--mid-shift/--bass-shift`. **Writes 32-bit FLOAT** (never write-clips an over-0-dBFS render — see gotcha). **Calibration overrides (Calibration.h untouched):** `--in-ref`, `--out-makeup`, and V1L/V2 zener `--zener-iref/-vzt/-cj/-vz/-vf/-m`. Build: `cmake --build build --target OfflineRender`. |
+| `noamp_captures.py` | pedal-specific layer: `parse_noamp(name)`, `find_captures(dir)`, `render_args(parsed)` (standalone, no numpy — run directly for a parse/args inventory), plus `load_capture(path)` (numpy) which **auto-corrects the wrong-sample-rate header** — see gotcha below. `render_args()` accepts optional `extra_args` list for calibration overrides. |
+| `offline_render.cpp` → `OfflineRender` | mirrors `processBlock` gain staging for any revision. `--rev V1E\|V1L\|V2`, the six pots, plus V2's `--mid/--mid-shift/--bass-shift`. **Writes 32-bit FLOAT** (never write-clips an over-0-dBFS render — see gotcha). **Calibration overrides (Calibration.h untouched):** `--in-ref`, `--out-makeup`, V1L/V2 zener `--zener-iref/-vzt/-cj/-vz/-vf/-m`, `--rail-knee`, `--rail-vneg/--rail-vpos`, `--sat-gain/--sat-knee/--sat-offset`. Build: `cmake --build build --target OfflineRender`. |
 | `ab_report.py` | the orchestrator: for each capture, renders the matching plugin setting, aligns both to the reference, and prints FR / THD / NULL / LEVEL. `--filter`, `--os`, `--csv`, `--keep-renders`. |
-| `inref_scan.py` | the **kInputRef scanner** (calibration step 1): renders each V2 capture at a grid of `--in-ref` and scores plugin-vs-pedal THD-vs-input-level. `--metric linear` (default; log biases high), `--exclude-drive-above 0.85` (skip the structurally-unreachable max-drive), `--values`. |
 | `analyze.py` | pedal-agnostic library (load/align, `transfer`, `harmonic_thd_curve` — returns per-order `Hn` for the even/odd-harmonic view, `null_depth`, `linear_removed_null`, `frac_align`, the FR grid). Don't duplicate its primitives. |
+
+### Diagnostic scripts (Phase 10 calibration)
+| Script | Purpose | Key CLI |
+|--------|---------|---------|
+| `harmonic_report.py` | Per-harmonic H2..H7 dB re fundamental vs pedal | `--filter V2`, `--os` |
+| `vzt_sweep.py` | Zener knee softness (Vzt) scan | `--values`, `--os` |
+| `rail_knee_sweep.py` | RailClip parabolic knee width scan | `--knee-values`, `--os` |
+| `asymmetry_check.py` | Zener asymmetry m-factor vs pedal H2 | `--os` |
+| `check_asym_sources.py` | Compares asymmetric rails vs sat-offset as H2 sources | `--os` |
+| `cj_scan.py` | Zener junction capacitance fit from DRIVE HF rolloff | `--values`, `--os` |
+| `sat_sweep.py` / `sat_sweep2.py` | Recovery saturation gain/knee scans (early passes) | `--os` |
+| `sat_calibrate.py` | 3D grid sweep: sat-gain × sat-knee × sat-offset | `--gain`, `--knee`, `--offset`, `--os` |
+| `verify_sat_fix.py` | Verify calibrated sat params against one V2 capture | `--os` |
+| `inref_scan.py` | kInputRef THD-vs-level fit from clip onset | `--values`, `--metric`, `--os` |
+| `gen_test_signal.py` | Comprehensive A/B reference signal (append-only) | — |
+
+**ALWAYS write new analysis commands as scripts in `analysis/`** — never as inline Python in a
+tool call. Inline commands block the terminal on long-running harmonic/THD scans and the output
+can't be recovered mid-execution. Use `analyze.py` + `noamp_captures.py` as the library layer.
 
 ## Run it
 
@@ -52,12 +71,17 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 # 1. build the renderer (once, or after any DSP change)
 cmake --build build --target OfflineRender
 # 2. run the full A/B (from repo ROOT — paths are repo-root-relative)
-python3 analysis/ab_report.py --csv analysis/reports/ab.csv
+python3.11 analysis/ab_report.py --csv analysis/reports/ab.csv
 #    subsets / options:
-python3 analysis/ab_report.py --filter V1E          # one revision
-python3 analysis/ab_report.py --keep-renders /tmp/r # keep the plugin renders to inspect
-python3 analysis/ab_report.py --os 1                # low-OS (see aliasing/top-octave droop)
+python3.11 analysis/ab_report.py --filter V1E          # one revision
+python3.11 analysis/ab_report.py --keep-renders /tmp/r # keep the plugin renders to inspect
+python3.11 analysis/ab_report.py --os 1                # low-OS (see aliasing/top-octave droop)
+# 3. diagnostic scripts
+python3.11 analysis/harmonic_report.py --filter V2     # per-harmonic breakdown
+python3.11 analysis/sat_calibrate.py                   # find best sat params
+python3.11 analysis/verify_sat_fix.py                  # verify sat params
 ```
+
 Needs numpy + scipy (the plotting-free scientific stack). The renderer defaults to `--os 8` so
 aliasing is off the table — drop it to expose the low-OS behaviour deliberately.
 
@@ -109,11 +133,16 @@ is downstream and misleading to chase on its own. Order:
    odd harmonics / THD / level unchanged, `m=0` is bit-identical to the old symmetric solve). Set in
    `v2Params()`. V1L not yet fit (`m=0`).
 3. **Per-revision zener `Cj`** — fit against the V1L/V2 captured DRIVE HF rolloff (`reference-fr-
-   targets.md` §4). `v2Params()` still uses the V1L `Cj` (220 pF) placeholder.
-4. **`kOutputMakeup`** — per-revision level match only (null already gain-matches, so this is cosmetic
-   for the A/B). The clean-null gain column shows the plugin runs ~+18 dB hot on V2, ~+8 dB on V1E (a
-   ~10 dB V1E↔V2 gap = V2's extra +10.1 dB LEVEL stage). Don't treat as a physical anchor.
-5. **Re-run** `ab_report.py`; decompose any residual with the linear-removed floor before touching
+   targets.md` §4). Use `analysis/cj_scan.py`. V2 Cj fit: **10 pF** (vs V1L's 220 pF). Note: 4.7 dB
+   RMS HF-shape error even at best Cj — remaining HF mismatch may be structural (coupling caps,
+   stage-A rail asymmetry).
+4. **`kOutputMakeup`** — per-revision level match. Changed from single scalar to array
+   `{0.393, 0.123, 0.123}`. V2 level now within ±1.5 dB (was +18 dB hot). Verified by ab_report.
+5. **Recovery saturation offset** — add small-signal H2 via asymmetric tanh after the recovery stage.
+   `RecoverySaturator.h` with `setOffset()`. Best params from 36-pt grid: **gain=0.06, knee=0.10,
+   offset=0.10**. At -18 dBFS: H2/H3/H4 within 2 dB of pedal (was −24 to −32 dB off). **NOT YET
+   production-defaulted** — currently sat-gain=0 (disabled).
+6. **Re-run** `ab_report.py`; decompose any residual with the linear-removed floor before touching
    constants (a deep-linear-removed but shallow-raw null = go fix the taper, not the clip).
 
 **Two open waveshape items (the "amount" residual):** (a) the clip onset is too ABRUPT (plugin THD
@@ -150,3 +179,6 @@ FR read looks like a huge "plugin too bright" error that is really the confound,
   plugin doesn't reproduce; a partial-blend FR read then shows a false "plugin too bright" top octave.
 - The V1L/V2 zener DRIVE **is** oversampled/ADAA'd now (`ZenerDriveClipRecovery`), so `--os` affects
   their drive aliasing too (this line previously said otherwise — stale).
+- **ALWAYS write analysis scripts as files** — never inline commands. OfflineRender renders take
+  1-2 seconds each, and Farina harmonic analysis takes 2-5 seconds per segment; inline commands
+  block the terminal and the output can't be recovered mid-execution. Use the `analysis/` scripts.
