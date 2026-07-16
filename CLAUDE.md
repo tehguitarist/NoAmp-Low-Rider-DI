@@ -148,10 +148,48 @@ without images.
 > - **Asymmetric rails** -5.8/+2.6 V in V1E: zero effect on D1.00 FR collapse (+8-12 dB unchanged).
 >   Max-drive corner case confirmed not fixable by rail adjustment.
 >
+> ### Full baseline audit (2026-07-16) — ab_report on all 12 captures across 3 revisions
+>
+> **V1E** (3 caps, D0.50/D0.60/D1.00, kOutputMakeup=0.393):
+>   Clean captures D0.50/D0.60: FR RMS ~1.5 dB ✅, NULL gain -1.9/+0.2 dB.
+>   THD at low drive = 0% (plugin has NO V1E saturator — V1E is rail-only clip; pedal has 4-22% THD).
+>   D1.00 max-drive FR collapse (+8-12 dB across band) confirmed NOT fixable by rail adjustment.
+>
+> **V1L** (3 caps, D0.65/D0.45/D0.40, kOutputMakeup=0.513):
+>   BL=1.0 primary: NULL gain **0.0 dB** ✅, FR RMS 8.57 dB (shape error, not level — see P1 HF).
+>   Lower-blend (BL=0.65/0.30): NULL +4-7 dB — **structural blend asymmetry** (dry path level differs
+>   from wet per revision due to coupling cap differences across revisions; not a single scalar fix).
+>   THD reasonable: 100Hz 9.8% / 24.7% vs pedal 12.1% / 17.6%.
+>   P1 HF shape dominant: 8k = -10.7 dB, 12k = -28.6 dB.
+>
+> **Blend asymmetry fix (committed cef46ff):** Added `kDryGain[3] = {3.308, 2.534, 10.569}` in
+>   Calibration.h — `dryTap *= kDryGain[rev]` in each DSP's processBlock. V2 V1200 BL=0.50 NULL
+>   went +16.8→-0.1 dB ✅. V1L BL=0.65 improved +6.8→+6.1 dB (NodalCircuit loading limits scalar fix).
+>   Fix is purely additive — BL=1.0 captures unchanged (NULL still 0.0 dB). All 23/23 ctest green.
+>
+> **V2** (6 caps, kOutputMakeup=0.123 — NO change needed for BL=1.0):
+>   BL=1.0 captures: avg FR RMS ~2.9 dB, NULL ±1.5 dB ✅ — best of the three revisions overall.
+>   H2/H3 at low drive (P5 fix): Δ = -1.6/+2.1 dB ✅.
+>   V1200 BL=0.50: NULL now -0.1 dB ✅ (blend asymmetry fix).
+>   D0.90 high-drive THD imbalance: plugin 21% vs pedal 11% at 100Hz, 17% vs 37% at 400Hz.
+>
+> **Cross-revision findings:**
+>   1. **Blend asymmetry** — V2 BL=0.50 fixed completely (kDryGain[2]=10.569). V1L improved but +6 dB
+>      residual at BL=0.65 is NodalCircuit impedance-loading; needs resistor-ratio fix inside BLEND
+>      stage, not a pre-scale.
+>   2. **V1E zero THD at low drive**: structural gap (no saturator on rail-only V1E). V1E saturator
+>      not yet implemented — `V1EarlyDriveClipRecovery` has a RecoverySaturator but it's disabled
+>      by default (gain=0). The P5 saturator tuning was V2/V1L-only (zener revisions).
+>   3. **V2 high-drive THD imbalance**: zener knee tracking vs drive level isn't correct — at D0.90
+>      plugin over-produces 100Hz THD and under-produces 400Hz THD.
+>
 > ### Remaining open items (all documented in phase10-gap-audit.md)
 > - P1 residual: 12.5k/16k (-5.9/-19.1 dB) is cumulative bilinear warp of V2 recovery LPF cascade.
 > - P2 residual: BASS=0.35/0.50 250-430 Hz hump correlates with MID shift (430 Hz throw), not BASS Q.
 > - P6: V1E max-drive FR collapse — tested, not rail-headroom-limited.
+> - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by scalar.
+> - **V1E saturator** — V1E needs RecoverySaturator enabled (like V2/V1L) to match low-drive THD.
+> - **V2 zener drive tracking** — knee/softness needs drive-dependence or a per-drive parameter.
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
 > **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ
