@@ -189,10 +189,12 @@ int main()
                     peakOut = std::max(peakOut, std::abs(v));
         }
         const double gainDb = 20.0 * std::log10(peakOut / peakIn);
-        std::printf("      dry-path 1 kHz gain = %.2f dB (expect ~ -0.9 dB: LEVEL noon + output loss)\n", gainDb);
-        // LEVEL at noon on the loaded pan network isn't exactly unity; allow a modest window. The
-        // point is: near-unity and CLEAN (no wet-path drive/notch), not an exact number.
-        check(std::isfinite(gainDb) && gainDb > -6.0 && gainDb < 12.0, "dry path is near-unity and stable");
+        std::printf("      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[0] = %s compensates to 0 dB at DAW)\n",
+                    gainDb, "1.084");
+        // Voltage-domain measurement (DSP output in volts). kOutputMakeup[0] = 1.084 is calibrated
+        // so that this × kOutputMakeup/kInputRef = 0 dB at the DAW output (T-002 anchor). Tight gate
+        // to catch accidental stage changes that would drift the unity point.
+        check(std::isfinite(gainDb) && gainDb > -3.0 && gainDb < 3.0, "dry path is near-unity and stable");
     }
 
     std::printf("%s\n", pass ? "V1EarlyIntegrationTest PASSED" : "V1EarlyIntegrationTest FAILED");

@@ -32,30 +32,40 @@ constexpr double kInputRef = 1.3;
 //   1 = V1 Late
 //   2 = V2
 //
+// ═══════════════════════════════════════════════════════════════════════════════════
+// T-002 ANCHOR (2026-07-17): kOutputMakeup[rev] is set so the DAW-domain output is
+// UNITY at blend=0, level=0.5 (all other knobs at noon; V1L/V2 volume switches OFF).
+// Each value = 1.0 / (voltage-domain dry-path gain at those settings).
+//
+// This REPLACES the prior capture-level-fit values. Capture analysis (ab_report.py)
+// gain-matches per file independently — this change is provably shape-neutral for all
+// A/B metrics (FR, THD, null depth, knob tracking). The dry path's frequency response
+// is unchanged by a flat scalar.
+//
+// If you need to re-fit to captures:
+//   a. Use OfflineRender --out-makeup to override per-run in analysis scripts, OR
+//   b. Add a COMMENTED-OUT capture-fit array alongside with a dated note explaining
+//      which captures it was fit to and why the unity anchor was temporarily suspended.
+//
+// Dry-path measurements at 1 kHz (from integration test dry-path gates):
+//   V1E: V_dsp_gain = -0.70 dB (0.923x) → kOutputMakeup = 1/0.923 = 1.084
+//   V1L: V_dsp_gain = -0.99 dB (0.892x) → kOutputMakeup = 1/0.892 = 1.121
+//   V2:  V_dsp_gain = +4.18 dB (1.618x) → kOutputMakeup = 1/1.618 = 0.618
+//   (V2 has U3B's fixed +10.1 dB non-inverting gain in the BLEND/LEVEL path; the
+//    others do not — hence V2's lower makeup.)
+// ═══════════════════════════════════════════════════════════════════════════════════
+//
 // Before 2026-07-15 this was a SINGLE GLOBAL scalar, but the three revisions have structurally different
 // post-blend output levels: V1L/V2 both have an additional +10.1 dB stage (LEVEL buffer on V1L's netlist
-// V5b, V2's non-inverting LEVEL stage per netlists.md V6) that V1E structurally lacks, producing a ~10 dB
-// output gap between them at the same knob settings. A single makeup can't zero out both an 8 dB gap and
-// an 18 dB gap simultaneously — so now each revision gets its own.
+// V5b, V2's non-inverting LEVEL stage per netlists.md V6) that V1E structurally lacks. Though kOutputMakeup
+// is now anchored to unity, this structural gap still exists — V1E's dry-path voltage gain is close to
+// unity while V2's is +4.18 dB, so kOutputMakeup compensates by more for V2 (0.618 vs 1.121 for V1L).
 //
-// These are PROVISIONAL fit targets — iterate with analysis/ab_report.py until the LEVEL gain column
-// is even across all three revisions' clean full-wet captures.
-//
-// V1E: 0.444 — re-fitted 2026-07-16 alongside V1EarlyDriveStage::kDriveEndR (P6) and then nudged
-//              0.437 -> 0.444 by the THD-onset fit (V1EarlyDSP's crossover saturator also removes a
-//              little level). The DRIVE end-R
-//              lowers V1E's gain at every knob position, so makeup and the taper are COUPLED and had
-//              to be fit together (analysis/v1e_drive_endr_fit.py): the end-R is fit on the offset
-//              SPREAD across the three V1E captures (what makeup cannot fix, since makeup shifts all
-//              three equally), then makeup absorbs the remaining common offset. At Rend=8k the
-//              per-capture offsets land D0.50 +1.13 / D0.60 -1.22 / D1.00 +0.09 dB (was D1.00 +5.0).
-//              (Prior: 0.393, fitted against the ideal-taper model.)
-// V1L: 0.513 — fitted from `ab_report.py --filter V1L` NULL clean gain +12.4 dB (V1030 capture,
-//              D0.65, the most representative mid-drive capture): 0.123 * 10^(12.4/20) = 0.513.
-//              The naive +10.1 dB compensation alone was insufficient — the actual deficit is larger
-//              (structural V1L coupling/cascade losses beyond the wet make-up buffer alone).
-// V2:  0.123 — still the placeholder, awaiting V2-specific capture calibration.
-constexpr double kOutputMakeup[3] = { 0.444, 0.513, 0.123 };
+// Prior values (for reference, superseded by T-002 anchor):
+//   V1E: 0.444 — fitted alongside kDriveEndR (P6) then nudged by the THD-onset fit (2026-07-16)
+//   V1L: 0.513 — fitted from ab_report.py NULL clean gain +12.4 dB
+//   V2:  0.123 — placeholder, awaiting V2-specific capture calibration
+constexpr double kOutputMakeup[3] = { 1.084, 1.121, 0.618 };
 
 // NO kDryGain — DO NOT REINTRODUCE A PER-PATH GAIN HERE (removed 2026-07-16, ISS-008).
 //

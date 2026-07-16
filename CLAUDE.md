@@ -122,19 +122,20 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-16).** All work is on **`main`** (the old
+> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`** (the old
 > phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
 > **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed. ISS-008 SOLVED (kDryGain
 > deleted — see its entry below; it also fixed ISS-006 and unmasked ISS-003).**
 > **ISS-009 CLOSED: C10 is EXONERATED — do NOT raise it. ISS-013 filed then CLOSED as INVALID the
-> same session (see below). NEXT: T-001/ISS-001 (clip onset) — the LF evidence folded into it makes
-> it the one remaining shared root cause, and it now BLOCKS ISS-006.** Then re-run `ab_report.py
+> same session (see below). T-002 DONE (kOutputMakeup anchored to dry-path unity at blend=0,
+> level=0.5 — see Calibration.h T-002 ANCHOR comment). ISS-012 RESOLVED by T-002.**
+> **NEXT: T-001/ISS-001 (clip onset)** — the LF evidence folded into it makes
+> it the one remaining shared root cause, and it now BLOCKS ISS-006. Then re-run `ab_report.py
 > --os 8` and re-read **ISS-010**'s linear-headroom table before
 > touching any clip/THD gap (ISS-001/002/004): ISS-010's finding — the residual is LINEAR-dominated,
 > 10–23 dB of null headroom at every capture — is what re-ordered this queue ahead of `docs/
 > phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear structural bug was worth
-> 5–7 dB of null on its own). Also consider **ISS-012** (kOutputMakeup) early: it is shape-neutral and
-> removes a fudge that has already caused one bad fit.
+> 5–7 dB of null on its own).
 >
 > ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
@@ -262,11 +263,10 @@ tracking gate (40–100 Hz, per N-004). Re-examine `kDriveEndR=8k` only after GB
     so it is invisible to every script — **the matrix is 11 captures now, and V2 BLEND=0.50 has NO
     capture; fit nothing to that setting.** The `.wav`s are gitignored, so the evidence lives in the
     tracked `analysis/captures-quarantine/README.md` — read it before ever restoring a file there.
-  - Follow-ups: **ISS-012**
-    (kOutputMakeup was fit to NAM-normalized = meaningless absolute level; with kDryGain gone V2's dry
-    sits ~18 dB quiet for users — anchor makeup on the circuit-derived dry gain, i.e. 1.0; provably
-    shape-neutral since all metrics gain-match). New probes: `analysis/iss008_dry_probe.py`,
-    `analysis/iss008_rate_check.py`. 23/23 green (full `-j8` build).
+  - Follow-ups: **ISS-012 — RESOLVED by T-002 (2026-07-17).** The old "kOutputMakeup was fit to
+    NAM-normalized = meaningless absolute level" concern is addressed — kOutputMakeup is now anchored
+    to dry-path unity at blend=0, level=0.5 rather than to capture-normalized levels.
+    New probes: `analysis/iss008_dry_probe.py`, `analysis/iss008_rate_check.py`. 23/23 green (full `-j8` build).
 >
 > - **ISS-009 — V1L "C10 LF deficit": C10 EXONERATED, no code change (2026-07-16). DO NOT RAISE C10.**
   The netlists.md L5d `[◐]` gate fired and is now **CLOSED `[✓]`**: the re-crop
@@ -311,11 +311,11 @@ tracking gate (40–100 Hz, per N-004). Re-examine `kDriveEndR=8k` only after GB
   ISS-001's THD slope, seen in the FR instead of the harmonics — and **immune to the THD anchor traps**
   (V1E THD is 100/200 Hz only). Fit clip onset against BOTH.
 
-- **T-002 — Level=0.5, Blend=0.0 should be unity gain (2026-07-17, user request).** When the level
-  knob is at 0.5 and blend at minimum (0.0), with all other knobs at 12 o'clock, the output should
-  be unity gain (same volume as pedal bypass). V1L/V2 both have +10 dB volume adds which are
-  switchable on real pedals; assume they're OFF. This may contradict capture-normalized levels — if
-  so, normalise volume for other behaviours. kOutputMakeup (ISS-012) is the likely lever for this.
+- **T-002 — Level=0.5, Blend=0.0 = unity gain — DONE (2026-07-17).** kOutputMakeup[rev] now
+  anchored to `1.0 / V_dsp_dry_gain` so DAW output = input at blend=0, level=0.5 (all other
+  knobs at noon, V1L/V2 volume switches OFF). The prior capture-level-fit values are superseded;
+  capture analysis normalizes levels independently so this is shape-neutral. See Calibration.h
+  T-002 ANCHOR comment. Integration test dry-path gates tightened to catch accidental stage changes.
 
 ### Lessons (hard-won, do not re-learn)
 

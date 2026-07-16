@@ -139,10 +139,12 @@ int main()
         dsp.setParams(1.0, 0.5, 0.0, 0.5, 0.5, 0.5); // blend=full dry, level noon, tone flat
         dsp.reset();
         const double gainDb = magnitudeDb(dsp, 1000.0, 0.3);
-        std::printf("      dry-path 1 kHz gain = %.2f dB (near-unity: input buffer + BLEND/LEVEL loading + "
-                    "tone/output stages)\n",
-                    gainDb);
-        check(std::isfinite(gainDb) && gainDb > -6.0 && gainDb < 15.0, "dry path is near-unity and stable");
+        std::printf("      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[1] = %s compensates to 0 dB at DAW)\n",
+                    gainDb, "1.121");
+        // Voltage-domain measurement (DSP output in volts). kOutputMakeup[1] = 1.121 is calibrated
+        // so that this × kOutputMakeup/kInputRef = 0 dB at the DAW output (T-002 anchor). Tight gate
+        // to catch accidental stage changes that would drift the unity point.
+        check(std::isfinite(gainDb) && gainDb > -3.0 && gainDb < 3.0, "dry path is near-unity and stable");
     }
 
     // --- 4. §1 full wet-path column: PRESENCE 0 / DRIVE 0 / BLEND 100% -----------------------------

@@ -193,16 +193,14 @@ int main()
         dsp.setParams(1.0, 0.5, 0.0, 0.5, 0.5, true, 0.5, 0.5, false); // blend=full dry, level/mid/tone flat
         dsp.reset();
         const double gainDb = magnitudeDb(dsp, 1000.0, 0.3);
-        std::printf("      dry-path 1 kHz gain = %.2f dB (near-unity: input buffer + BLEND/LEVEL loading + "
-                    "MID/tone/output stages)\n",
-                    gainDb);
-        // RESTORED to the original Phase-6.3 band (2026-07-16, ISS-008). cef46ff had widened this to
-        // >+5 .. <+40 dB — a 35 dB window that is not "near-unity" by any reading — because kDryGain
-        // pushed this path to +24.66 dB. That is the gate erasing the bug it existed to catch: the
-        // circuit says the V2 dry path is unity-ish (input buffer -> BLEND/LEVEL dividers -> U3B
-        // +10.1 dB -> MID -1 -> tone -1), i.e. ~+4 dB, and it now reads +4.18 dB. Keep this band
-        // TIGHT: a dry path outside +/-12 dB means a per-path gain fudge has crept back in.
-        check(std::isfinite(gainDb) && gainDb > -12.0 && gainDb < 12.0, "dry path is near-unity and stable");
+        std::printf("      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[2] = %s compensates to 0 dB at DAW)\n",
+                    gainDb, "0.618");
+        // Voltage-domain measurement (DSP output in volts). kOutputMakeup[2] = 0.618 is calibrated
+        // so that this × kOutputMakeup/kInputRef = 0 dB at the DAW output (T-002 anchor). Tight band:
+        // V2's U3B fixed +10.1 dB means the dry path CANNOT be below unity + pot losses (~+2.5 dB
+        // floor), and the +4.18 dB measured value is stable across rebuilds. Gate centered around
+        // the expected ~+4.2 dB to catch accidental stage changes.
+        check(std::isfinite(gainDb) && gainDb > 1.0 && gainDb < 7.0, "dry path within expected voltage-domain range");
     }
 
     // --- 4. §1 full wet-path column: PRESENCE 0 / DRIVE 0 / BLEND 100% -----------------------------
