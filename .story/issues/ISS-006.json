@@ -1,0 +1,15 @@
+{
+  "components": [],
+  "dedupeKey": "phase10-gap-audit:F",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-006",
+  "impact": "V1L BL=1.0 is good (NULL 0.0dB). BL=0.65/0.30 show +4-7dB error. The kDryGain[3] pre-scale fixed V2 completely (BL=0.50 NULL +16.8 -> -0.1dB) but only improved V1L (+6.8 -> +6.1dB): the residual is NodalCircuit impedance loading inside the BLEND stage itself, which a pre-scale cannot fix. Needs a resistor-ratio fix in the stage, not a scalar.",
+  "location": [],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "medium",
+  "status": "open",
+  "title": "V1L blend residual at partial BLEND settings"
+}

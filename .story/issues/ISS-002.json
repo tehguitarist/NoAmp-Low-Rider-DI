@@ -1,0 +1,15 @@
+{
+  "components": [],
+  "dedupeKey": "phase10-gap-audit:B",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-002",
+  "impact": "With P6's level error removed, residual shape error isolates to two bands at D1.00: 800Hz (plugin's twin-T notch stays ~11dB deeper than the pedal's -- the pedal's notch fills in at drive, the plugin's doesn't) and 3-4kHz (plugin +7.7dB; knob-tracking confirms pedal only gains +5.6dB from D0.50->D1.00 there vs plugin's +11.8dB, meaning the pedal is already saturated in that band at D0.50). Same class of problem as gap D (V2 zener drive tracking) -- both need drive-dependent saturation. Answer the GBW hypothesis from gap A/P6 first, since it may be the shared root cause for both this gap and gap D.",
+  "location": [],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "medium",
+  "status": "open",
+  "title": "V1E drive-dependent band saturation (800Hz notch, 3-4kHz residual)"
+}

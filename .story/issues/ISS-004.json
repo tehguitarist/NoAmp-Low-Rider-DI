@@ -1,0 +1,15 @@
+{
+  "components": [],
+  "dedupeKey": "phase10-gap-audit:D",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-004",
+  "impact": "At D0.90 the plugin over-produces 100Hz THD (21.8% vs pedal's 11.5%) and under-produces 400Hz THD (16.9% vs pedal's 37.4%). The zener knee/softness does not track drive level correctly and needs drive-dependence or a per-drive parameter. v2Params() is still a placeholder equal to v1LateParams() -- V2's Cj/knee were never fit independently. Shares its shape/root-cause class with gap B (V1E drive-dependent band saturation).",
+  "location": [],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "medium",
+  "status": "open",
+  "title": "V2 zener drive tracking: THD imbalance across frequency"
+}

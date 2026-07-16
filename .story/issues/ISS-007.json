@@ -1,0 +1,21 @@
+{
+  "components": [
+    "analysis"
+  ],
+  "createdBy": "claude-session-review",
+  "dedupeKey": "comprehensive-report-fr-gain-match",
+  "discoveredDate": "2026-07-16",
+  "displayId": "ISS-007",
+  "id": "ISS-007",
+  "impact": "analysis/comprehensive_report.py's fr_at_bands() computes plugin_db/pedal_db via A.transfer() (raw Pxy/Pxx) with no gain-matching step, unlike ab_report.py's null_depth() which explicitly gain-matches before comparing (because captures are NAM-model output, level-normalized — see noamp_captures.py header + memory note noamp-capture-pipeline). Applying the FR deltas in analysis/reports/comprehensive_data.json at face value shows 20-45dB spreads between captures at the same band and even sign flips vs documented gaps (e.g. V2 12.5-16kHz: existing Gap C says plugin is too quiet there, this file's raw deltas say plugin is too loud) — the signature of an unremoved per-capture level offset, not a real circuit-model gap. The file's THD data (a ratio, not level-dependent) is unaffected and usable as-is; it confirms/extends Gap A (THD keeps climbing to ~35% at 1-1.3kHz on V1E, well past the previously-anchored 400Hz). Fix: add gain-matching to fr_at_bands (mirror ab_report.py's null_depth() gain-match) before this data can be used to file or update FR-related gaps.",
+  "location": [],
+  "phase": null,
+  "relatedTickets": [
+    "T-001"
+  ],
+  "resolution": "Added gain-matching to fr_at_bands() in analysis/comprehensive_report.py, mirroring ab_report.py's null_check(): sub-sample align the plugin render to the pedal capture on the same sweep segment (A.frac_align), then apply the optimal linear gain (A.null_depth's returned gain_db) to the plugin's FR curve before computing per-band deltas. Applied per sweep-level (clean + each driven level), not just once per file, since the gain offset drifts with drive (observed -0.02 to -12.06 dB across the 12 captures, growing at higher DRIVE settings). Regenerated analysis/reports/comprehensive_data.json. Confirmed fix: V1E's previously up-to +18dB HUGE deltas collapsed to a mostly 1-5dB range; remaining >3dB bands now look like real shape gaps consistent with tracked issues (e.g. V1E's 800Hz twin-T notch depth mismatch, Gap B) rather than random per-capture offset. gain_db_applied is now stored per sweep-level in the JSON for transparency.",
+  "resolvedDate": "2026-07-16",
+  "severity": "high",
+  "status": "resolved",
+  "title": "comprehensive_report.py's FR comparison isn't gain-matched (NAM level-normalization confound)"
+}

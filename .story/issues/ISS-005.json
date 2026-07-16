@@ -1,0 +1,15 @@
+{
+  "components": [],
+  "dedupeKey": "phase10-gap-audit:E",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-005",
+  "impact": "BASS=0.65 (the primary calibration capture) is clean at RMS 1.02dB, but BASS=0.50/0.35 show ~3dB error at 250-430Hz. Ruled out: C27 100n->82n had zero effect (the old audit recommended exactly this; it had already been tested). The hump correlates with the MID shift throw (430Hz), not BASS Q -- C27/C29 tests confirm the error is pre-tone-stack. Look at the MID stage and wet path, not the BASS rail.",
+  "location": [],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "low",
+  "status": "open",
+  "title": "V2 BASS 250-430Hz hump at low BASS settings"
+}

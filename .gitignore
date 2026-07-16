@@ -15,3 +15,11 @@ analysis/pedal_results*/
 
 # Generated A/B analysis outputs
 analysis/reports/
+
+# Storybloq session-local state (tickets/issues/roadmap ARE tracked; these are not)
+.story/snapshots/
+.story/sessions/
+.story/status.json
+
+# Kilo local agent state (worktrees + node_modules)
+.kilo/

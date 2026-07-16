@@ -1,0 +1,31 @@
+{
+  "features": {
+    "handovers": true,
+    "issues": true,
+    "reviews": true,
+    "roadmap": true,
+    "tickets": true
+  },
+  "language": "cpp",
+  "project": "NoAmp Low Rider DI",
+  "schemaVersion": 2,
+  "type": "macapp",
+  "version": 2,
+  "recipeOverrides": {
+    "stages": {
+      "TEST": {
+        "enabled": true,
+        "command": "cmake --build build -j8 && (cd build && ctest)"
+      }
+    },
+    "codexReviewBackends": [
+      "lenses"
+    ],
+    "reviewBackends": [
+      "lenses",
+      "agent"
+    ],
+    "maxTicketsPerSession": 0,
+    "handoverInterval": 3
+  }
+}

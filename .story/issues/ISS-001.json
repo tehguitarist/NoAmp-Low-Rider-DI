@@ -1,0 +1,18 @@
+{
+  "components": [],
+  "dedupeKey": "phase10-gap-audit:A",
+  "discoveredDate": "2026-07-16",
+  "displayId": "ISS-001",
+  "id": "ISS-001",
+  "impact": "THD@200Hz is ~3x under target and the slope direction is inverted: pedal THD RISES with frequency (100->200->400Hz: 4.5->10.5->22.3%) while the plugin's FALLS (5.9->3.6->0.9%). A memoryless saturator can't produce this since it gives frequency-independent THD, so something frequency-dependent is shaping the harmonics or the drive into the nonlinearity. Candidates (untested): (1) twin-T notch upstream of the clip may be shallower/narrower than modelled, letting the pedal keep driving the clip at higher fundamentals; (2) finite GBW at the DRIVE op-amp (would push plugin THD DOWN with frequency, opposite of what's needed, so likely not sufficient alone); (3) recovery LPF cascade may be over-attenuating high harmonics of higher-frequency tones. Verify with: cmake --build build -j8 && python3.11 analysis/ab_report.py --filter V1E --os 4. Note: 400Hz sits on the ~430Hz bridged-T notch and reads unreliably -- treat 100/200Hz as the real evidence.",
+  "location": [],
+  "phase": "capture-validation",
+  "relatedTickets": [
+    "T-001"
+  ],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "high",
+  "status": "open",
+  "title": "V1E THD-vs-frequency slope has wrong sign"
+}
