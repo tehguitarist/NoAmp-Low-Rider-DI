@@ -122,79 +122,62 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR gap reduction session (2026-07-16).**
-> P6 V1E max-drive tested (asymmetric rails: no effect, not rail-headroom-limited). Open items
-> documented in phase10-gap-audit.md. Next session: any remaining high-priority gap.
+> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-16).** Branch `phase10-v1e-drive-taper`.
+> **P6 SOLVED (level half) + two "structural" verdicts DISPROVEN.** Next: V1E THD onset fit.
 >
-> ## Session achievements (2026-07-16) — second sub-session
+> ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
+> `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
+> cross-validated only against the author's SPICE sim (which also assumes an ideal pot). The captures
+> want ~8 dB less. Now `kDriveEndR = 8.0e3` (fit across all 3 V1E captures, `analysis/v1e_drive_endr_fit.py`)
+> + `kOutputMakeup[0] = 0.437`, `kDryGain[0] = 2.975`.
+> - **Rend and makeup are COUPLED** (an end-R lowers gain at EVERY knob position). Fit Rend on the
+>   per-capture offset **SPREAD** (makeup shifts all three equally, so it cannot fix spread), then let
+>   makeup absorb the common offset. Clean interior minimum at 8k: spread 3.65→0.96 dB.
+> - Result: D1.00 FR rms 8.65→5.93 dB; knob-tracking err 100Hz +8.8→−0.7, 250 +10.1→+1.2, 12k +8.6→−1.0.
+> - **CAVEAT:** 8k is ~8% of a 100k pot — far above real end/wiper R (<1%). It is an EMPIRICAL effective
+>   value likely absorbing un-modelled gain limiting at high closed-loop gain (**TLC2264 GBW ≈0.72 MHz →
+>   at gain 101 the closed-loop BW is only ~7 kHz**, so the ideal-op-amp model over-delivers). If it IS
+>   GBW, the correct model is FREQUENCY-DEPENDENT — which would also attack the 3–4 kHz residual a flat
+>   resistance cannot touch. **Test GBW before treating 8k as settled.**
+> - `kDriveEndR` is exposed so `V1EarlyDriveTest` gates BOTH the schematic law at Rend=0 (+40.08 dB,
+>   WDF-vs-analytic — the E3/E4 transcription cross-check is PRESERVED) and the fitted default (29.60 dB).
+>   **A capture-fit must never silently erase a schematic-verification gate.**
 >
-> ### Committed
-> 1. **V2 HF fix** (C15=8.2n + C17=1.8n): 8k/10k within ±1.5 dB (was -3.4 dB). 12.5k/16k improved
->    (-9.4→-5.9, -22.7→-19.1) but remain below spec — cumulative bilinear warp floor.
-> 2. **V1L level staging** (kOutputMakeup[1]=0.123→0.513): NULL gain now 0.0 dB on primary capture.
->    RMS dropped 17.9→8.6 dB (remaining errors are genuine shape/THD, not level).
-> 3. **V1E sub-100 Hz droop** (C12 47n→220n): D0.60 60 Hz went -3.7→+0.2 dB, 100 Hz -4.6→-2.0.
->    D0.50 now at RMS 1.53 dB overall.
-> 4. **V2 H2 saturation** (knee 0.08→0.150, offset 0.10→0.080): H2 Δ at sweep_drv_-18 = -2 dB
->    (was -7 dB), H3 Δ = +2 dB. Both within ±3 dB. (Gain stays 0.04.)
-> 5. **V2 hump** (C41=15n, prior session) still passes at RMS 1.09 dB after all other changes.
+> ### Two false "structural" verdicts — distrust this pattern
+> Both were written off after ONE candidate failed. Neither is structural:
+> 1. **P6** — audit's only candidate was asymmetric rails, which HAD to fail: the collapse is in the
+>    deconvolved **FUNDAMENTAL**, which even-harmonic/DC asymmetry cannot move.
+> 2. **V1E THD residual** — the rail knee moves D0.50 THD **0.6% → 36.8%** (target 22.3%); it sails past.
+>    The tanh "can't model it" verdict came from a DEGENERATE corner: sat gain=0.080 is an 8% tanh blend
+>    against 92% linear ≈ a no-op. **Saturation is ruled OUT as P6's cause** by proof: a memoryless
+>    saturator cannot compress a sine ~8 dB while producing only ~8.5% THD (every setting that compressed
+>    enough blew THD to 62.5% vs the pedal's 8.5%).
 >
-> ### Tested and rejected (all documented here, not re-litigated)
-> - **C16 470p→330p** (S-K#1 HF shunt): overshot +4.7 dB at 8k, reverted.
-> - **C14 47n→39n** (S-K#1 mid shunt): regressed LF hump max to 2.04 dB, reverted.
-> - **C32/C29 22p→15p** (tone-stack feedback caps): zero effect on HF — confirms error is pre-tone-stack.
-> - **C27 100n→82n** (BASS across-pot cap): zero effect on BASS=0.35/0.50 hump — confirms hump is
->   pre-tone-stack (correlates with MID shift throw, not BASS Q).
-> - **Asymmetric rails** -5.8/+2.6 V in V1E: zero effect on D1.00 FR collapse (+8-12 dB unchanged).
->   Max-drive corner case confirmed not fixable by rail adjustment.
+> ### Measurement traps that cost real time (do NOT re-learn)
+> - **V1E THD anchors are 100/200 Hz ONLY.** 400 Hz sits on the ~430 Hz bridged-T and 800 Hz on the
+>   twin-T notch; both notch the FUNDAMENTAL and inflate THD (400 Hz gave absurd >100% readings).
+> - **FR is read on the −30 dBFS CLEAN sweep** — at D1.00 that puts 0.041×101 = 4.15 V into the 4.2 V
+>   rail, so the plugin barely clips and passes the full +40 dB while the pedal already compresses.
+> - **PRESENCE contributes ~0 dB at LF** (C31 blocks DC; §3's +16.7 dB is *at 4.8 kHz*), so the recovery
+>   saturator sees ~1 V, not ~2.9 V — knee must be sized to the ACTUAL signal.
 >
-> ### Full baseline audit (2026-07-16) — ab_report on all 12 captures across 3 revisions
+> ### Open items (phase10-gap-audit.md — REFRESHED 2026-07-16)
+> - **V1E THD onset** — plugin now uniformly too clean at every drive (0.7–5.2% vs pedal 4.5–9.8%): the
+>   taper fix removed the excess gain that was MASKING absent saturation (old D1.00 THD match was two
+>   errors cancelling). Single coherent cause; rail-knee leverage already proven. **NEXT.**
+> - **P6 shape residual** — isolated to two bands: 800 Hz (plugin notch 11 dB too deep; pedal's fills in
+>   at drive) and 3–4 kHz (+8.7 dB; pedal gains only +5.6 dB there D0.50→D1.00 vs plugin +13.1).
+>   Drive-dependent band saturation — same class as V2 zener tracking. **Answer the GBW question first.**
+> - **V2 zener drive tracking** — knee/softness needs drive-dependence.
+> - P1 residual: V2 12.5k/16k (−5.9/−19.1 dB) = cumulative bilinear warp of the recovery LPF cascade.
+> - P2 residual: BASS=0.35/0.50 250–430 Hz hump correlates with MID shift throw, not BASS Q (C27 tested).
+> - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by a scalar.
 >
-> **V1E** (3 caps, D0.50/D0.60/D1.00, kOutputMakeup=0.393):
->   Clean captures D0.50/D0.60: FR RMS ~1.5 dB ✅, NULL gain -1.9/+0.2 dB.
->   THD at low drive = 0% (plugin has NO V1E saturator — V1E is rail-only clip; pedal has 4-22% THD).
->   D1.00 max-drive FR collapse (+8-12 dB across band) confirmed NOT fixable by rail adjustment.
->
-> **V1L** (3 caps, D0.65/D0.45/D0.40, kOutputMakeup=0.513):
->   BL=1.0 primary: NULL gain **0.0 dB** ✅, FR RMS 8.57 dB (shape error, not level — see P1 HF).
->   Lower-blend (BL=0.65/0.30): NULL +4-7 dB — **structural blend asymmetry** (dry path level differs
->   from wet per revision due to coupling cap differences across revisions; not a single scalar fix).
->   THD reasonable: 100Hz 9.8% / 24.7% vs pedal 12.1% / 17.6%.
->   P1 HF shape dominant: 8k = -10.7 dB, 12k = -28.6 dB.
->
-> **Blend asymmetry fix (committed cef46ff):** Added `kDryGain[3] = {3.308, 2.534, 10.569}` in
->   Calibration.h — `dryTap *= kDryGain[rev]` in each DSP's processBlock. V2 V1200 BL=0.50 NULL
->   went +16.8→-0.1 dB ✅. V1L BL=0.65 improved +6.8→+6.1 dB (NodalCircuit loading limits scalar fix).
->   Fix is purely additive — BL=1.0 captures unchanged (NULL still 0.0 dB). All 23/23 ctest green.
->
-> **V2** (6 caps, kOutputMakeup=0.123 — NO change needed for BL=1.0):
->   BL=1.0 captures: avg FR RMS ~2.9 dB, NULL ±1.5 dB ✅ — best of the three revisions overall.
->   H2/H3 at low drive (P5 fix): Δ = -1.6/+2.1 dB ✅.
->   V1200 BL=0.50: NULL now -0.1 dB ✅ (blend asymmetry fix).
->   D0.90 high-drive THD imbalance: plugin 21% vs pedal 11% at 100Hz, 17% vs 37% at 400Hz.
->
-> **V1E recovery saturator (committed 6fe2f1b):** Added `setRecoverySaturation(0.080, 0.100)` and
->   `setSaturationOffset(0.020)` in V1EarlyDSP::prepare(). V1E now produces 0.6-0.8% THD at low-mid
->   drive (was 0% — ideal rail model). Pedal has 4-22% THD at these settings. The tanh+offset model
->   can't fully capture V1E's rail-only op-amp crossover distortion (no zener), so the residual
->   gap is structural. Scanned via `sat_refine.py --rev V1E` (224 candidates). FR unaffected.
->
-> **Cross-revision findings:**
->   1. **Blend asymmetry** — V2 BL=0.50 fixed completely (kDryGain[2]=10.569). V1L improved but +6 dB
->      residual at BL=0.65 is NodalCircuit impedance-loading; needs resistor-ratio fix inside BLEND
->      stage, not a pre-scale.
->   2. **V1E saturator** — now enabled (gain=0.080, knee=0.100, offset=0.020). THD went 0→0.7% @ 100Hz.
->      Residual gap to pedal's 4-22% is structural (op-amp crossover vs tanh model).
->   3. **V2 high-drive THD imbalance**: zener knee tracking vs drive level isn't correct — at D0.90
->      plugin over-produces 100Hz THD and under-produces 400Hz THD.
->
-> ### Remaining open items (all documented in phase10-gap-audit.md)
-> - P1 residual: 12.5k/16k (-5.9/-19.1 dB) is cumulative bilinear warp of V2 recovery LPF cascade.
-> - P2 residual: BASS=0.35/0.50 250-430 Hz hump correlates with MID shift (430 Hz throw), not BASS Q.
-> - P6: V1E max-drive FR collapse — tested, not rail-headroom-limited.
-> - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by scalar.
-> - V1E THD residual: tanh model can't fully reproduce rail-only op-amp crossover (structural).
-> - **V2 zener drive tracking** — knee/softness needs drive-dependence or a per-drive parameter.
+> ### Prior Phase-10 committed fixes (2026-07-16, still holding)
+> V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);
+> V2 H2 sat (knee=0.150/offset=0.080, H2 Δ −1.6 dB); V2 hump (C41=15n); blend asymmetry
+> (`kDryGain[3]`, V2 BL=0.50 NULL +16.8→−0.1 dB). **Tested and REJECTED (do not re-try):** C16 470p→330p,
+> C14 47n→39n, C32/C29 22p→15p, C27 100n→82n, asymmetric rails in V1E.
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
 > **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ

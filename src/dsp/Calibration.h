@@ -41,7 +41,9 @@ constexpr double kInputRef = 1.3;
 // These are PROVISIONAL fit targets — iterate with analysis/ab_report.py until the LEVEL gain column
 // is even across all three revisions' clean full-wet captures.
 //
-// V1E: 0.437 — re-fitted 2026-07-16 alongside V1EarlyDriveStage::kDriveEndR (P6). The DRIVE end-R
+// V1E: 0.444 — re-fitted 2026-07-16 alongside V1EarlyDriveStage::kDriveEndR (P6) and then nudged
+//              0.437 -> 0.444 by the THD-onset fit (V1EarlyDSP's crossover saturator also removes a
+//              little level). The DRIVE end-R
 //              lowers V1E's gain at every knob position, so makeup and the taper are COUPLED and had
 //              to be fit together (analysis/v1e_drive_endr_fit.py): the end-R is fit on the offset
 //              SPREAD across the three V1E captures (what makeup cannot fix, since makeup shifts all
@@ -53,14 +55,14 @@ constexpr double kInputRef = 1.3;
 //              The naive +10.1 dB compensation alone was insufficient — the actual deficit is larger
 //              (structural V1L coupling/cascade losses beyond the wet make-up buffer alone).
 // V2:  0.123 — still the placeholder, awaiting V2-specific capture calibration.
-constexpr double kOutputMakeup[3] = { 0.437, 0.513, 0.123 };
+constexpr double kOutputMakeup[3] = { 0.444, 0.513, 0.123 };
 
 // Dry-path restore gain per revision. The processor applies outputGain = kOutputMakeup[rev]/kInputRef
 // globally at the output. The wet path has ~30-40 dB of circuit gain to absorb this scaling, but the
 // dry path is unity (input buffer → BLEND). Without compensation, dry/BLEND<1.0 outputs are too quiet
 // by 1/kOutputMakeup. kDryGain[rev] restores the dry tap: dryTap *= kDryGain before feeding BLEND.
 //   kDryGain[rev] = kInputRef / kOutputMakeup[rev]
-// V1E: 1.3 / 0.437 = 2.975   (tracks the 2026-07-16 makeup re-fit — see kOutputMakeup above)
+// V1E: 1.3 / 0.444 = 2.928   (tracks the 2026-07-16 makeup re-fit — see kOutputMakeup above)
 // V1L: 1.3 / 0.513 = 2.534
 // V2:  1.3 / 0.123 = 10.569
 constexpr double kDryGain[3] = { 2.975, 2.534, 10.569 };

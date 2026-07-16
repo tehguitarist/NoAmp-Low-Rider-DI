@@ -88,6 +88,8 @@ AliasResult measureAliasing(std::vector<double>& samples, double fs, double f0)
 }
 
 // Drive the region with a steady sine and capture N frame-aligned steady-state samples.
+constexpr double kAliasAmp = 0.334; // see note at the aliasing gates below
+
 std::vector<double> captureRegion(double fs, double f0, double amp, int factor, bool adaa, int N)
 {
     nalr::V1EarlyDriveClipRecovery region;
@@ -184,11 +186,18 @@ int main()
     check(std::abs(hiP - hiExpect) < 0.15 && std::abs(hiN + hiExpect) < 0.15, "high drive clamps at the +/-4.2 V rail");
 
     // --- (2) Aliasing at 4x OS < -70 dBFS ---
+    // Stimulus amplitude: 0.334 V, NOT the original 0.1 V. These gates test the RAIL CLIP's aliasing /
+    // ADAA behaviour, which requires the signal to actually REACH the rail. The 2026-07-16 P6 taper fit
+    // (V1EarlyDriveStage::kDriveEndR = 8k) dropped max DRIVE from +40.1 dB to +29.6 dB, so the old 0.1 V
+    // only reaches 3.0 V — below the +/-4.2 V rail, i.e. no clipping, no aliasing, and nothing for ADAA
+    // to reduce (the gate went silently vacuous: -94.7 dB at every OS factor = the measurement floor).
+    // 0.334 V restores the ORIGINAL 2.4x overdrive (0.334 * 30.2 = 10.1 V) at the shipping gain, so the
+    // gates test what actually ships. Keep this in step with kDriveEndR.
     std::printf("Aliasing vs OS factor (full-drive %.0f Hz, ADAA on):\n", f0);
     double alias1x = 0.0, alias4x = 0.0;
     for (int factor : {1, 2, 4, 8})
     {
-        auto cap = captureRegion(fs, f0, 0.1, factor, true, N);
+        auto cap = captureRegion(fs, f0, kAliasAmp, factor, true, N);
         auto r = measureAliasing(cap, fs, f0);
         std::printf("      %dx: worst alias %.1f dB re fund @ %.0f Hz\n", factor, r.worstAliasDbReFund, r.worstAliasHz);
         if (factor == 1)
@@ -200,8 +209,8 @@ int main()
 
     // --- (3) ADAA on/off A/B at 1x ---
     std::printf("ADAA A/B at 1x (no oversampling):\n");
-    auto capOn = captureRegion(fs, f0, 0.1, 1, true, N);
-    auto capOff = captureRegion(fs, f0, 0.1, 1, false, N);
+    auto capOn = captureRegion(fs, f0, kAliasAmp, 1, true, N);
+    auto capOff = captureRegion(fs, f0, kAliasAmp, 1, false, N);
     const double aOn = measureAliasing(capOn, fs, f0).worstAliasDbReFund;
     const double aOff = measureAliasing(capOff, fs, f0).worstAliasDbReFund;
     std::printf("      1x ADAA off: %.1f dB | 1x ADAA on: %.1f dB | reduction %.1f dB\n", aOff, aOn, aOff - aOn);

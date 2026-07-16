@@ -108,6 +108,8 @@ int main()
         dsp.prepare(kFs, kBlock);
         dsp.setParams(1.0, 1.0, 1.0, 1.0, 1.0, 1.0); // worst case: max gain everywhere
         bool ok = true;
+        double worstAll = 0.0;
+        int worstOs = 0;
         std::vector<double> zeros((size_t) kBlock, 0.0);
         for (int os : osFactors)
         {
@@ -123,7 +125,13 @@ int main()
                         worst = std::max(worst, std::abs(v));
             }
             ok &= std::isfinite(worst) && worst < 1.0e-6;
+            if (worst > worstAll)
+            {
+                worstAll = worst;
+                worstOs = os;
+            }
         }
+        std::printf("      worst residual after settle: %.3g V (at %dx OS)\n", worstAll, worstOs);
         check(ok, "zero input decays to zero output (<1 uV) at every OS factor");
     }
 

@@ -42,14 +42,33 @@ public:
         input.prepare(baseFs);
         presence.prepare(baseFs);
         driveRegion.prepare(baseFs, maxBlock);
-        // V1E recovery saturation (Phase 10 calibration, 2026-07-16):
-        // gain=0.080 knee=0.100 offset=0.020 — top candidate from sat_refine.py --rev V1E
-        // (RMS 17.1 dB). V1E uses rail-only clipping (no zener), so the pedal's low-drive harmonics
-        // come from op-amp crossover distortion that the tanh+offset model captures imperfectly.
-        // RMS 17.1 is poor vs V2's 7.8, but vastly better than the default 0% THD (the pedal has
-        // 4-22% THD at these settings). The saturator produces some harmonic content that the
-        // ideal-rail model completely misses.
-        driveRegion.setRecoverySaturation(0.080, 0.100);
+        // V1E recovery saturation — THD-onset fit (2026-07-16, analysis/v1e_thd_onset_fit.py,
+        // fit across all three V1E captures; supersedes the 0.080/0.100 sat_refine candidate).
+        //
+        // WHAT THIS MODELS: the TLC2264's CROSSOVER distortion — a kink near the zero crossing that is
+        // present at EVERY signal level. That is the only mechanism available: V1E's sole other
+        // nonlinearity is the rail clip, and at the LOCKED +/-4.2 V rail (circuit.md power section)
+        // the rail has ZERO leverage at low drive — after the kDriveEndR taper fit, D0.50/D0.60 only
+        // reach ~2.1 V and never approach the rail (measured: 0.8%/0.7% THD at EVERY rail knee from
+        // 0 to 2.0 V). Only an illegal rail drop to ~2.4 V made a knee bite, so the rail is NOT the
+        // low-drive THD lever. (An earlier note claiming the knee moves D0.50 THD 0.6% -> 36.8% was
+        // measured WITH that illegal rail drop — the knee alone at 4.2 V does nothing.)
+        //
+        // WHY 0.080 LOOKED "STRUCTURALLY UNABLE": gain is a tanh/linear BLEND, so 0.080 was an 8%
+        // tanh against 92% linear — a near no-op at any knee. The model was fine; the parameter was
+        // degenerate. Knee must also be sized to the ACTUAL signal at this node (~0.1-1 V), not the
+        // rails — see RecoverySaturator.h.
+        //
+        // FIT: THD@100 rms err 4.11% -> 1.02% (D0.50 5.9 vs pedal 4.5, D0.60 6.1 vs 6.7,
+        // D1.00 7.6 vs 8.5); FR shape 2.80 -> 2.69 dB (no regression); offset spread unchanged at
+        // 0.96 dB, so it does not disturb the kDriveEndR/kOutputMakeup fit.
+        driveRegion.setRecoverySaturation(0.40, 0.25);
+        // Offset drives the even harmonics (a symmetric tanh makes only odd ones). Kept at the prior
+        // session's fitted 0.020: it is now DC-SAFE at any value (RecoverySaturator subtracts the
+        // zero-input DC), and the THD fit above is INSENSITIVE to it (rms err 1.02/1.02/1.01% at
+        // offset 0.020/0.010/0.004). OPEN: H2 was not re-measured this session and the knee moved
+        // 0.100 -> 0.250, so the offset/knee asymmetry ratio changed — re-fit offset against captured
+        // H2 before treating 0.020 as anything more than carried-over.
         driveRegion.setSaturationOffset(0.020);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
