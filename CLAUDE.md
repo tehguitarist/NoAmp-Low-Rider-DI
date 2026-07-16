@@ -122,30 +122,36 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR gap reduction session done (2026-07-16).**
-> Next session: tackle V2 HF error (4-16 kHz) via recovery LPF component scan.
-> See `docs/phase10-gap-audit.md` for the full task list.
+> **CURRENT: Phase 10 — FR gap reduction session (2026-07-16).**
+> P6 V1E max-drive tested (asymmetric rails: no effect, not rail-headroom-limited). Open items
+> documented in phase10-gap-audit.md. Next session: any remaining high-priority gap.
 >
-> ## Session achievements (2026-07-16)
+> ## Session achievements (2026-07-16) — second sub-session
 >
-> ### Committed this session (`f2a6e87`)
-> 1. **Production saturation defaults** for V2 (gain=0.04 knee=0.08 offset=0.10)
-> 2. **V2 FR hump fix** (C41=15n) — 200-630 Hz now within ±1.5 dB
+> ### Committed
+> 1. **V2 HF fix** (C15=8.2n + C17=1.8n): 8k/10k within ±1.5 dB (was -3.4 dB). 12.5k/16k improved
+>    (-9.4→-5.9, -22.7→-19.1) but remain below spec — cumulative bilinear warp floor.
+> 2. **V1L level staging** (kOutputMakeup[1]=0.123→0.513): NULL gain now 0.0 dB on primary capture.
+>    RMS dropped 17.9→8.6 dB (remaining errors are genuine shape/THD, not level).
+> 3. **V1E sub-100 Hz droop** (C12 47n→220n): D0.60 60 Hz went -3.7→+0.2 dB, 100 Hz -4.6→-2.0.
+>    D0.50 now at RMS 1.53 dB overall.
+> 4. **V2 H2 saturation** (knee 0.08→0.150, offset 0.10→0.080): H2 Δ at sweep_drv_-18 = -2 dB
+>    (was -7 dB), H3 Δ = +2 dB. Both within ±3 dB. (Gain stays 0.04.)
+> 5. **V2 hump** (C41=15n, prior session) still passes at RMS 1.09 dB after all other changes.
 >
-> ### Methodology created (13 new analysis scripts)
-> `sat_refine.py`, `sat_baseline.py`, `sat_v1_crosscheck.py`, `sat_decision.py`,
-> `v2_hump_investigate.py`, `v2_hump_correlate.py`, `v2_hump_diagnose.py`,
-> `v2_stage_isolation.py`, `v2_wetpath_isolation.py`, `v2_hump_measure.py`,
-> `v2_notch_c26_scan.py`, `v2_treble_investigate.py`, `v2_hf_bass_interaction.py`
+> ### Tested and rejected (all documented here, not re-litigated)
+> - **C16 470p→330p** (S-K#1 HF shunt): overshot +4.7 dB at 8k, reverted.
+> - **C14 47n→39n** (S-K#1 mid shunt): regressed LF hump max to 2.04 dB, reverted.
+> - **C32/C29 22p→15p** (tone-stack feedback caps): zero effect on HF — confirms error is pre-tone-stack.
+> - **C27 100n→82n** (BASS across-pot cap): zero effect on BASS=0.35/0.50 hump — confirms hump is
+>   pre-tone-stack (correlates with MID shift throw, not BASS Q).
+> - **Asymmetric rails** -5.8/+2.6 V in V1E: zero effect on D1.00 FR collapse (+8-12 dB unchanged).
+>   Max-drive corner case confirmed not fixable by rail adjustment.
 >
-> ### Key diagnostic insight (V2 FR gaps)
-> Both the 200-630 Hz hump and the 4-16 kHz HF error are **knob-independent** —
-> not from tone-stack tapers, PRESENCE, or DRIVE. Both trace to the V2 recovery
-> stage topology (V2-specific R47/C42 LP + S-K#1/#2 with C41/R46 inter-stage).
-> C41 fixed the LF shoulder; C15 (S-K#1 feedback 10n) is the next candidate for HF.
->
-> ### Results gap audit (see docs/phase10-gap-audit.md)
-> 7 gaps identified and prioritised from ab_report FR/THD data.
+> ### Remaining open items (all documented in phase10-gap-audit.md)
+> - P1 residual: 12.5k/16k (-5.9/-19.1 dB) is cumulative bilinear warp of V2 recovery LPF cascade.
+> - P2 residual: BASS=0.35/0.50 250-430 Hz hump correlates with MID shift (430 Hz throw), not BASS Q.
+> - P6: V1E max-drive FR collapse — tested, not rail-headroom-limited.
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
 > **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ

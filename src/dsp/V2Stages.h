@@ -92,7 +92,7 @@ private:
         skA.addCapacitor(2, NC::kDatum, 470.0e-12); // C16
         skA.addResistor(1, 4, 10.0e3);              // R17
         skA.addCapacitor(4, NC::kDatum, 47.0e-9);   // C14 (R17+C14 series shunt at n1)
-        skA.addCapacitor(1, 3, 10.0e-9);            // C15 (positive feedback n1 -> OUTa)
+        skA.addCapacitor(1, 3, 8.2e-9);             // C15 (positive feedback n1 -> OUTa)
         skA.addUnityBuffer(2, 3);                   // U2B: V(OUTa) = V(n2)
         skA.setOutputNode(3);
 
@@ -105,7 +105,7 @@ private:
         skB.addResistor(0, NC::kDatum, 100.0e3);  // R46
         skB.addResistor(0, 1, 33.0e3);            // R19
         skB.addResistor(1, 2, 33.0e3);            // R20
-        skB.addCapacitor(1, 3, 2.2e-9);           // C17 (positive feedback n3 -> OUTb)
+        skB.addCapacitor(1, 3, 1.8e-9);           // C17 (positive feedback n3 -> OUTb)
         skB.addCapacitor(2, NC::kDatum, 1.0e-9);  // C18
         skB.addUnityBuffer(2, 3);                 // U2A: V(OUTb) = V(n4)
         skB.setOutputNode(3);
@@ -281,7 +281,7 @@ private:
         // Direct (flat) arm + inverting feedback -> centre gain -R35/R30 = -1.
         net.addResistor(2, 0, 1.0e6);     // R30 T_IN -> nV
         net.addResistor(0, 1, 1.0e6);     // R35 feedback nV -> OUT
-        net.addCapacitor(0, 1, 22.0e-12); // C32 feedback rolloff (~7.2 kHz pole, as V1L C29)
+        net.addCapacitor(0, 1, 22.0e-12); // C32 feedback rolloff
         // TREBLE rail (identical values to V1L L7).
         net.addResistor(2, 3, 3.3e3);           // R31 T_IN -> t1
         rTrebA = net.addResistor(3, 4, 50.0e3); // VR57 t1 -> wiper

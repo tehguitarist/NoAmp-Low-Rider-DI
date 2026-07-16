@@ -43,11 +43,10 @@ constexpr double kInputRef = 1.3;
 //
 // V1E: 0.393 — fitted from V1E's own full-wet clean captures (-8.1 dB from the old 1.0 interim).
 //              Keep this revision's own calibration.
-// V1L: 0.123 — pulled down ~10 dB from 0.393 to compensate for V1L's +10.1 dB wet make-up buffer
-//              (netlists.md V5b) that V1E structurally lacks.
-// V2:  0.123 — pulled down ~10 dB from 0.393 to compensate for V2's +10.1 dB LEVEL non-inverting
-//              stage (netlists.md V6) that V1E structurally lacks.
-//              All three revisions now target the SAME output level: the V1E anchor, with V1L/V2
-//              compensated for their structural post-blend gain stage.
-constexpr double kOutputMakeup[3] = { 0.393, 0.123, 0.123 };
+// V1L: 0.513 — fitted from `ab_report.py --filter V1L` NULL clean gain +12.4 dB (V1030 capture,
+//              D0.65, the most representative mid-drive capture): 0.123 * 10^(12.4/20) = 0.513.
+//              The naive +10.1 dB compensation alone was insufficient — the actual deficit is larger
+//              (structural V1L coupling/cascade losses beyond the wet make-up buffer alone).
+// V2:  0.123 — still the placeholder, awaiting V2-specific capture calibration.
+constexpr double kOutputMakeup[3] = { 0.393, 0.513, 0.123 };
 } // namespace nalr
