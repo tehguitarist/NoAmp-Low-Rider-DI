@@ -122,8 +122,10 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-16).** Branch `phase10-v1e-drive-taper`.
-> **P6 SOLVED (level half) + two "structural" verdicts DISPROVEN.** Next: V1E THD onset fit.
+> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-16).** All work is on **`main`** (the old
+> phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
+> **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed.**
+> **NEXT: gap A — THD-vs-frequency slope** (see `docs/phase10-gap-audit.md`, refreshed & authoritative).
 >
 > ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
@@ -143,15 +145,38 @@ without images.
 >   WDF-vs-analytic — the E3/E4 transcription cross-check is PRESERVED) and the fitted default (29.60 dB).
 >   **A capture-fit must never silently erase a schematic-verification gate.**
 >
+> ### V1E THD-onset fit — DONE (commit cb0fe9b)
+> `setRecoverySaturation(0.080, 0.100)` → **(0.40, 0.25)**, `kOutputMakeup[0]` → **0.444**.
+> THD@100 rms err **4.11% → 1.02%** (D0.50 5.9 vs 4.5, D0.60 6.1 vs 6.7, D1.00 7.6 vs 8.5); FR shape
+> 2.80 → 2.69 dB (no regression); offset spread unchanged 0.96 dB (doesn't disturb the taper fit).
+> Models the TLC2264's **crossover distortion** (a kink at the zero crossing, present at every level).
+> **⚠ A mid-session claim was WRONG and is corrected here:** "the rail knee moves D0.50 THD 0.6% →
+> 36.8%" was measured **with an illegal rail drop to 2.4 V**. At the LOCKED ±4.2 V rail the knee has
+> **zero** leverage (0.8%/0.7% at every knee 0..2.0) — after the taper fit D0.50/D0.60 only reach
+> ~2.1 V and never approach the rail. The rail is NOT the low-drive THD lever; only a zero-crossing
+> nonlinearity is. The prior "tanh is structurally unable" verdict was still wrong, but because
+> **gain is a tanh/linear BLEND** — 0.080 = 8% tanh vs 92% linear, a degenerate parameter, not a model
+> limit.
+>
 > ### Two false "structural" verdicts — distrust this pattern
-> Both were written off after ONE candidate failed. Neither is structural:
-> 1. **P6** — audit's only candidate was asymmetric rails, which HAD to fail: the collapse is in the
->    deconvolved **FUNDAMENTAL**, which even-harmonic/DC asymmetry cannot move.
-> 2. **V1E THD residual** — the rail knee moves D0.50 THD **0.6% → 36.8%** (target 22.3%); it sails past.
->    The tanh "can't model it" verdict came from a DEGENERATE corner: sat gain=0.080 is an 8% tanh blend
->    against 92% linear ≈ a no-op. **Saturation is ruled OUT as P6's cause** by proof: a memoryless
->    saturator cannot compress a sine ~8 dB while producing only ~8.5% THD (every setting that compressed
->    enough blew THD to 62.5% vs the pedal's 8.5%).
+> Both were written off after ONE candidate failed. Neither was structural:
+> 1. **P6** — the audit's only candidate was asymmetric rails, which HAD to fail: the collapse is in the
+>    deconvolved **FUNDAMENTAL**, which even-harmonic/DC asymmetry cannot move. **Saturation is ruled
+>    OUT as P6's cause by proof:** a memoryless saturator cannot compress a sine ~8 dB while producing
+>    only ~8.5% THD (every setting that compressed enough blew THD to 62.5% vs the pedal's 8.5%).
+> 2. **V1E THD residual** — degenerate parameter, not a model limit (above).
+>
+> ### Pre-existing DC bug fixed (RecoverySaturator) — and how it hid
+> A non-zero `offset` injected a **static DC at silent input** (V1E 1.6 mV, V2 2.9 mV). Nothing removes
+> it on a useful timescale: the slowest output DC-block is **C9 47u into R1 100k (netlists.md E8) =
+> ~0.034 Hz, τ≈4.7 s**, so ~95% survives a 200 ms window. This broke `V1EarlyIntegrationTest`'s silence
+> gate from commit **6fe2f1b** onward. Fix: subtract `dcTrim = knee*tanh(offset/knee)` so `f(0)==0`;
+> subtracting a CONSTANT cannot change any harmonic (removes only H0, keeps the asymmetric curvature
+> that makes H2) → **AC-neutral, V2 unaffected**.
+> **HOW IT HID — the trap that matters most:** CLAUDE.md claimed "all 23/23 green" for 6fe2f1b, and it
+> was FALSE. A partial `cmake --build --target X` leaves OTHER test binaries STALE, and ctest happily
+> runs the stale ones. This produced a false green in TWO separate sessions and hid a real bug for a
+> week. **ALWAYS `cmake --build build -j8` (all targets) before believing ctest.**
 >
 > ### Measurement traps that cost real time (do NOT re-learn)
 > - **V1E THD anchors are 100/200 Hz ONLY.** 400 Hz sits on the ~430 Hz bridged-T and 800 Hz on the
