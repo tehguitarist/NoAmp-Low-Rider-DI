@@ -197,6 +197,7 @@ without images.
 > - P1 residual: V2 12.5k/16k (−5.9/−19.1 dB) = cumulative bilinear warp of the recovery LPF cascade.
 > - P2 residual: BASS=0.35/0.50 250–430 Hz hump correlates with MID shift throw, not BASS Q (C27 tested).
 > - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by a scalar.
+- **ISS-008 — V2 dry-path HF excess at BL<1.00 (+54 dB @12.9k BL=0.50):** Phase 1 confirmed kOutputMakeup[2]=0.123 is correct (analysis/v2_makeup_fit.py, +0.41 dB offset). Phase 2 SPICE §1 cross-check (analysis/spice_target_check.py) + V1L comparison confirmed the mechanism: the plugin's dry path is flat (full bandwidth), while the pedal's real dry path has ~55 dB of HF attenuation at 12.9 kHz that the netlist's "IN_B → direct (no cap) → BLEND VR50.a" does not capture. Phase cancellation (candidate b) is ruled out — at BL=0.50 the wet (−75 dBr at blend wiper) is 67 dB below the dry (−8 dBr); no phase relationship can cancel that. **NEXT: examine `schematics/crops/v2_TL_2x.png` for any component (cap, resistor, filter) between U1B output and BLEND VR50.a that was missed in the netlist trace.**
 >
 > ### Prior Phase-10 committed fixes (2026-07-16, still holding)
 > V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);

@@ -1,0 +1,15 @@
+{
+  "content": "Ran analysis/spice_target_check.py --rev V2 (2026-07-16, Opus). Renders the V2 plugin at DRIVE=0/PRESENCE=0/BLEND=1 (SPICE §1 conditions) and compares to docs/reference-fr-targets.md §1 — no capture involved.\n\nNORMALIZATION-ROBUST FINDINGS (ratios + frequencies, reference-free — the only trustworthy comparisons):\n  - high-bump→notch depth: plugin +28.1 dB vs SPICE ~+26 dB (high bump −10, notch −36). Within ~2 dB. The V2 wet-path twin-T notch DEPTH is correct.\n  - high bump frequency: plugin 2561 Hz vs SPICE ~2500–3000 Hz. In range. Correct.\n  - HF −40 dB rolloff reaches deep attenuation near the right region (R47+C42 recovery LP working).\n  => V2's wet-path character curve is fundamentally right. No V2 wet-path voicing bug.\n\nARTIFACT RULED OUT (do not chase): the automated notch-MINIMUM frequency reads ~674 Hz vs SPICE ~750–800 Hz. This is NOT a mistuned notch — the SAME twin-T component values read ~803 Hz on V1L (spice_target_check --rev V1L). V2's steeper HF pre-rolloff (R47+C42) and absent bridged-T reshape the notch's skirts asymmetrically, pulling the apparent minimum down in frequency. Judge the notch by depth, not minimum-frequency.\n\nCORRECTED A STALE ANNOTATION in the tool: the script's V2 mode (external edit) had hardcoded \"V2IntegrationTest shows ~−27 dB (known gap)\" on the 750 Hz notch anchor. My measured high-bump→notch depth (28.1 dB, matching SPICE ~26) contradicts a \"too shallow\" reading, so I removed that annotation as unverified. If a real V2 notch-depth gap is later confirmed by another method, re-add with evidence.\n\nMETHOD CAVEAT baked into the tool output: the V2 mode also prints an ABSOLUTE-dB anchor table (25/70/750/... Hz vs SPICE dB). Those per-anchor gaps (e.g. 70 Hz −16.5 vs SPICE −3) are DOMINATED by the unstated SPICE self-normalization reference, NOT model error — the same trap the V1L mode was rewritten to avoid. The table is now labeled DIAGNOSTIC ONLY in the output; never read it as pass/fail. Only the \"NORMALIZATION-ROBUST\" block is a verdict.\n\nISS-008 CORROBORATION (from the plugin side, independent of captures): the V2 wet path at BL=1.00 is legitimately −58/−72/−99 dB at 10/12.9/16.3 kHz. Because the wet path is SUPPOSED to be that dark up top, any dry-tap leakage (near-flat HF) completely dominates the top octave at BL<1.00 — confirming ISS-008's mechanism is a dry-path HF problem, not a wet-path one. This CONVERGES with the parallel diagnostic work already written into ISS-008.json (phase2_A1/B1: candidate (a), unmodelled dry-path HF rolloff, kOutputMakeup ruled out).",
+  "createdDate": "2026-07-16",
+  "id": "N-003",
+  "status": "active",
+  "tags": [
+    "methodology",
+    "capture-validation",
+    "phase10",
+    "v2",
+    "spice"
+  ],
+  "title": "SPICE cross-check results: V2 wet-path §1 voicing is fundamentally CORRECT (independent confirmation)",
+  "updatedDate": "2026-07-16"
+}
