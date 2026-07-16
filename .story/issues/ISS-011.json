@@ -1,0 +1,22 @@
+{
+  "components": [
+    "analysis",
+    "captures"
+  ],
+  "createdBy": "autonomous-session:ISS-008",
+  "dedupeKey": "iss008-followup:corrupt-v2-bl050-capture",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-011",
+  "impact": "`analysis/captures/V2 V1200 BL1200 T1200 B1200 D1200 P1200 M1200 MS500 BS40 test_signal_48k_2.wav` is not trustworthy and MUST NOT be used to fit any constant. It is the only `_2` take in the 12-capture matrix (every other file is `_3`) — i.e. a leftover from an earlier render batch.\n\nTWO INDEPENDENT PROOFS IT IS CORRUPT (both reproducible, no plugin involved):\n\n1. IMPOSSIBLE HF ENERGY (analysis/iss008_rate_check.py). Raw 8-16 kHz energy re 100-1k:\n     V2 BL=1.00 (0% dry):  -46.8 / -46.6 / -42.8 dB\n     V2 BL=0.95 (5% dry):  -35.8   <- more HF than full-wet, correct\n     V2 BL=0.90 (10% dry): -37.3   <- more HF than full-wet, correct\n     V2 BL=0.50 (50% dry): -49.7   <- LESS HF than full-wet. IMPOSSIBLE.\n   The dry tap is a bare wire (verified directly from schematics/crops/v2_TL_2x.png: U1B pin 7 runs\n   down and straight into BLEND VR50.a — no cap, no resistor, no filter). Mixing in 50% of a\n   full-bandwidth dry signal can only ADD HF energy. This file has less than its own full-wet\n   siblings. The monotonic BLEND->HF trend is broken at exactly this one file and nowhere else.\n\n2. WRONG ABSOLUTE LEVEL. With the dry/wet ratio now physically correct (kDryGain removed, ISS-008),\n   every good V2 capture gain-matches to ~0 dB (BL1.00: +1.5/-0.2/+0.5; BL0.95: -0.6; BL0.90: +0.7)\n   while this file needs +16.8 dB. NAM normalizes level per render batch, so a `_2` take carries a\n   different normalization than the `_3` set.\n\nWHY THIS MATTERS / THE DAMAGE IT ALREADY DID: kDryGain was fit to zero exactly this file's +16.8 dB\nlevel error (commit cef46ff, \"V2 BL=0.50 NULL +16.8 -> -0.1 dB\"). That fit corrupted the dry/wet\nratio by +20.5 dB on V2 and broke the GOOD BL=0.90/0.95 captures (ISS-008). One bad capture fitted a\nconstant that damaged five good ones.\n\nALSO: this file is the sole evidence for ISS-008's headline \"+54 dB @12.9k / pedal -63.3 dB\" and for\nthe memory note \"at partial blend the pedal's dry+wet phase-CANCEL in the top octave (BL0.50 rolls\n~20 dB harder @14 kHz)\". Both claims trace to this one corrupt file and should be treated as void.\nThe control that settles it: V1L BL=0.30 (70% dry, same bare-wire dry tap) reads only -9.1 dB @12.9k\n— the pedal's dry path demonstrably passes HF essentially flat, exactly as the schematic predicts.\n\nACTION: quarantine it (the A/B harness should skip or hard-flag `_2` takes), and ask the user to\nre-render this setting into the `_3` batch. Until then, treat V2 BLEND=0.50 as having NO capture.\n\nReproduce: python3.11 analysis/iss008_rate_check.py ; python3.11 analysis/iss008_dry_probe.py",
+  "location": [
+    "analysis/captures/V2 V1200 BL1200 T1200 B1200 D1200 P1200 M1200 MS500 BS40 test_signal_48k_2.wav",
+    "analysis/ab_report.py"
+  ],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "high",
+  "status": "open",
+  "title": "V2 BLEND=0.50 capture (the matrix's only `_2` take) is CORRUPT — exclude it from fits"
+}

@@ -196,7 +196,13 @@ int main()
         std::printf("      dry-path 1 kHz gain = %.2f dB (near-unity: input buffer + BLEND/LEVEL loading + "
                     "MID/tone/output stages)\n",
                     gainDb);
-        check(std::isfinite(gainDb) && gainDb > 5.0 && gainDb < 40.0, "dry path is near-unity and stable");
+        // RESTORED to the original Phase-6.3 band (2026-07-16, ISS-008). cef46ff had widened this to
+        // >+5 .. <+40 dB — a 35 dB window that is not "near-unity" by any reading — because kDryGain
+        // pushed this path to +24.66 dB. That is the gate erasing the bug it existed to catch: the
+        // circuit says the V2 dry path is unity-ish (input buffer -> BLEND/LEVEL dividers -> U3B
+        // +10.1 dB -> MID -1 -> tone -1), i.e. ~+4 dB, and it now reads +4.18 dB. Keep this band
+        // TIGHT: a dry path outside +/-12 dB means a per-path gain fudge has crept back in.
+        check(std::isfinite(gainDb) && gainDb > -12.0 && gainDb < 12.0, "dry path is near-unity and stable");
     }
 
     // --- 4. §1 full wet-path column: PRESENCE 0 / DRIVE 0 / BLEND 100% -----------------------------
@@ -220,7 +226,19 @@ int main()
         check(lowBump > -10.0 && lowBump < 8.0, "§1 low bump in range");
         check(notch < -20.0, "§1 deep notch present (< -20 dB)");
         check(highBump > -15.0 && highBump < 5.0, "§1 high bump in range");
-        check(hf8k < notch, "§1 top end rolls off well below the notch by 8 kHz");
+        // ABSOLUTE, not relative-to-notch (changed 2026-07-16, ISS-008). This was `hf8k < notch`,
+        // which couples an HF-rolloff assertion to the DEPTH OF THE NOTCH — a different §1 feature
+        // that legitimately moves. Removing kDryGain deepened the notch -21.9 -> -26.7 dB (toward its
+        // ~-36 dB target, because the boosted dry leg was leaking through the BLEND pot's off-side and
+        // filling the notch in), while hf8k barely moved (-26.8 -> -26.6). The relative gate then
+        // "failed" on an IMPROVEMENT — it had only been passing because the notch was ALSO wrong.
+        //
+        // HONEST GAP, NOT HIDDEN: §1 puts V2's -40 dB point at ~8 kHz, so hf8k should read ~-40 dB and
+        // reads -26.6 — a ~13 dB deficit that is PRE-EXISTING (baseline -26.8) and belongs to the open
+        // V2 HF-rolloff work (ISS-003 and the §1 gap notes), NOT to ISS-008. This gate therefore holds
+        // the line where the model actually is, so a real regression still trips it; tighten it toward
+        // -40 dB as that HF work lands.
+        check(hf8k < -24.0, "§1 top end rolls off by 8 kHz (absolute; ~13 dB shy of §1's -40 dB — ISS-003)");
     }
 
     // --- 5. §4 V2 DRIVE small-signal gain, isolated at the module (min/max knob) --------------------

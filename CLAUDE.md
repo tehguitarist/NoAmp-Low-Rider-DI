@@ -124,8 +124,15 @@ without images.
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
 > **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-16).** All work is on **`main`** (the old
 > phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
-> **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed.**
-> **NEXT: gap A — THD-vs-frequency slope** (see `docs/phase10-gap-audit.md`, refreshed & authoritative).
+> **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed. ISS-008 SOLVED (kDryGain
+> deleted — see its entry below; it also fixed ISS-006 and unmasked ISS-003).**
+> **NEXT: ISS-009 (V1L wet-path LF / C10) — it BLOCKS ISS-006 and is the last big linear structural
+> bug.** Then re-run `ab_report.py --os 8` and re-read **ISS-010**'s linear-headroom table before
+> touching any clip/THD gap (ISS-001/002/004): ISS-010's finding — the residual is LINEAR-dominated,
+> 10–23 dB of null headroom at every capture — is what re-ordered this queue ahead of `docs/
+> phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear structural bug was worth
+> 5–7 dB of null on its own). Also consider **ISS-012** (kOutputMakeup) early: it is shape-neutral and
+> removes a fudge that has already caused one bad fit.
 >
 > ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
@@ -197,7 +204,40 @@ without images.
 > - P1 residual: V2 12.5k/16k (−5.9/−19.1 dB) = cumulative bilinear warp of the recovery LPF cascade.
 > - P2 residual: BASS=0.35/0.50 250–430 Hz hump correlates with MID shift throw, not BASS Q (C27 tested).
 > - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by a scalar.
-- **ISS-008 — V2 dry-path HF excess at BL<1.00 (+54 dB @12.9k BL=0.50):** Phase 1 confirmed kOutputMakeup[2]=0.123 is correct (analysis/v2_makeup_fit.py, +0.41 dB offset). Phase 2 SPICE §1 cross-check (analysis/spice_target_check.py) + V1L comparison confirmed the mechanism: the plugin's dry path is flat (full bandwidth), while the pedal's real dry path has ~55 dB of HF attenuation at 12.9 kHz that the netlist's "IN_B → direct (no cap) → BLEND VR50.a" does not capture. Phase cancellation (candidate b) is ruled out — at BL=0.50 the wet (−75 dBr at blend wiper) is 67 dB below the dry (−8 dBr); no phase relationship can cancel that. **NEXT: examine `schematics/crops/v2_TL_2x.png` for any component (cap, resistor, filter) between U1B output and BLEND VR50.a that was missed in the netlist trace.**
+- **ISS-008 — V2 dry-path HF excess at BL<1.00 — SOLVED + CLOSED (2026-07-16).** Root cause was
+  **`kDryGain`, an unphysical per-path scalar — now DELETED; never reintroduce one** (see the long
+  do-not-do note at the bottom of `Calibration.h`). `kDryGain[rev]=kInputRef/kOutputMakeup[rev]`
+  boosted ONLY the dry leg, multiplying the dry/wet ratio by +9.5/+8.1/**+20.5 dB** (V1E/V1L/V2).
+  **Why the reasoning was wrong:** kOutputMakeup is applied ONCE, GLOBALLY (`outputGainFor`), so it
+  scales dry and wet EQUALLY and cannot skew their balance — the ratio is the CIRCUIT's job (that's
+  what the BLEND pot models). Invisible at BL=1.00, growing as BL falls = the exact symptom.
+  - **Results:** V2 BL0.90 FR rms 10.15→**3.51** dB (12k +27.1→+8.2); BL0.95 8.22→**2.82** (12k
+    +24.4→+7.1); V1L BL0.65 null −9.6→**−12.7**; BL0.30 −1.9→**−4.1**. All five BL=1.00 captures
+    unchanged within 0.1 dB (dry-leg-only signature). **Also fixes ISS-006** (whose "not fixable by a
+    scalar" verdict was exactly wrong — it WAS a scalar) and unmasks ISS-003.
+  - **Bonus corroboration:** the hot dry leaked through the BLEND pot's cap-limited off-side even at
+    BL=1.00, filling the notch. Removing it moved every §1 feature toward SPICE: notch −21.9→**−26.7**
+    (target −36), LF edge **+5.2→−4.4** (target −15; a POSITIVE LF edge was never physical).
+  - **Both prior candidates were REFUTED — don't re-try.** (a) "unmodelled dry HF rolloff": the
+    schematic itself (`v2_TL_2x.png`) shows U1B pin 7 → straight into BLEND VR50.a, **no component**;
+    the netlist was right. (d) "NAM can't capture dry HF": the **V1L BL=0.30 control (70% dry, same
+    bare-wire tap) reads only −9.1 dB @12.9k** — dry HF captures fine.
+  - **⚠ THE PREMISE WAS FALSE.** The headline "+54 dB @12.9k / pedal −63.3 dB" came ENTIRELY from the
+    matrix's only **`_2` take, which is CORRUPT** (ISS-011): it holds LESS raw 8–16k energy (−49.7 dB)
+    than its own FULL-WET siblings (−42.8..−46.8) — impossible with 50% bare-wire dry in the mix.
+    **kDryGain had been fit to that one file** (cef46ff: "BL=0.50 NULL +16.8→−0.1"). One bad capture
+    fitted a constant that damaged five good ones. The memory's "dry+wet phase-CANCEL at BL0.50" note
+    traces to the same file and is void.
+  - **GATE ARCHAEOLOGY — the durable lesson.** cef46ff *also widened the gate that would have caught
+    it*: the dry-path check went from Phase-6.3's correct `±12 dB` "near-unity" band to `+5..+40 dB`
+    (a 35 dB window) because kDryGain forced +24.66 dB. **Restored to ±12 dB; now reads +4.18 dB** =
+    the circuit's own value. When a fit fails a gate, suspect the fit — **`git log -L` on the gate
+    line is the fastest way to catch this class** (it found this in one command).
+  - Follow-ups: **ISS-011** (quarantine/re-render the corrupt BL=0.50 `_2` capture), **ISS-012**
+    (kOutputMakeup was fit to NAM-normalized = meaningless absolute level; with kDryGain gone V2's dry
+    sits ~18 dB quiet for users — anchor makeup on the circuit-derived dry gain, i.e. 1.0; provably
+    shape-neutral since all metrics gain-match). New probes: `analysis/iss008_dry_probe.py`,
+    `analysis/iss008_rate_check.py`. 23/23 green (full `-j8` build).
 >
 > ### Prior Phase-10 committed fixes (2026-07-16, still holding)
 > V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);

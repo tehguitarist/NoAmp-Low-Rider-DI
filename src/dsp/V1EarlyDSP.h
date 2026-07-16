@@ -145,7 +145,7 @@ public:
         // Stage 3 (base rate): BLEND(dry, wet) -> LEVEL -> gain -> BASS/TREBLE -> output buffer.
         for (int i = 0; i < n; ++i)
         {
-            const double b = blendLevel.process(dryTap[(size_t) i] * kDryGain[0], data[i]);
+            const double b = blendLevel.process(dryTap[(size_t) i], data[i]);
             data[i] = output.process(tone.process(b));
         }
     }

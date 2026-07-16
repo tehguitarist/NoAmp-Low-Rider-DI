@@ -57,13 +57,29 @@ constexpr double kInputRef = 1.3;
 // V2:  0.123 — still the placeholder, awaiting V2-specific capture calibration.
 constexpr double kOutputMakeup[3] = { 0.444, 0.513, 0.123 };
 
-// Dry-path restore gain per revision. The processor applies outputGain = kOutputMakeup[rev]/kInputRef
-// globally at the output. The wet path has ~30-40 dB of circuit gain to absorb this scaling, but the
-// dry path is unity (input buffer → BLEND). Without compensation, dry/BLEND<1.0 outputs are too quiet
-// by 1/kOutputMakeup. kDryGain[rev] restores the dry tap: dryTap *= kDryGain before feeding BLEND.
-//   kDryGain[rev] = kInputRef / kOutputMakeup[rev]
-// V1E: 1.3 / 0.444 = 2.928   (tracks the 2026-07-16 makeup re-fit — see kOutputMakeup above)
-// V1L: 1.3 / 0.513 = 2.534
-// V2:  1.3 / 0.123 = 10.569
-constexpr double kDryGain[3] = { 2.975, 2.534, 10.569 };
+// NO kDryGain — DO NOT REINTRODUCE A PER-PATH GAIN HERE (removed 2026-07-16, ISS-008).
+//
+// A `kDryGain[rev] = kInputRef / kOutputMakeup[rev]` scalar used to multiply the dry tap before it
+// fed BLEND, on the reasoning that "the wet path has ~30-40 dB of circuit gain to absorb the output
+// scaling, but the dry path is unity, so dry/BLEND<1.0 outputs are too quiet by 1/kOutputMakeup".
+// That reasoning is wrong. kOutputMakeup is applied ONCE, GLOBALLY, to the whole DSP output
+// (PluginProcessor::outputGainFor), so it scales dry and wet EQUALLY and cannot skew their balance:
+//     dry_out = daw * G_dry * kOutputMakeup      wet_out = daw * G_wet * kOutputMakeup
+// The ratio dry/wet = G_dry/G_wet is already correct — it is set by the CIRCUIT, which is what the
+// BLEND pot models. Scaling only the dry leg therefore multiplied the dry/wet ratio by kDryGain:
+// +9.5 dB on V1E, +8.1 dB on V1L, and +20.5 dB on V2 (kOutputMakeup[2] is the smallest, so V2 was
+// the worst) — a purely unphysical error, and the root cause of ISS-008's dry-path HF excess.
+//
+// Why it looked right: it was fit to make the ONE V2 BLEND=0.50 capture's null gain read ~0 dB
+// (+16.8 -> -0.1). That capture is the matrix's only `_2` take and is CORRUPT — it carries less raw
+// 8-16 kHz energy (-49.7 dB re 100-1k) than the same revision's FULL-WET captures (-42.8..-46.8),
+// which is impossible when 50% of a bare-wire, full-bandwidth dry tap is in the mix, and it sits
+// ~17 dB off the level of every other V2 file (a different NAM normalization batch). See ISS-011.
+// Removing kDryGain improved every partial-blend capture (V2 BL0.90 FR rms 10.15 -> 3.51 dB, null
+// -6.1 -> -12.0; BL0.95 8.22 -> 2.82, null -11.3 -> -16.2; V1L BL0.65 null -9.6 -> -12.7) and was
+// neutral on every full-wet one — the signature of a dry-path-only error.
+//
+// The dry/wet balance is a PHYSICAL property of the circuit. If a dry-path level ever looks wrong,
+// the bug is in kOutputMakeup (a global cosmetic scalar) or in a stage's modelled gain — never in a
+// per-path fudge factor. Verify the dry tap against netlists.md E1/L1/V1 first.
 } // namespace nalr

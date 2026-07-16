@@ -154,7 +154,7 @@ public:
         // Stage 3 (base rate): BLEND(dry,wet) -> LEVEL -> +10.1dB -> MID -> BASS/TREBLE -> output.
         for (int i = 0; i < n; ++i)
         {
-            const double bl = blendLevel.process(dryTap[(size_t) i] * kDryGain[2], data[i]); // V6
+            const double bl = blendLevel.process(dryTap[(size_t) i], data[i]); // V6
             const double midded = mid.process(bl);                             // V6: MID + MID SHIFT
             data[i] = output.process(tone.process(midded));                    // V7 tone -> V8 output
         }
