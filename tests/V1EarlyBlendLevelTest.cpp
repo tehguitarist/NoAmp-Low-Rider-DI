@@ -53,7 +53,7 @@ cd blendMNA(double f, double blend, double level, double dryV, double wetV)
     auto C = [&](int a, int b, double c) { stampY(a, b, cd(0.0, w * c), Vsrc(a), Vsrc(b)); };
 
     C(-2, 0, 2.2e-6);  // C1
-    C(-3, 1, 47.0e-9); // C12
+    C(-3, 1, 220.0e-9); // C12 (Phase-10 P4: increased from 47n to 220n for sub-100 Hz response)
     R(0, 2, clampPot(blend * 100.0e3));
     R(2, 1, clampPot((1.0 - blend) * 100.0e3));
     R(2, 3, clampPot((1.0 - level) * 100.0e3));

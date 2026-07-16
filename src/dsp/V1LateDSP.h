@@ -29,6 +29,7 @@
 #include "V1LateStages.h"
 #include "ZenerDriveClipRecovery.h"
 #include "../utils/ChangeGate.h"
+#include "Calibration.h"
 
 namespace nalr
 {
@@ -124,7 +125,7 @@ public:
         // Stage 3 (base rate): BLEND(dry, wet) -> LEVEL -> BASS/TREBLE -> output buffer.
         for (int i = 0; i < n; ++i)
         {
-            const double b = blendLevel.process(dryTap[(size_t) i], data[i]); // L6
+            const double b = blendLevel.process(dryTap[(size_t) i] * kDryGain[1], data[i]); // L6
             data[i] = output.process(tone.process(b));                        // L7 tone -> L8 output
         }
     }

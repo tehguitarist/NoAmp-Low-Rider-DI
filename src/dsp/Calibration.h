@@ -49,4 +49,14 @@ constexpr double kInputRef = 1.3;
 //              (structural V1L coupling/cascade losses beyond the wet make-up buffer alone).
 // V2:  0.123 — still the placeholder, awaiting V2-specific capture calibration.
 constexpr double kOutputMakeup[3] = { 0.393, 0.513, 0.123 };
+
+// Dry-path restore gain per revision. The processor applies outputGain = kOutputMakeup[rev]/kInputRef
+// globally at the output. The wet path has ~30-40 dB of circuit gain to absorb this scaling, but the
+// dry path is unity (input buffer → BLEND). Without compensation, dry/BLEND<1.0 outputs are too quiet
+// by 1/kOutputMakeup. kDryGain[rev] restores the dry tap: dryTap *= kDryGain before feeding BLEND.
+//   kDryGain[rev] = kInputRef / kOutputMakeup[rev]
+// V1E: 1.3 / 0.393 = 3.308
+// V1L: 1.3 / 0.513 = 2.534
+// V2:  1.3 / 0.123 = 10.569
+constexpr double kDryGain[3] = { 3.308, 2.534, 10.569 };
 } // namespace nalr
