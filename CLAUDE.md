@@ -173,13 +173,18 @@ without images.
 >   V1200 BL=0.50: NULL now -0.1 dB ✅ (blend asymmetry fix).
 >   D0.90 high-drive THD imbalance: plugin 21% vs pedal 11% at 100Hz, 17% vs 37% at 400Hz.
 >
+> **V1E recovery saturator (committed 6fe2f1b):** Added `setRecoverySaturation(0.080, 0.100)` and
+>   `setSaturationOffset(0.020)` in V1EarlyDSP::prepare(). V1E now produces 0.6-0.8% THD at low-mid
+>   drive (was 0% — ideal rail model). Pedal has 4-22% THD at these settings. The tanh+offset model
+>   can't fully capture V1E's rail-only op-amp crossover distortion (no zener), so the residual
+>   gap is structural. Scanned via `sat_refine.py --rev V1E` (224 candidates). FR unaffected.
+>
 > **Cross-revision findings:**
 >   1. **Blend asymmetry** — V2 BL=0.50 fixed completely (kDryGain[2]=10.569). V1L improved but +6 dB
 >      residual at BL=0.65 is NodalCircuit impedance-loading; needs resistor-ratio fix inside BLEND
 >      stage, not a pre-scale.
->   2. **V1E zero THD at low drive**: structural gap (no saturator on rail-only V1E). V1E saturator
->      not yet implemented — `V1EarlyDriveClipRecovery` has a RecoverySaturator but it's disabled
->      by default (gain=0). The P5 saturator tuning was V2/V1L-only (zener revisions).
+>   2. **V1E saturator** — now enabled (gain=0.080, knee=0.100, offset=0.020). THD went 0→0.7% @ 100Hz.
+>      Residual gap to pedal's 4-22% is structural (op-amp crossover vs tanh model).
 >   3. **V2 high-drive THD imbalance**: zener knee tracking vs drive level isn't correct — at D0.90
 >      plugin over-produces 100Hz THD and under-produces 400Hz THD.
 >
@@ -188,7 +193,7 @@ without images.
 > - P2 residual: BASS=0.35/0.50 250-430 Hz hump correlates with MID shift (430 Hz throw), not BASS Q.
 > - P6: V1E max-drive FR collapse — tested, not rail-headroom-limited.
 > - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by scalar.
-> - **V1E saturator** — V1E needs RecoverySaturator enabled (like V2/V1L) to match low-drive THD.
+> - V1E THD residual: tanh model can't fully reproduce rail-only op-amp crossover (structural).
 > - **V2 zener drive tracking** — knee/softness needs drive-dependence or a per-drive parameter.
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
