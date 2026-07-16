@@ -86,7 +86,7 @@ private:
         // (R17/C14 series junction).
         skA.setNumNodes(5);
         skA.addResistor(NC::kInput, 0, 10.0e3);     // R47
-        skA.addCapacitor(0, NC::kDatum, 10.0e-9);   // C42 -- NEW V2-only LP corner (§1 top-end delta)
+        skA.addCapacitor(0, NC::kDatum, 10.0e-9);   // C42
         skA.addResistor(0, 1, 22.0e3);              // R16
         skA.addResistor(1, 2, 33.0e3);              // R18
         skA.addCapacitor(2, NC::kDatum, 470.0e-12); // C16
@@ -101,7 +101,7 @@ private:
         // nodes: nH=0 (post-C41, R46 shunt) n3=1 (C17 positive feedback source) n4=2 (C18 shunt,
         // feeds U2A(+)) OUTb=3.
         skB.setNumNodes(4);
-        skB.addCapacitor(NC::kInput, 0, 22.0e-9); // C41
+        skB.addCapacitor(NC::kInput, 0, 15.0e-9); // C41
         skB.addResistor(0, NC::kDatum, 100.0e3);  // R46
         skB.addResistor(0, 1, 33.0e3);            // R19
         skB.addResistor(1, 2, 33.0e3);            // R20
