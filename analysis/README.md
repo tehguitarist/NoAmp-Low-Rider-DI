@@ -58,6 +58,10 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `sat_sweep.py` / `sat_sweep2.py` | Recovery saturation gain/knee scans (early passes) | `--os` |
 | `sat_calibrate.py` | 3D grid sweep: sat-gain × sat-knee × sat-offset | `--gain`, `--knee`, `--offset`, `--os` |
 | `verify_sat_fix.py` | Verify calibrated sat params against one V2 capture | `--os` |
+| `sat_refine.py` | Fine-grid multi-anchor H2..H6 sweep around best sat params | `--rev`, `--multi-caps`, `--gain`, `--knee`, `--offset`, `--os` |
+| `sat_baseline.py` | DISABLED vs OLD vs NEW sat param comparison on V2 | — |
+| `sat_v1_crosscheck.py` | Cross-check NEW sat params on V1L/V1E captures | — |
+| `sat_decision.py` | Per-revision RMS scores for sat param decision | — |
 | `inref_scan.py` | kInputRef THD-vs-level fit from clip onset | `--values`, `--metric`, `--os` |
 | `gen_test_signal.py` | Comprehensive A/B reference signal (append-only) | — |
 

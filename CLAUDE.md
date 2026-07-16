@@ -122,35 +122,27 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 CALIBRATION CONTINUING — saturation offset discovered (2026-07-16).**
-> Next: wire sat params as production defaults, then wire production defaults for all three revisions,
-> then run final ab_report + ctest + commit.
+> **CURRENT: Phase 10 CALIBRATION CONTINUING — sat defaults wired (2026-07-16).**
+> Next: V1L level staging and V1E max-drive modelling.
 >
-> ## CALIBRATION PROGRESS (all committed as of ae9b94c)
+> ## CALIBRATION PROGRESS (all committed as of current HEAD)
 >
-> ### 1. Per-revision kOutputMakeup ✅
-> Changed from single scalar `0.393` to array `{0.393, 0.123, 0.123}`.
-> V2 level matching verified within ±1.5 dB by ab_report (was ~+18 dB hot).
+> ### 1-3. All pre-Phase-10 items ✅
 >
-> ### 2. V2 zener Cj fit ✅
-> cj_scan.py across {10..100 pF} found best at **10 pF** (4.7 dB RMS HF-shape error).
-> v2Params() now returns independent values instead of copying v1LateParams().
-> Note: 4.7 dB residual even at best Cj suggests remaining HF mismatch is structural
-> (coupling caps, stage-A rail asymmetry) — revisit if it confounds waveshape work.
+> ### 4. Production saturation defaults (2026-07-16) ✅
+> **Multi-capture cross-validation** (`analysis/sat_refine.py`): 100-candidate fine grid sweep
+> scored H2..H6 @ 100/200/400 Hz across -18/-12/-6 dBFS, all 6 V2 captures.
+> Best: **gain=0.04, knee=0.08, offset=0.10** — mean RMS 6.5 dB vs disabled 15.2 dB.
+> **Per-revision decision**: V2 ONLY gets the saturator (0.04/0.08/0.10 wired in V2DSP::prepare).
+> V1L/V1E stay DISABLED (0/0/0):
+>   - V1L symmetric zener (m=0.0) — sat offset pollutes H2 (confirmed cross-check)
+>   - V1E rail-clip only — pedal has no small-signal H2; saturator introduces spurious harmonics
+> `analysis/sat_baseline.py`/`sat_v1_crosscheck.py`/`sat_decision.py` document all scores.
 >
-> ### 3. Saturation offset fix discovered ✅
-> Vzt sweep ✘, RailClip knee ✘, RecoverySaturator gain ✘, asymmetric rails ✘
-> sat-offset ✅ — DC offset before recovery tanh produces H2 at ALL signal
-> levels without inflating H3. Best params: gain=0.06, knee=0.10, offset=0.10.
-> verify_sat_fix.py: at -18 dBFS, H2/H3/H4 within 2 dB of pedal (was -24 to -32 dB).
-> **NOT YET production-defaulted** — currently sat-gain=0 (disabled); needs flashing
-> into v2Params() / v1LateParams() defaults.
->
-> ### Remaining calibration work (next session)
-> - Wire sat-gain/sat-knee/sat-offset as production defaults in ZenerDriveParams
-> - Wire sat params for V1E (its recovery uses the same RecoverySaturator)
-> - Run final ab_report.py across all 12 captures
-> - 23/23 ctest green
+> ### Remaining calibration work
+> - V1L: large FR gaps (−17..−20 dB @ 100 Hz, all 3 captures) — revisit when V1L's kOutputMakeup
+>   is capture-calibrated (current 0.123 is a structural placeholder, not V1L-specific)
+> - V1E max-drive (D1.00): FR mismatch up to +12 dB — suggests stage-A rail or tone-stack gap
 >
 > **Prior milestone: Phase 9 COMPLETE + ALL pre-Phase-10 items DONE (2026-07-13).**
 > **#3 low-OS top-octave shelf DONE (2026-07-13):** `src/dsp/TopOctaveShelf.h` — one 2nd-order RBJ

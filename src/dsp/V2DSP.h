@@ -48,6 +48,10 @@ public:
         presence.prepare(baseFs);
         driveRegion.setDriveParams(ZenerDriveModule::v2Params());
         driveRegion.prepare(baseFs, maxBlock);
+        // Production saturation defaults (Phase 10 calibration, 2026-07-16):
+        // gain=0.04 knee=0.08 offset=0.10 — best fit across all 6 V2 captures.
+        driveRegion.setRecoverySaturation(0.04, 0.08);
+        driveRegion.setSaturationOffset(0.10);
         blendLevel.prepare(baseFs);
         mid.prepare(baseFs);
         tone.prepare(baseFs);
