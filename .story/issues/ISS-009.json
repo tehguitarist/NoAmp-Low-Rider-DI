@@ -19,6 +19,6 @@
   "resolution": null,
   "resolvedDate": null,
   "severity": "high",
-  "status": "open",
+  "status": "inprogress",
   "title": "V1L wet-path LF deficit −12.9 dB: the flagged C10/R14 netlist gate has FIRED (C10 10n reads as a 159 Hz HP)"
 }

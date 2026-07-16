@@ -233,7 +233,12 @@ without images.
     (a 35 dB window) because kDryGain forced +24.66 dB. **Restored to ±12 dB; now reads +4.18 dB** =
     the circuit's own value. When a fit fails a gate, suspect the fit — **`git log -L` on the gate
     line is the fastest way to catch this class** (it found this in one command).
-  - Follow-ups: **ISS-011** (quarantine/re-render the corrupt BL=0.50 `_2` capture), **ISS-012**
+  - **The corrupt capture is now QUARANTINED (ISS-011, done):** moved to
+    `analysis/captures-quarantine/` (not deleted). `find_captures()` globs `analysis/captures/*.wav`,
+    so it is invisible to every script — **the matrix is 11 captures now, and V2 BLEND=0.50 has NO
+    capture; fit nothing to that setting.** The `.wav`s are gitignored, so the evidence lives in the
+    tracked `analysis/captures-quarantine/README.md` — read it before ever restoring a file there.
+  - Follow-ups: **ISS-012**
     (kOutputMakeup was fit to NAM-normalized = meaningless absolute level; with kDryGain gone V2's dry
     sits ~18 dB quiet for users — anchor makeup on the circuit-derived dry gain, i.e. 1.0; provably
     shape-neutral since all metrics gain-match). New probes: `analysis/iss008_dry_probe.py`,
