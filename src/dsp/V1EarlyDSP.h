@@ -42,6 +42,15 @@ public:
         input.prepare(baseFs);
         presence.prepare(baseFs);
         driveRegion.prepare(baseFs, maxBlock);
+        // V1E recovery saturation (Phase 10 calibration, 2026-07-16):
+        // gain=0.080 knee=0.100 offset=0.020 — top candidate from sat_refine.py --rev V1E
+        // (RMS 17.1 dB). V1E uses rail-only clipping (no zener), so the pedal's low-drive harmonics
+        // come from op-amp crossover distortion that the tanh+offset model captures imperfectly.
+        // RMS 17.1 is poor vs V2's 7.8, but vastly better than the default 0% THD (the pedal has
+        // 4-22% THD at these settings). The saturator produces some harmonic content that the
+        // ideal-rail model completely misses.
+        driveRegion.setRecoverySaturation(0.080, 0.100);
+        driveRegion.setSaturationOffset(0.020);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         output.prepare(baseFs);
