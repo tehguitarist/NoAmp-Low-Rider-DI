@@ -157,8 +157,15 @@ public:
     void setDrive(double drive01) noexcept
     {
         lastDrive01 = drive01;
-        Rvr1.setResistanceValue((1.0 - drive01) * 100.0e3 + endR);
+        lastRvr1 = (1.0 - drive01) * 100.0e3 + endR;
+        Rvr1.setResistanceValue(lastRvr1);
         zgSrc.propagateImpedanceChange();
+    }
+
+    // DC closed-loop gain G_cl = 1 + Zf/Zg = 1 + R25/(R23 + Rvr1) (C28 open at DC).
+    inline double getClosedLoopGain() const noexcept
+    {
+        return 1.0 + 330.0e3 / (3.3e3 + lastRvr1);
     }
 
     inline double process(double vin) noexcept { return processNonInvOpAmp(vin, zgSrc, Zg, zfSrc, Zf); }
@@ -166,6 +173,7 @@ public:
 private:
     double endR = kDriveEndR;   // see setDriveEndResistance()
     double lastDrive01 = 0.5;   // re-applied when endR changes
+    double lastRvr1 = 50.0e3;   // tracks (1-drive01)*100k + endR
 
     // Zg = R23(3.3k) + VR1 (series to VCOM), no cap. Zf = R25(330k) || C28(100p).
     wdft::ResistorT<double> R23{3.3e3};

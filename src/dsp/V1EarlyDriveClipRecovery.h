@@ -23,6 +23,7 @@
 #include <array>
 #include <memory>
 
+#include "GbwCorrection.h"
 #include "RailClip.h"
 #include "TopOctaveShelf.h"
 #include "RecoverySaturator.h"
@@ -69,6 +70,7 @@ public:
         drive.reset();
         railClip.reset();
         recovery.reset();
+        gbw.reset();
         shelf.reset();
         for (size_t i = 0; i < kNumOs; ++i)
             if (os[i] != nullptr)
@@ -114,7 +116,30 @@ public:
 
     // Single-sample core at the CURRENT discretisation rate (drive -> clip -> recovery). Intended for
     // 1x/base-rate probes such as the DC-step polarity test; the oversampled path uses it internally.
-    inline double processCoreSample(double x) noexcept { return saturator.process(recovery.process(railClip.process(drive.process(x)))); }
+    // Drive output after GBW correction (before recovery). Exposed for THD-slope measurements:
+    // the GBW-corrected signal naturally exceeds the rails (causing frequency-dependent THD),
+    // but this must be clamped before passing to the recovery WDF to prevent divergence.
+    inline double processCoreDrive(double x) noexcept
+    {
+        const double linear = drive.process(x);
+        const double clipped = railClip.transfer(linear);
+        const double resid = clipped - linear;
+        const double residEff = gbw.process(resid, drive.getClosedLoopGain());
+        return linear + residEff;
+    }
+
+    inline double processCoreSample(double x) noexcept
+    {
+        // GBW-corrected drive output. Clamp to rail + a small headroom margin before ADAA — the
+        // antiderivative of a hard clamp produces incorrect output when the signal overshoots the
+        // rail by many volts (the ADAA averages across the full step, yielding ~1.5 V instead of
+        // the rail-limited 4.2 V). The headroom allows the ADAA to operate correctly at the rail
+        // edge without being confused by extreme overshoot from the GBW correction.
+        const double driveOut = std::max(-5.2, std::min(5.2, processCoreDrive(x)));
+        return saturator.process(recovery.process(railClip.process(driveOut)));
+    }
+
+    static constexpr double kHeadroom = 1.0; // volts above/below rail for ADAA to work correctly
 
     int getActiveFactor() const noexcept { return activeFactor; }
 
@@ -128,16 +153,19 @@ private:
         activeFactor = factor;
         const double osRate = baseSampleRate * (double) factor;
         drive.prepare(osRate); // re-discretise DRIVE's C28 at the oversampled rate
+        gbw.prepare(osRate);
         recovery.prepare(osRate);
         shelf.setOSFactor(factor); // scale the top-octave restore for this factor (base rate)
         drive.reset();
         railClip.reset();
+        gbw.reset();
         recovery.reset();
         if (factor > 1)
             os[osIndex(factor)]->reset();
     }
 
     V1EarlyDriveStage drive;
+    GbwCorrection gbw;
     RailClip railClip;
     V1EarlyRecoveryStage recovery;
     RecoverySaturator saturator; // small-signal op-amp saturation (0 gain = disabled, production default)

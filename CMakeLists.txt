@@ -345,6 +345,17 @@ target_link_libraries(V1EarlyNonlinearTest
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1EarlyNonlinearTest COMMAND V1EarlyNonlinearTest)
 
+# T-001 — V1E THD-vs-frequency baseline + GBW-corrected gate. JUCE console app (needs juce::dsp for
+# the oversampled DRIVE region; runs at 1x OS for baseline, 8x for the GBW-corrected gate).
+juce_add_console_app(V1EarlyTHDSweepTest PRODUCT_NAME "V1EarlyTHDSweepTest")
+target_sources(V1EarlyTHDSweepTest PRIVATE tests/V1EarlyTHDSweepTest.cpp)
+target_compile_definitions(V1EarlyTHDSweepTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V1EarlyTHDSweepTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME V1EarlyTHDSweepTest COMMAND V1EarlyTHDSweepTest)
+
 # 3 — V1 Early full-chain integration: all-knobs × OS-factor stability sweep (finite, bounded, no
 # clicks, no self-oscillation) + dry-path passthrough. JUCE console app (OS region needs juce::dsp).
 juce_add_console_app(V1EarlyIntegrationTest PRODUCT_NAME "V1EarlyIntegrationTest")

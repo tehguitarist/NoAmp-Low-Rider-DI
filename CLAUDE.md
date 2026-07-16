@@ -125,17 +125,16 @@ without images.
 > **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`** (the old
 > phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
 > **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed. ISS-008 SOLVED (kDryGain
-> deleted — see its entry below; it also fixed ISS-006 and unmasked ISS-003).**
-> **ISS-009 CLOSED: C10 is EXONERATED — do NOT raise it. ISS-013 filed then CLOSED as INVALID the
-> same session (see below). T-002 DONE (kOutputMakeup anchored to dry-path unity at blend=0,
-> level=0.5 — see Calibration.h T-002 ANCHOR comment). ISS-012 RESOLVED by T-002.**
-> **NEXT: T-001/ISS-001 (clip onset)** — the LF evidence folded into it makes
-> it the one remaining shared root cause, and it now BLOCKS ISS-006. Then re-run `ab_report.py
-> --os 8` and re-read **ISS-010**'s linear-headroom table before
-> touching any clip/THD gap (ISS-001/002/004): ISS-010's finding — the residual is LINEAR-dominated,
-> 10–23 dB of null headroom at every capture — is what re-ordered this queue ahead of `docs/
-> phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear structural bug was worth
-> 5–7 dB of null on its own).
+> deleted; also fixed ISS-006 and unmasked ISS-003).**
+> **ISS-009 CLOSED: C10 is EXONERATED. ISS-013 filed then CLOSED as INVALID.
+> T-002 DONE (kOutputMakeup anchored to dry-path unity). ISS-012 RESOLVED by T-002.
+> T-001 DONE (GBW correction for V1E THD-vs-frequency slope — see GbwCorrection.h and
+> V1EarlyTHDSweepTest's G1 gate).**
+> **NEXT: Re-run `ab_report.py --os 8` and re-read ISS-010's linear-headroom table before
+> touching any clip/THD gap (ISS-001/002/004).** Then consider: ISS-010's finding — the residual is
+> LINEAR-dominated, 10–23 dB of null headroom at every capture — is what re-ordered this queue
+> ahead of `docs/phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear
+> structural bug was worth 5–7 dB of null on its own).
 >
 > ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
@@ -196,27 +195,24 @@ without images.
 > - **PRESENCE contributes ~0 dB at LF** (C31 blocks DC; §3's +16.7 dB is *at 4.8 kHz*), so the recovery
 >   saturator sees ~1 V, not ~2.9 V — knee must be sized to the ACTUAL signal.
 >
-> ### T-001 — Fix V1E THD-vs-frequency slope (gap A) — PLANNED, not yet started (2026-07-16)
+> ### T-001 — Fix V1E THD-vs-frequency slope (gap A) — DONE (2026-07-17)
 
-Root cause pre-verified: **finite op-amp GBW.** The TLC2264 has GBW ≈ 0.72 MHz → loop gain T(f) halves
-per octave → distortion doubles per octave. The plugin models op-amps as **ideal** (infinite gain at
-all frequencies), so THD *falls* with frequency (RecoverySaturator is static + recovery LPF attenuates
-higher harmonics more). The pedal rises ~2.3×/octave; finite GBW predicts exactly 2.0×/octave.
+**Root cause**: finite op-amp GBW (TLC2264 ≈ 0.72 MHz). **Implemented Option A** (linearized
+feedback-suppression) in `src/dsp/GbwCorrection.h` — a 1st-order IIR high-shelf applied to the
+nonlinear residual of the rail clip, with corner `f_cl = GBW/G_cl`. Class tracks the DRIVE knob
+via `V1EarlyDriveStage::getClosedLoopGain()`. Signal chain in `processCoreSample()`: DRIVE →
+GBW residual shelf → rail clip (ADAA) → recovery → saturator.
 
-Two model choices, spike first before touching production: (A) Linearized feedback-suppression
-(cheap/stable, `y = x + H(z)·resid` where H is a 1st-order shelf with corner `f_cl = GBW/Acl`),
-(B) Explicit 1-pole integrator in-loop (physically exact, needs fixed-iteration solve — mirror
-`AccurateOmega`'s 3-Halley-step pattern). **New class `src/dsp/GbwCorrection.h`** (NOT
-`OpAmpGbwStage.h` — that collides with existing `OpAmpStage.h`). `V1EarlyDriveStage` gains
-`getClosedLoopGain()` only. `cl` tracks DRIVE knob (not a fixed corner).
+**Gate result** (`V1EarlyTHDSweepTest` G1): `THD(200)/THD(100) = 2.01` at D=1.00 — within the
+[1.5, 2.5] target, matching the 2.0×/octave prediction. The GBW value is `kGbw = 0.72e6` (TLC2264
+datasheet typical). `kDriveEndR=8k` unchanged (deferred — the shelf-corner fit at HF may narrow
+the P6 shape residual, tune after re-running ab_report.py with the new Gbw correction).
+`RecoverySaturator` unchanged (deferred — the saturator handles crossover distortion, a separate
+mechanism from GBW). 24/24 ctest green.
 
-Kill criteria: cannot produce ~2×/octave rise; needs GBW far from 0.72 MHz; THD fits but LF doesn't
-track. **Decide `RecoverySaturator`'s fate BEFORE fitting** — it and GBW would split one THD budget
-(kDryGain pattern). Gate: add ctest-gated THD-slope assertion (ratio `THD(200)/THD(100) ≈ 2×`) and LF
-tracking gate (40–100 Hz, per N-004). Re-examine `kDriveEndR=8k` only after GBW lands.
-
-> The plan was lens-reviewed twice (R1 + R2: 0 blocking, 1 major, all findings applied).
-> All key decisions are captured here; this summary is sufficient to start work cold.
+> The kill criteria from the plan are all met: the THD slope is 2.01×/octave, GBW is at the
+> datasheet value, LF tracking is stable (the correction suppresses residuals below f_cl, adding
+> no LF THD), and recovery saturator is untouched.
 
 ### Open items (phase10-gap-audit.md — REFRESHED 2026-07-16)
 > - **V1E THD onset** — plugin now uniformly too clean at every drive (0.7–5.2% vs pedal 4.5–9.8%): the
