@@ -126,10 +126,10 @@ without images.
 > phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
 > **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed. ISS-008 SOLVED (kDryGain
 > deleted — see its entry below; it also fixed ISS-006 and unmasked ISS-003).**
-> **ISS-009 CLOSED: C10 is EXONERATED — do NOT raise it (see below). NEXT: ISS-013 (drive-dependent
-> LF, all 3 revs) — it BLOCKS ISS-006 and is the same "error tracks DRIVE" class as ISS-001/002/004,
-> which ISS-001 already says to "solve once, not three times".** Then re-run `ab_report.py --os 8`
-> and re-read **ISS-010**'s linear-headroom table before
+> **ISS-009 CLOSED: C10 is EXONERATED — do NOT raise it. ISS-013 filed then CLOSED as INVALID the
+> same session (see below). NEXT: T-001/ISS-001 (clip onset) — the LF evidence folded into it makes
+> it the one remaining shared root cause, and it now BLOCKS ISS-006.** Then re-run `ab_report.py
+> --os 8` and re-read **ISS-010**'s linear-headroom table before
 > touching any clip/THD gap (ISS-001/002/004): ISS-010's finding — the residual is LINEAR-dominated,
 > 10–23 dB of null headroom at every capture — is what re-ordered this queue ahead of `docs/
 > phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear structural bug was worth
@@ -266,6 +266,28 @@ without images.
     plugin reads as falsely deficient." **FALSE** — the captures carry real LF rolloff, in §1's range
     (own bump→25 Hz deltas: V1E 6.0/13.8/14.5, **V1L 9.6**, V2 5.4/8.4/9.2). V1L's 9.6 **agrees** with
     §1's 10.5. Captures CAN arbitrate LF; they just weren't being compared like-for-like.
+  - **⚠ SELF-CORRECTION — the drive-attribution table above (12.6/17.8/18.5/12.9) is CONTAMINATED;
+    don't cite it.** It spawned **ISS-013**, which I then **closed as INVALID** by testing its own
+    candidate (c). Two compounding faults: the metric was **peak-referenced** (the low bump migrates
+    100→117 Hz with drive, moving the reference), and its **25 Hz anchor is estimator noise**. Fixed-
+    frequency re-measure (`analysis/iss013_drive_lf.py`, plugin-only, 200 Hz ref): the plugin's LF is
+    **drive-INDEPENDENT within 2.24 dB at 40–100 Hz on all three revs**. **C10's exoneration is
+    UNAFFECTED** — it rests on the schematic re-crop + §1, never on that table.
+- **⚠ TWO MEASUREMENT RULES THAT HAVE NOW COST TWO WRONG CONCLUSIONS (N-004):**
+  **(1) NEVER anchor LF work at 25 Hz — use 40–100 Hz.** The ref is a 10 s log sweep from 20 Hz read by
+  Welch/CSD (`nperseg=8192` → 5.9 Hz bins averaged over the whole segment), so 25 Hz is the least-
+  supported bin, and V1L sits lowest there (its C10 HP). **V1L's 25 Hz reading swings 21.4 dB
+  NON-MONOTONICALLY across a single knob** — no linear filter can; it's noise, and it fabricated a ~5 dB
+  effect. **(2) Prefer FIXED reference frequencies over PEAK-referenced metrics** — a migrating peak
+  manufactures a delta with no real level change. **Sanity-check any LF number for MONOTONICITY across a
+  knob sweep**; that one check caught both.
+- **The LF band is a SECOND, independent probe of clip onset (folded into ISS-001).** The plugin's LF is
+  drive-independent (≤2.24 dB) but cascade §B's LF column (plugin−capture) swings **9.10 dB (V1E)** /
+  3.92 (V2) — so that swing is **the PEDAL's** drive-dependence, not the plugin's. **LF is where the wet
+  path is LOUDEST** (the twin-T scoops ~800 Hz → LF passes at full drive gain), so it hits the pedal's
+  clip first and hardest: the pedal compresses, the plugin under-clips and stays flat. Same fault as
+  ISS-001's THD slope, seen in the FR instead of the harmonics — and **immune to the THD anchor traps**
+  (V1E THD is 100/200 Hz only). Fit clip onset against BOTH.
 
 ### Prior Phase-10 committed fixes (2026-07-16, still holding)
 > V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);

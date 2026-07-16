@@ -1,0 +1,14 @@
+{
+  "content": "25 Hz is the least trustworthy point in this harness's whole band. Two sessions have now built a wrong conclusion on it (ISS-009's \"-21.8 dB @25 Hz\" headline, and ISS-013's entire premise — filed and closed as invalid within one session).\n\nWHY IT IS WEAK. The reference is a 10 s log sweep starting at 20 Hz (gen_test_signal.SWEEP_F0 = 20.0), read by analyze.transfer() — a Welch/CSD estimate with nperseg=8192. At 48 kHz that is 5.9 Hz bins (so the 25 Hz \"reading\" is interpolated between ~23.4 and ~29.3 Hz) averaged across the ENTIRE 10 s segment, while the sweep is only near 25 Hz for a fraction of a second. Every other window contributes leakage/noise at that bin. The problem compounds wherever the signal is already low there — V1L sits lowest at 25 Hz (its C10/R14 ~159 Hz wet-path HP), so V1L's 25 Hz estimate is the worst in the matrix.\n\nTHE EVIDENCE (analysis/iss013_drive_lf.py — plugin only, fixed reference, sweeping DRIVE 0 -> 1.00):\n    rev   25Hz swing   40-100Hz swing   25Hz monotonic in DRIVE?\n    V1E      1.87 dB       <= 0.85 dB   yes\n    V1L     21.44 dB       <= 2.24 dB   NO  (-7.2 -> -28.7 -> -15.3 -> -13.1 -> -11.8 -> -10.7)\n    V2       1.95 dB       <= 1.35 dB   yes\nV1L's 25 Hz column swings 21 dB NON-MONOTONICALLY as a single knob moves. No linear filter can do that — it is estimator noise, and it is large enough to invent a fake ~5 dB effect.\n\nWHAT TO DO INSTEAD:\n - Anchor LF conclusions at 40-100 Hz, where all three revisions read smoothly and monotonically.\n - Prefer FIXED reference frequencies over PEAK-REFERENCED metrics. A migrating peak (the V1L low bump moves 100 -> 117 Hz with drive) moves the reference and manufactures a delta with no real level change. This is the second fault that produced ISS-013.\n - §1's \"LF edge (~20-30 Hz)\" target is still usable as a SHAPE cross-check, but treat a single 25 Hz number as indicative only — never as the sole evidence for a component change. (It nearly bought a 10x change to C10.)\n - If a 25 Hz reading ever matters, sanity-check it for MONOTONICITY across a knob sweep first. That check is what caught this.",
+  "createdDate": "2026-07-16",
+  "id": "N-004",
+  "status": "active",
+  "tags": [
+    "methodology",
+    "analysis",
+    "phase10",
+    "caveat"
+  ],
+  "title": "Measurement caveat: do NOT anchor LF analysis at 25 Hz — use 40–100 Hz",
+  "updatedDate": "2026-07-16"
+}
