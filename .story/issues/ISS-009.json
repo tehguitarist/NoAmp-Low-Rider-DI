@@ -1,0 +1,23 @@
+{
+  "components": [
+    "dsp",
+    "v1-late"
+  ],
+  "createdBy": "claude-session-review",
+  "dedupeKey": "v1l-wet-lf-c10-gate",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-009",
+  "impact": "V1L's WET path (BLEND=1.00, so upstream of BLEND and contaminating everything downstream) is LF-deficient by -12.9dB mean below 100Hz: -21.8dB @25Hz, -12.6 @40, -8.8 @63, -6.4 @100, tapering to -1.9 @400.\n\nTHE NETLIST PREDICTED THIS AND NAMED THE GATE. netlists.md L5d flags C10/R14 as \"the least-certain read on this revision\" with the self-validation gate: \"if the derived V1L wet-path LF misses §1, re-crop this node first\". src/dsp/V1LateStages.h:174-180 carries the same warning inline. C10=10n into R14=100k = a 159.2 Hz single-pole highpass in the WET path of a BASS pedal — implausible on its face.\n\nEVIDENCE (4-way triangulation):\n1. Shape: the measured deficit tracks a single-pole HP at 159Hz within ~1dB over 40-127Hz — a very specific shape, not a coincidence.\n2. Revision-exclusivity: the wet make-up buffer carrying C10/R14 is V1L-ONLY (netlists.md reuse map), and the LF deficit is V1L-ONLY (V1E/V2 clean).\n3. Fit: scanning E12 values with the mean removed (shape-only, since a flat offset is absorbed by gain-match/makeup) drops shape residual RMS 4.27dB (10n) -> 0.58dB. The fit SATURATES at >=100n: 100n/150n/220n/470n all give ~0.58dB because once the corner falls below the measured band the HP is transparent. So the data PROVES 10n is wrong and the true value is >=100n, but CANNOT pin the exact value. 100n is the most plausible misread of \"10n\". Re-crop the schematic per the gate rather than fitting blind.\n4. The gate's own precondition (V1L wet-path LF misses FR §1) is met.\n\nCASCADE — this invalidates a fitted constant and blocks an issue:\n* kOutputMakeup[1]=0.513 was fitted on capture \"V1L V1030 ... D1330\" = V1L D0.65 BL1.00 — THE EXACT CAPTURE carrying this deficit (Calibration.h:53-56 names it). The makeup absorbed part of the C10 error: two errors cancelling, the P6 pattern. Fixing C10 REQUIRES re-fitting kOutputMakeup[1], and kDryGain[1] is derived from it.\n* Calibration.h:55 already noticed the symptom without diagnosing it: \"The naive +10.1 dB compensation alone was insufficient — the actual deficit is larger (structural V1L coupling/cascade losses beyond the wet make-up buffer alone).\" That unexplained residual is consistent with this bug.\n* ISS-006 (V1L blend residual at BL=0.65) is measured against this broken wet path and cannot be honestly diagnosed until it is fixed.\n\nFix order: re-crop the C10/R14 node -> set C10 -> re-fit kOutputMakeup[1] -> re-derive kDryGain[1] -> re-measure ISS-006. Reproduce: python3.11 analysis/cascade_analysis.py (section A).",
+  "location": [
+    "src/dsp/V1LateStages.h",
+    "src/dsp/Calibration.h",
+    ".claude/rules/netlists.md"
+  ],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "high",
+  "status": "open",
+  "title": "V1L wet-path LF deficit −12.9 dB: the flagged C10/R14 netlist gate has FIRED (C10 10n reads as a 159 Hz HP)"
+}

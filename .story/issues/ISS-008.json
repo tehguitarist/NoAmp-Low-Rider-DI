@@ -1,0 +1,22 @@
+{
+  "components": [
+    "dsp",
+    "calibration"
+  ],
+  "createdBy": "claude-session-review",
+  "dedupeKey": "v2-dry-path-hot-blend",
+  "discoveredDate": "2026-07-16",
+  "displayId": "ISS-008",
+  "id": "ISS-008",
+  "impact": "SYMPTOM (solid, reproduced two ways). V2's error is monotonic in BLEND while the wet path is correct:\n  HF(5-13k) mean:  BL=1.00 +0.3dB (good) | BL=0.95 +8.7 | BL=0.90 +11.2 | BL=0.50 +15.3\n  ab_report FR@:   BL=0.90 -> 8000:+13.2  12000:+27.1     BL=0.95 -> 8000:+10.4  12000:+24.4\n  BL=0.50 top octave: 12.9kHz plugin -8.9dB vs pedal -63.3dB (delta +54.4); 16.3kHz delta +58.3.\nNOT a noise-floor artifact — the pedal has real, deep HF rolloff there; the plugin passes the dry tap with only the tone stack's 7.2kHz R35||C32 pole.\n\n*** ROOT CAUSE IS OPEN. MY FIRST HYPOTHESIS WAS WRONG — DO NOT RE-TRY IT. ***\nI originally blamed kOutputMakeup[2]=0.123 (commented \"still the placeholder\") feeding kDryGain[2]=10.569, guessing the dry tap was ~12dB hot. REFUTED by ab_report's LEVEL/gain column: every V2 capture gain-matches to ~0dB (BL=1.00: -0.2/+1.4/+0.1; BL=0.95 -1.1; BL=0.90 -0.9; BL=0.50 -0.1). The broadband LEVEL is already CORRECT at every blend, so kOutputMakeup[2]/kDryGain[2] are not 12dB wrong. CLAUDE.md corroborates: the kDryGain blend-asymmetry fix already drove V2 BL=0.50's level +16.8 -> -0.1dB.\n\nNote also: kOutputMakeup CANNOT be fitted from gain-matched data at all — it is a global output scalar, exactly what the analysis gain-match removes. It is only visible in the raw LEVEL column (and only trustworthy for the identically-staged V1E+V2 set). Likewise OfflineRender's --out-makeup scales outGain ONLY; kDryGain is a hardcoded constant it does not move, so --out-makeup cannot probe the dry/wet ratio.\n\nWHAT THE EVIDENCE NOW SAYS: level right + HF badly wrong = a FREQUENCY-DEPENDENT dry-path error, not a gain constant. The dry level was fit on broadband (LF-dominated) energy and is right there, while the dry path carries HF the pedal does not. Candidates, untested:\n  (a) The real V2 dry path has HF rolloff we have not modelled (netlists.md V1 reads \"IN_B -> direct (no cap) -> BLEND VR50.a\" — full bandwidth; that read may be wrong or incomplete).\n  (b) Dry/wet PHASE cancellation at HF that the model gets wrong. Suggestive: the pedal at BL=0.50 (-63.3dB @12.9k) is 6.7dB QUIETER than half its own BL=1.00 wet alone (-50.6 -6 = -56.6), which a pure crossfade cannot do — that is destructive interference, so the pedal's dry is NOT simply absent up there.\n  (c) BLEND pot impedance loading modelled as too ideal a crossfade (cf. CLAUDE.md: real blend leaks the off-side, cap-impedance-limited, frequency-dependent; and ISS-006's \"NodalCircuit impedance loading\" note on V1L).\n  (d) NAM capture fidelity at HF (least likely — the wet path's HF captures fine at BL=1.00).\n\nCASCADE (unchanged, still holds): blocks honest diagnosis of ISS-003 (V2 12.5k/16k, OPPOSITE sign so the excess MASKS it at BL&lt;1.00) and ISS-005 (BASS hump; -8.4dB low-mid excess at BL=0.50). V1L does NOT show this, so it is V2-specific.\n\nMEASUREMENT GAP: there is NO BLEND=0 (full-dry) capture in the matrix, so the dry path is never observed in isolation — it is only ever inferred from mixed captures. A single full-dry V2 capture would settle (a) vs (b) vs (c) immediately.\n\nReproduce: python3.11 analysis/cascade_analysis.py (section C); python3.11 analysis/ab_report.py --filter V2 --os 8.",
+  "location": [
+    "src/dsp/Calibration.h"
+  ],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "critical",
+  "status": "open",
+  "title": "V2 dry path passes far too much HF at BLEND&lt;1.00 (+27 dB @12k) — level is correct, SHAPE is not"
+}
