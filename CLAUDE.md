@@ -195,7 +195,29 @@ without images.
 > - **PRESENCE contributes ~0 dB at LF** (C31 blocks DC; §3's +16.7 dB is *at 4.8 kHz*), so the recovery
 >   saturator sees ~1 V, not ~2.9 V — knee must be sized to the ACTUAL signal.
 >
-> ### Open items (phase10-gap-audit.md — REFRESHED 2026-07-16)
+> ### T-001 — Fix V1E THD-vs-frequency slope (gap A) — PLANNED, not yet started (2026-07-16)
+
+Root cause pre-verified: **finite op-amp GBW.** The TLC2264 has GBW ≈ 0.72 MHz → loop gain T(f) halves
+per octave → distortion doubles per octave. The plugin models op-amps as **ideal** (infinite gain at
+all frequencies), so THD *falls* with frequency (RecoverySaturator is static + recovery LPF attenuates
+higher harmonics more). The pedal rises ~2.3×/octave; finite GBW predicts exactly 2.0×/octave.
+
+Two model choices, spike first before touching production: (A) Linearized feedback-suppression
+(cheap/stable, `y = x + H(z)·resid` where H is a 1st-order shelf with corner `f_cl = GBW/Acl`),
+(B) Explicit 1-pole integrator in-loop (physically exact, needs fixed-iteration solve — mirror
+`AccurateOmega`'s 3-Halley-step pattern). **New class `src/dsp/GbwCorrection.h`** (NOT
+`OpAmpGbwStage.h` — that collides with existing `OpAmpStage.h`). `V1EarlyDriveStage` gains
+`getClosedLoopGain()` only. `cl` tracks DRIVE knob (not a fixed corner).
+
+Kill criteria: cannot produce ~2×/octave rise; needs GBW far from 0.72 MHz; THD fits but LF doesn't
+track. **Decide `RecoverySaturator`'s fate BEFORE fitting** — it and GBW would split one THD budget
+(kDryGain pattern). Gate: add ctest-gated THD-slope assertion (ratio `THD(200)/THD(100) ≈ 2×`) and LF
+tracking gate (40–100 Hz, per N-004). Re-examine `kDriveEndR=8k` only after GBW lands.
+
+> The plan was lens-reviewed twice (R1 + R2: 0 blocking, 1 major, all findings applied).
+> All key decisions are captured here; this summary is sufficient to start work cold.
+
+### Open items (phase10-gap-audit.md — REFRESHED 2026-07-16)
 > - **V1E THD onset** — plugin now uniformly too clean at every drive (0.7–5.2% vs pedal 4.5–9.8%): the
 >   taper fix removed the excess gain that was MASKING absent saturation (old D1.00 THD match was two
 >   errors cancelling). Single coherent cause; rail-knee leverage already proven. **NEXT.**
@@ -288,6 +310,27 @@ without images.
   clip first and hardest: the pedal compresses, the plugin under-clips and stays flat. Same fault as
   ISS-001's THD slope, seen in the FR instead of the harmonics — and **immune to the THD anchor traps**
   (V1E THD is 100/200 Hz only). Fit clip onset against BOTH.
+
+- **T-002 — Level=0.5, Blend=0.0 should be unity gain (2026-07-17, user request).** When the level
+  knob is at 0.5 and blend at minimum (0.0), with all other knobs at 12 o'clock, the output should
+  be unity gain (same volume as pedal bypass). V1L/V2 both have +10 dB volume adds which are
+  switchable on real pedals; assume they're OFF. This may contradict capture-normalized levels — if
+  so, normalise volume for other behaviours. kOutputMakeup (ISS-012) is the likely lever for this.
+
+### Lessons (hard-won, do not re-learn)
+
+- **L-001: When a fit fails a gate, suspect the fit — `git log -L` the gate line.** If a calibration
+  fit makes an existing test fail, do NOT widen the test. The commit that added the constant may also
+  have loosened the gate to accommodate it. One `git log -L` command found this in ISS-008 (kDryGain
+  forced +24.66 dB; the gate was widened from ±12 dB to +5..+40 dB to hide it). Sibling of the
+  standing rule "a capture-fit must never silently erase a schematic-verification gate."
+- **L-002: Verify a derived metric before building on it — check monotonicity across a knob sweep.**
+  A migrating reference point or a low-SNR anchor bin will manufacture an effect that does not exist.
+  Prefer FIXED reference frequencies over peak-referenced ones, and never anchor on the
+  least-supported point of your excitation. ISS-013 was filed then closed as INVALID within one
+  session because a peak-referenced delta + 25 Hz noise anchor fabricated a ~5 dB effect. The tell
+  was monotonicity: V1L's 25 Hz column swung 21.4 dB non-monotonically across one knob — no linear
+  filter can do that. **See N-004: never anchor LF at 25 Hz; use 40–100 Hz.**
 
 ### Prior Phase-10 committed fixes (2026-07-16, still holding)
 > V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);
