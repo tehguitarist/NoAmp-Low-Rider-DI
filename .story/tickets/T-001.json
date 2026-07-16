@@ -1,12 +1,19 @@
 {
   "blockedBy": [],
+  "claim": {
+    "branch": "main",
+    "since": "2026-07-16T11:25:18.291Z",
+    "user": "leighpierce@me.com"
+  },
+  "claimedBySession": "4e63fab3-24a0-4c24-b811-72eb7a4654da",
   "completedDate": null,
   "createdDate": "2026-07-16",
   "description": "The audit's explicit next priority. Diagnose and fix why V1E's THD-vs-frequency slope has the wrong sign: pedal THD rises 100->200->400Hz (4.5->10.5->22.3%) while the plugin's falls (5.9->3.6->0.9%). See ISS-001 for full diagnosis and untested candidates (twin-T notch depth/width upstream of clip; finite GBW; recovery LPF harmonic-dependent attenuation). Verify with: cmake --build build -j8 && python3.11 analysis/ab_report.py --filter V1E --os 4. Record the result (pass or fail) directly in docs/phase10-gap-audit.md per its own standing rule -- do not let the audit drift from the code.",
+  "displayId": "T-001",
   "id": "T-001",
   "order": 10,
   "phase": "capture-validation",
-  "status": "open",
+  "status": "inprogress",
   "title": "Fix V1E THD-vs-frequency slope (gap A)",
   "type": "task"
 }
