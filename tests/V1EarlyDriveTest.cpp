@@ -31,6 +31,7 @@ double measureWdfDb(double fs, double freq, double drive01)
 {
     nalr::V1EarlyDriveStage drv;
     drv.prepare(fs);
+    drv.setDriveEndResistance(0.0); // schematic law — analyticDb() below is the ideal-pot reference
     drv.setDrive(drive01);
     const int total = (int) (fs * 0.3);
     const int settle = total / 2;
@@ -49,6 +50,7 @@ double dcGain(double fs, double drive01)
 {
     nalr::V1EarlyDriveStage drv;
     drv.prepare(fs);
+    drv.setDriveEndResistance(0.0); // schematic law — analyticDb() below is the ideal-pot reference
     drv.setDrive(drive01);
     double y = 0.0;
     for (int n = 0; n < (int) (fs * 0.1); ++n) // let the (tiny) C28 settle to DC
@@ -85,6 +87,31 @@ int main()
     std::printf("      max-DRIVE: 1k %.2f dB, 2k %.2f dB, 8k %.2f dB\n", at1k, at2k, at8k);
     check(at1k < gMax + 0.1 && (gMax - at2k) > 0.3, "rolloff underway by ~2 kHz");
     check(at8k < at2k - 3.0, "continues rolling off above (HF loss increases)");
+
+    // The checks above pin the end-R to 0 so they gate the SCHEMATIC/SPICE law (§4) and thus the
+    // E3/E4 transcription, exactly as before. The shipping default deliberately deviates from it:
+    // kDriveEndR is capture-fitted (see V1EarlyStages.h). Gate that separately so neither the
+    // schematic cross-check nor the fitted value can silently drift.
+    std::printf("Capture-fitted end-R default (kDriveEndR = %.0f ohm):\n", nalr::V1EarlyDriveStage::kDriveEndR);
+    {
+        nalr::V1EarlyDriveStage drv; // default endR
+        drv.prepare(fs);
+        drv.setDrive(1.0);
+        double peak = 0.0;
+        const int total = (int) (fs * 0.3);
+        for (int n = 0; n < total; ++n)
+        {
+            const double y = drv.process(std::sin(2.0 * kPi * 100.0 * (double) n / fs));
+            if (n > total / 2)
+                peak = std::max(peak, std::abs(y));
+        }
+        const double fittedMax = 20.0 * std::log10(peak);
+        const double expect = 20.0 * std::log10(1.0 + R25 / (R23 + nalr::V1EarlyDriveStage::kDriveEndR));
+        std::printf("      max DRIVE @100Hz: %.2f dB (expect %.2f dB; schematic-ideal is %.2f dB)\n",
+                    fittedMax, expect, gMax);
+        check(std::abs(fittedMax - expect) < 0.3, "fitted max DRIVE matches 1 + R25/(R23 + kDriveEndR)");
+        check(fittedMax < gMax - 5.0, "fitted default is materially below the ideal-pot §4 max (P6 fit)");
+    }
 
     std::printf("WDF vs analytic:\n");
     // Tolerance grows toward Nyquist (bilinear cap warp; see dsp.md "Top-octave accuracy").

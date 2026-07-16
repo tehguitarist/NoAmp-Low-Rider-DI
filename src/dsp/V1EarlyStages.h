@@ -130,17 +130,43 @@ public:
     // starts from rest rather than carrying a stale wave value.
     void reset() noexcept { C28.reset(); }
 
-    // drive in [0,1]. VR1 rheostat to VCOM: wiper at pin1 (knob max) -> 0 -> max gain; pin3 (min) ->
-    // 100k -> min gain. So R_vr1 = (1 - d) * 100k.
+    // Capture-fitted resistance REMAINING in the VR1 leg at the pot's electrical maximum (Phase 10,
+    // 2026-07-16). The schematic law reaches a literal 0 ohm at d=1.0 -> gain 1+330k/3.3k = +40.1 dB,
+    // which matches the author's SPICE sim (FR §4) exactly — but NOT the real unit: fitted across all
+    // three V1E captures (analysis/v1e_drive_endr_fit.py) the captures want ~8k, giving +29.6 dB max.
+    //
+    // This is an EMPIRICAL effective value, not a claimed pot spec: 8k is ~8% of a 100k pot, far above
+    // a real pot's end/wiper resistance (<1%), so it is very likely absorbing additional un-modelled
+    // gain limiting at high closed-loop gain (the TLC2264 is a LOW-GBW part — at gain 101 its
+    // closed-loop bandwidth is only ~7 kHz, so the ideal-op-amp model over-delivers). It is fit here
+    // because it is what the captures require; the physical decomposition is still open.
+    // See CLAUDE.md "P6" — this DELIBERATELY deviates from the schematic/SPICE §4 max-gain target.
+    //
+    // Set to 0.0 to recover the exact schematic/SPICE law; tests/V1EarlyDriveTest gates that path
+    // (WDF vs analytic + the +40.1 dB §4 transcription cross-check) at 0, and the fitted default here.
+    static constexpr double kDriveEndR = 8.0e3;
+
+    void setDriveEndResistance(double ohms) noexcept
+    {
+        endR = ohms;
+        setDrive(lastDrive01);
+    }
+
+    // drive in [0,1]. VR1 rheostat to VCOM: wiper at pin1 (knob max) -> endR -> max gain; pin3 (min)
+    // -> 100k + endR -> min gain. So R_vr1 = (1 - d) * 100k + endR (endR = 0 is the schematic law).
     void setDrive(double drive01) noexcept
     {
-        Rvr1.setResistanceValue((1.0 - drive01) * 100.0e3);
+        lastDrive01 = drive01;
+        Rvr1.setResistanceValue((1.0 - drive01) * 100.0e3 + endR);
         zgSrc.propagateImpedanceChange();
     }
 
     inline double process(double vin) noexcept { return processNonInvOpAmp(vin, zgSrc, Zg, zfSrc, Zf); }
 
 private:
+    double endR = kDriveEndR;   // see setDriveEndResistance()
+    double lastDrive01 = 0.5;   // re-applied when endR changes
+
     // Zg = R23(3.3k) + VR1 (series to VCOM), no cap. Zf = R25(330k) || C28(100p).
     wdft::ResistorT<double> R23{3.3e3};
     wdft::ResistorT<double> Rvr1{50.0e3};
