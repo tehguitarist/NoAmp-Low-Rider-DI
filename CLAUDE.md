@@ -126,8 +126,10 @@ without images.
 > phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
 > **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed. ISS-008 SOLVED (kDryGain
 > deleted — see its entry below; it also fixed ISS-006 and unmasked ISS-003).**
-> **NEXT: ISS-009 (V1L wet-path LF / C10) — it BLOCKS ISS-006 and is the last big linear structural
-> bug.** Then re-run `ab_report.py --os 8` and re-read **ISS-010**'s linear-headroom table before
+> **ISS-009 CLOSED: C10 is EXONERATED — do NOT raise it (see below). NEXT: ISS-013 (drive-dependent
+> LF, all 3 revs) — it BLOCKS ISS-006 and is the same "error tracks DRIVE" class as ISS-001/002/004,
+> which ISS-001 already says to "solve once, not three times".** Then re-run `ab_report.py --os 8`
+> and re-read **ISS-010**'s linear-headroom table before
 > touching any clip/THD gap (ISS-001/002/004): ISS-010's finding — the residual is LINEAR-dominated,
 > 10–23 dB of null headroom at every capture — is what re-ordered this queue ahead of `docs/
 > phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear structural bug was worth
@@ -244,7 +246,28 @@ without images.
     shape-neutral since all metrics gain-match). New probes: `analysis/iss008_dry_probe.py`,
     `analysis/iss008_rate_check.py`. 23/23 green (full `-j8` build).
 >
-> ### Prior Phase-10 committed fixes (2026-07-16, still holding)
+> - **ISS-009 — V1L "C10 LF deficit": C10 EXONERATED, no code change (2026-07-16). DO NOT RAISE C10.**
+  The netlists.md L5d `[◐]` gate fired and is now **CLOSED `[✓]`**: the re-crop
+  (`v1-late_TR_2x.png`) confirms **C10 `10n` / R14 `100k`** exactly as modelled. §1 is *consistent*
+  with a 159 Hz HP (its V1L column implies a 10.5 dB bump→LF-edge drop; a lone 159 Hz pole drops
+  8.3 dB), and the plugin measures **12.6 dB at §1 conditions**. 100n would collapse the delta to ~0.
+  - **The −12.9 dB "deficit" is DRIVE-DEPENDENT, and C10 is a FIXED cap** → it cannot be the cause.
+    Attribution (`analysis/iss009_lf_probe.py` §3): D=0 → **12.6 dB** (correct) | D=0.65 → **17.8**
+    (+8.2 vs the capture's own 9.6) | BASS→0.5 → 18.5 (**BASS is not the cause**) | **DRIVE→0 → 12.9
+    (correct again)**. Split out as **ISS-013**; cascade §B already flags `LF <100Hz` DRIVE-DEPENDENT
+    on V1E (swing 9.1 dB) and V2 (3.92) — one shared mechanism, same class as ISS-001/002/004.
+  - **Two traps this cost, both now recorded:** (1) the old "−4.7 dB SPICE LF edge" was *ad-hoc*
+    (`spice_target_check.py` has **no §1 mode for V1L**, only §8), used an **absolute** dB against a
+    curve the doc says is "each normalised its own way", and predated ISS-008. Use the
+    **normalization-free** metric (bump-peak→25 Hz **delta**, both points off the same curve).
+    (2) **Compare at MATCHED KNOB SETTINGS** — §1 is D=0/P=0/tones-flat; the captures are not. The
+    whole "deficit" was a §1-vs-capture-settings mismatch.
+  - **A hypothesis I tested and REFUTED — don't re-run it:** "NAM captures are LF-blind so a correct
+    plugin reads as falsely deficient." **FALSE** — the captures carry real LF rolloff, in §1's range
+    (own bump→25 Hz deltas: V1E 6.0/13.8/14.5, **V1L 9.6**, V2 5.4/8.4/9.2). V1L's 9.6 **agrees** with
+    §1's 10.5. Captures CAN arbitrate LF; they just weren't being compared like-for-like.
+
+### Prior Phase-10 committed fixes (2026-07-16, still holding)
 > V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);
 > V2 H2 sat (knee=0.150/offset=0.080, H2 Δ −1.6 dB); V2 hump (C41=15n); blend asymmetry
 > (`kDryGain[3]`, V2 BL=0.50 NULL +16.8→−0.1 dB). **Tested and REJECTED (do not re-try):** C16 470p→330p,

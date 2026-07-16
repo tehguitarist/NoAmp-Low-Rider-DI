@@ -235,16 +235,24 @@ C14 10n : n1—OUT        (−) tied to OUT
 ### L5b. S-K #2 (IC2D, unity) [◐ §1] — identical to E5b (R35/R34 33k, C33 2.2n, C34 1n).
 ### L5c. Bridged-T ~430 Hz [✓] — identical to E5c (R36 22k, C27 22n, C30 47n, R9 6.2k→GND),
 but the buffer after it is NOT unity:
-### L5d. Wet make-up buffer (IC3B, non-inverting ×3.2) — NEW vs V1e [◐ §1]
+### L5d. Wet make-up buffer (IC3B, non-inverting ×3.2) — NEW vs V1e [✓ re-cropped 2026-07-16]
 ```
 nQ (bridged-T out) —C10 10n— nR → IC3B(+) ;  R14 100k : nR—VCOM
 gain-set leg : R12 10k : (−)—VCOM ;  feedback : R27 22k ∥ C42 4.7n : (−)—OUT
 OUT —C12 47n (∥ C0 2.2u when populated — default ABSENT)— BLEND VR6.b
 ```
 +10.1 dB below ~1.5 kHz falling to unity above (C42·R27) — part of V1L's extra top-end rolloff.
-⚠ [◐]: C10 10n into R14 100k reads as a ~160 Hz wet-path HP, which looks aggressive against
-§1's low-frequency bump — if the derived V1L wet-path LF misses §1, **re-crop this node first**
-(C10/R14 values are the least-certain read on this revision; everything else here is clean).
+**✓ GATE FIRED AND CLOSED — 2026-07-16 (ISS-009). C10 = 10n and R14 = 100k are CONFIRMED; this is no
+longer the least-certain read.** The [◐] flag did its job: the V1L wet-path LF *did* appear to miss
+§1 (captures read −12.9 dB below 100 Hz), so the node was re-cropped as prescribed
+(`schematics/crops/v1-late_TR_2x.png`, zoomed): R36 22k → nQ → **C10 `10n`** → nR → IC3B pin 5 (+),
+**R14 `100k`** nR→VCOM, C30 47n nQ→bridged-T leg. Exactly as written above.
+The ~160 Hz HP only *looks* aggressive: §1's V1L column implies a ~10.5 dB drop from the +0.5 dB bump
+@70 Hz to the −10 dB LF edge @25 Hz, and a lone 159 Hz 1-pole HP drops 8.3 dB over 70→25 Hz — so §1 is
+**consistent with C10=10n**, and the plugin measures 12.6 dB at §1 conditions (+2.1). **Do NOT raise
+C10** (100n → ~16 Hz corner → the delta collapses toward 0 dB, far worse against §1); that fix was
+proposed from captures and is refuted. The real LF error is **drive-dependent** (ISS-013) and a fixed
+cap cannot cause it. Verify with `python3.11 analysis/iss009_lf_probe.py`.
 
 ## L6. BLEND → LEVEL (single inverting stage IC3A) [✓]
 

@@ -1,0 +1,23 @@
+{
+  "components": [
+    "dsp",
+    "analysis"
+  ],
+  "createdBy": "autonomous-session:ISS-009",
+  "dedupeKey": "iss009-followup:drive-dependent-lf-all-revs",
+  "discoveredDate": "2026-07-16",
+  "id": "ISS-013",
+  "impact": "Split out of ISS-009 (2026-07-16), which was chasing this as a V1L C10 component-value error. C10 is exonerated (schematic re-crop confirms 10n/100k; §1 says the V1L wet path is +2.8 dB of target at §1 conditions). The error is DRIVE-DEPENDENT, so a fixed cap cannot be the cause.\n\nTHE ATTRIBUTION (analysis/iss009_lf_probe.py, section 3 — plugin rendered across knobs, V1L):\n    §1 conditions (D=0)        LF delta 12.6 dB   <- matches §1's implied 10.5\n    capture settings (D=0.65)  LF delta 17.8 dB   <- +8.2 vs the capture's own 9.6 dB\n    capture, BASS -> 0.5       LF delta 18.5 dB   <- BASS is NOT the cause\n    capture, DRIVE -> 0        LF delta 12.9 dB   <- CORRECT again\n(\"LF delta\" = the normalization-free low-bump-peak -> 25 Hz drop; both points from the same curve.)\nSo the plugin's LF is correct at zero drive and over-rolls by ~5 dB as DRIVE comes up. The pedal does\nnot do this.\n\nIT IS NOT V1L-SPECIFIC — cascade_analysis.py section B already flags it on the other two revisions and\nnobody connected it to the V1L \"C10\" story:\n    V1E  LF <100Hz  swing 9.10 dB   D0.50:+4.0  D0.60:+3.4  D1.00:-5.1   <== DRIVE-DEPENDENT\n    V2   LF <100Hz  swing 3.92 dB   D0.25:-0.2  D0.50:-0.1  D0.90:-4.0   <== DRIVE-DEPENDENT\nNote the SIGN: on V1E/V2 the error goes NEGATIVE as drive rises (plugin loses LF at high drive) — the\nsame direction as V1L's. One shared mechanism across three structurally different drive stages\n(V1E = rail-clip only, no diodes; V1L/V2 = zener module). That is a strong constraint on the cause.\n\nWHY THIS MATTERS BEYOND LF: this is the SAME CLASS as ISS-001 (V1E THD slope), ISS-002 (V1E\ndrive-dependent band saturation) and ISS-004 (V2 zener drive tracking) — all \"the error tracks DRIVE\".\nISS-001's own text already says \"the drive-dependence is the fault... SHARED with ISS-002 and ISS-004.\nSolve once, not three times.\" This issue is another face of that same drive-dependence and should be\nworked WITH them, not separately.\n\nCANDIDATES, UNTESTED (do not assume; cascade B's label \"coupling HPs\" is a guess, not a finding):\n (a) A drive-swept coupling corner. On V1L/V2 the DRIVE pot is shared between two coupled inverting\n     stages (netlists.md L4/V4), so stage B's input R = R_wb + R17 SHRINKS as drive rises, moving the\n     C8/C4 coupling HP up (V1L: ~0.66 Hz at D=0 -> ~1.6 Hz at D=0.65 -> ~7.2 Hz at D=1.0). Direction is\n     right, but a first-pass hand-calc says the magnitude is far too small at 25 Hz (~0.02 dB) — and it\n     cannot explain V1E, which has no such module. Verify properly before believing or dismissing.\n (b) The LF is where the wet path is LOUDEST (the twin-T notch is at ~800 Hz, so LF passes at full\n     drive gain), so LF clips FIRST. If the plugin's clip onset is too early / too compressive, LF\n     would lose level fastest as drive rises. This is attractive because it is revision-independent\n     and ties straight into ISS-001's clip-onset work. But a first-pass level check at the -30 dBFS\n     clean sweep puts V1L's D0.65 drive output at ~1.75 V against a ~3.9 V zener — no clipping — so\n     either the level estimate or the FR-read assumption is wrong. Check the actual node voltage\n     before trusting either.\n (c) A measurement artifact in how the low-bump PEAK is located (it moves 100 -> 117 Hz with drive, and\n     the delta is peak-referenced, so a rising peak inflates the delta without any real LF loss).\n     RULE THIS OUT FIRST — it is the cheapest and would invalidate the framing above.\n\nReproduce: python3.11 analysis/iss009_lf_probe.py (section 3); python3.11 analysis/cascade_analysis.py (section B).",
+  "location": [
+    "src/dsp/V1LateDSP.h",
+    "src/dsp/V1EarlyDSP.h",
+    "src/dsp/V2DSP.h"
+  ],
+  "phase": "capture-validation",
+  "relatedTickets": [],
+  "resolution": null,
+  "resolvedDate": null,
+  "severity": "high",
+  "status": "open",
+  "title": "Drive-dependent LF error (&lt;100 Hz) on ALL THREE revisions — the real cause behind the \"V1L C10 deficit\""
+}
