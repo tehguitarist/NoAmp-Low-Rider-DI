@@ -44,8 +44,16 @@ is wrong by ~12 dB — a common conflation. Don't anchor to dBu.)
 
 ### Implementation
 
+> **⚠ 3.27 below is a WORKED EXAMPLE, not a value to copy — and copying a `kInputRef` is this
+> template's most expensive recorded mistake.** On NoAmp it was set from *another pedal's*
+> real-capture constant (monarch-of-tone's 0.87); the plugin then under-clipped, which was misread as
+> an FR excess, which produced an unphysical drive-taper fudge, which produced a saturator to fake the
+> missing distortion back — four compensating errors deep before anyone questioned the seed. See
+> CLAUDE.md **L-008** and `phase10-gap-audit.md` section I. **Measure it for YOUR circuit, from clip
+> ONSET, or carry it as explicitly provisional and re-derive it the moment captures exist.**
+
 ```cpp
-// header: pick from your measurement
+// header: pick from your measurement — see the warning above; do NOT inherit another pedal's value
 static constexpr float kInputRef = 3.27f; // volts per full-scale
 
 // processBlock — scale into the circuit, but keep the meter + bypass dry path in DAW domain:

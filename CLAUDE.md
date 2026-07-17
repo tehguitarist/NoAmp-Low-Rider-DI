@@ -200,6 +200,35 @@ without images.
 > - **⚠ Any FR@/FR-rms number in this file or `phase10-gap-audit.md` predating 2026-07-17 is
 >   LEVEL-CONFOUNDED** — re-derive on the SHAPE metric before building on it (Gap C above is one).
 >
+> ## ⛔ THE CAPTURE MATRIX IS FINAL — 11 FILES, NO MORE ARE OBTAINABLE (user, 2026-07-17)
+>
+> **The pedal is gone. No new capture, no re-capture, no matched pair, no new test signal — EVER.**
+> `analysis/captures/*.wav` (11 files) is the complete and permanent evidence base. Do not write a
+> plan, a "next step", or a gap resolution that depends on a capture we do not already have; do not
+> ask for one. **This is not a scheduling constraint — it is a permanent property of the project.**
+>
+> **What it changes, concretely:**
+> - **Some gaps are now UNRESOLVABLE and must be closed as "best effort, documented".** Where the
+>   evidence cannot arbitrate, **pick the schematic-faithful answer and say so** — the schematic and
+>   the author's SPICE §-targets are capture-free references that remain fully available, and
+>   `docs/reference-fr-targets.md` + `netlists.md` are the arbiters of last resort. **Prefer being
+>   faithful to the circuit over being fitted to a capture we cannot disambiguate.**
+> - **`dsp.md`'s "isolate a coupled control with a MATCHED-PAIR capture" is DEAD as a tactic here.**
+>   Every confounded knob stays confounded. Where two gaps are entangled (J vs E), say so and treat
+>   them as one item rather than pretending they can be separated.
+> - **THD's ceiling is permanently 9.5 kHz** (Farina needs `N*f <= SWEEP_F1`=20 kHz). 9.5–12 kHz would
+>   need a 24 kHz sweep ⇒ a re-capture ⇒ **impossible**. Above 12 kHz THD does not exist at 48 kHz.
+>   **Do not re-raise "extend THD coverage".**
+> - **Permanent blind spots, by matrix design — do not re-discover these:** V1E has **no BLEND<1.00
+>   capture at all**; V2's are all **≥0.90**; V2 **BLEND=0.50 has none** (its only file was quarantined,
+>   ISS-011); only V1L sweeps blend (1.00/0.65/0.30), and its three files move DRIVE and BASS at the
+>   same time. There are exactly **two blend-matched pairs** in the whole matrix (V1L 0.30-vs-0.65,
+>   V2 0.90-vs-1.00) and both already PASS (`capture_outlier_scan.py`).
+> - **Guessing is now legitimate — but label it.** Where a value is chosen without evidence to
+>   arbitrate, mark it in the code as a JUDGEMENT CALL with the reasoning and the alternative that was
+>   not ruled out. A documented guess is honest; a guess that reads like a measurement is the L-008
+>   failure mode that produced the Gap I stack.
+>
 > ### 2026-07-17 (later session): METRIC FIXES + TWO NEW GAPS — read `phase10-gap-audit.md` M / I / J
 >
 > **ACCEPTANCE TARGETS SET BY THE USER:** FR within **1.5 dB** (60 Hz–12 kHz) / **3 dB** at the
@@ -288,11 +317,14 @@ without images.
 >   *"TL072 only appears in the XLR driver, which we're not modelling."* V1L's S-K is **TLC2264**
 >   (CMOS, GBW **0.72 MHz**) — not a TL072 (bipolar, 3 MHz). Use the right part's numbers.
 >
-> **NEXT: arbitrate Gap H error 2** (a PRESENCE matched-pair capture is the cleanest instrument), then
-> Gap J / Gap C.
-> **Capture requests outstanding:** a **BLEND-only matched pair** on V1L (separates Gap J from Gap E
-> in one shot — they are currently confounded), and **any V1E capture at blend<1.00** (V1E has none,
-> so a Gap-J-class phase fault is invisible there by matrix design).
+> **NEXT: arbitrate Gap H error 2 with the CAPTURE-FREE tools** (the matrix is FINAL — the PRESENCE
+> matched pair that would have settled it will never exist). Cheapest first: **re-read §1's V1L top
+> octave** from `schematics/crops/fr/` (the −40 dB point sits at the graph's least-supported EDGE —
+> N-004 aimed at SPICE rather than at a capture), then **quantify the real S-K's stopband floor-out**
+> (right sign, but the TLC2264 has ~35 dB of loop gain at 12.5 kHz — put a number on it before
+> believing it). If neither closes it: **stay faithful to the schematic + §1, document the ~12 dB
+> capture disagreement as an unarbitrable residual, and do NOT bend the cab-sim to it.**
+> Then Gap J+E (**one item — permanently confounded**) / Gap C.
 >
 > **Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
 > Both the S-K (error 1: 33k, schematic-faithful) and PRESENCE (§3: +27.5 dB, analytic-confirmed)
@@ -331,7 +363,8 @@ without images.
 >   −25.3 (BL1.00, P0.74) → **+6.2** (BL0.65, P0.70) → −1.9 (BL0.30, P0.65). A fixed cap cannot flip
 >   sign. The **pedal's own** top band is likewise non-monotonic in blend (−13.6/−27.3/−9.9) while the
 >   plugin's is monotonic. Never fit a fixed cap against one capture here — fit the SPREAD (kDriveEndR
->   lesson) or isolate PRESENCE with a matched-pair capture.
+>   lesson). (**The matched-pair route is GONE — the matrix is FINAL. PRESENCE can never be isolated
+>   by capture; use §3 + the L3 closed form instead, both capture-free.**)
 > - **A hypothesis I tested and REFUTED — do not re-run it:** "the 10–16k band on a full-wet V1L
 >   capture is below the NAM model's noise floor, so −31 dB is noise" (§1 says V1L's wet path is
 >   ~−40 dB by 11–12 kHz, so this was plausible, and it is the ISS-011 pattern). **FALSE.**
@@ -347,7 +380,9 @@ without images.
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
 > cross-validated only against the author's SPICE sim (which also assumes an ideal pot). The captures
 > want ~8 dB less. Now `kDriveEndR = 8.0e3` (fit across all 3 V1E captures, `analysis/v1e_drive_endr_fit.py`)
-> + `kOutputMakeup[0] = 0.437`, `kDryGain[0] = 2.975`.
+> + ~~`kOutputMakeup[0] = 0.437`, `kDryGain[0] = 2.975`~~ (**both SUPERSEDED** — makeup is now
+> T-002-anchored to dry-path unity, `kDryGain` is DELETED (ISS-008). `kDriveEndR=8k` still stands but
+> **Gap I shows it is a compensator for a too-low `kInputRef`, not a real end-resistance** — L-008.)
 > - **Rend and makeup are COUPLED** (an end-R lowers gain at EVERY knob position). Fit Rend on the
 >   per-capture offset **SPREAD** (makeup shifts all three equally, so it cannot fix spread), then let
 >   makeup absorb the common offset. Clean interior minimum at 8k: spread 3.65→0.96 dB.
@@ -362,7 +397,10 @@ without images.
 >   **A capture-fit must never silently erase a schematic-verification gate.**
 >
 > ### V1E THD-onset fit — DONE (commit cb0fe9b)
-> `setRecoverySaturation(0.080, 0.100)` → **(0.40, 0.25)**, `kOutputMakeup[0]` → **0.444**.
+> `setRecoverySaturation(0.080, 0.100)` → **(0.40, 0.25)** (still live), ~~`kOutputMakeup[0]` → 0.444~~
+> (**SUPERSEDED by T-002 → 1.084**). **⚠ Gap I supersedes this fit's PREMISE:** it was scored partly on
+> the notch-confounded 400 Hz anchor, it is 7× hotter than the saturator's own design goal, and a tanh
+> cannot make the pedal's onset at all. Do not treat "THD@100 rms err 4.11%→1.02%" as validation.
 > THD@100 rms err **4.11% → 1.02%** (D0.50 5.9 vs 4.5, D0.60 6.1 vs 6.7, D1.00 7.6 vs 8.5); FR shape
 > 2.80 → 2.69 dB (no regression); offset spread unchanged 0.96 dB (doesn't disturb the taper fit).
 > Models the TLC2264's **crossover distortion** (a kink at the zero crossing, present at every level).
@@ -649,7 +687,7 @@ the gate FAILS when you delete the feature it guards.
   filter can do that. **See N-004: never anchor LF at 25 Hz; use 40–100 Hz.**
 
 ### Prior Phase-10 committed fixes (2026-07-16, still holding)
-> V2 HF (C15=8.2n/C17=1.8n); V1L level (kOutputMakeup[1]=0.513, NULL 0.0 dB); V1E sub-100 Hz (C12=220n);
+> V2 HF (C15=8.2n/C17=1.8n); V1L level (~~kOutputMakeup[1]=0.513~~ → **T-002: 1.121**); V1E sub-100 Hz (C12=220n);
 > V2 H2 sat (knee=0.150/offset=0.080, H2 Δ −1.6 dB); V2 hump (C41=15n); blend asymmetry
 > (`kDryGain[3]`, V2 BL=0.50 NULL +16.8→−0.1 dB). **Tested and REJECTED (do not re-try):** C16 470p→330p,
 > C14 47n→39n, C32/C29 22p→15p, C27 100n→82n, asymmetric rails in V1E.
@@ -721,10 +759,11 @@ the gate FAILS when you delete the feature it guards.
 > knob-independent; fold into Phase-10 capture calibration if a real capture shows the top octave still
 > a touch dark at high OS. Not a blocker.
 >
-> **Phase 10 itself (capture-gated, cannot start until the user provides captures):** re-anchor
-> `kInputRef`/`kOutputMakeup` per revision, fit each revision's zener Cj against captured DRIVE HF
-> (`v2Params()` is currently a placeholder == `v1LateParams()`), run the four analyses. Nothing to
-> prepare beyond `docs/validation-and-capture.md`.
+> ~~**Phase 10 itself (capture-gated, cannot start until the user provides captures)**~~ — **STALE,
+> superseded.** The captures arrived and Phase 10 is well underway; the matrix is now **FINAL at 11
+> files** (see the block at the top). `kOutputMakeup` is T-002-anchored, `kInputRef` is fit-on-V2 and
+> disputed by V1E (Gap I), and V2's zener Cj=10 pF / m=0.015 are independently fit — `v2Params()` is
+> **no longer a placeholder**. Read `docs/phase10-gap-audit.md`, not this paragraph.
 > **Durable gotchas from Phase 6 (still relevant to future NodalCircuit/switch-stage work):**
 > (1) **Switch modelling is NOT `setSMatrixData()`** — V2's MID/BASS-SHIFT stages are NodalCircuit
 > (MNA), so "switched topology" = a resistor toggled `kSwitchShort`(0.5Ω)/`kSwitchOpen`(1e12Ω) +
@@ -839,13 +878,14 @@ the gate FAILS when you delete the feature it guards.
   prewarping swept corners) EXCEPT the one fixed tone-stack feedback corner **C29 ~7.2 kHz** (sub-dB)
   — record it as the single deferred prewarp target, to be tuned with the low-OS shelf against
   `OSFidelity` (don't perturb the gated 1.5 stage blind now).
-- **Phase 3 (integration) facts for Phase 10 calibration.** (1) Provisional constants in
-  `src/dsp/Calibration.h`: **kInputRef = 0.87 V/FS** (2026-07-13, user request: carried over from
-  the author's prior same-template project, monarch-of-tone's real-capture-calibrated
-  `circuitVoltsPerFS` — a different circuit's own clip-onset anchor, so still NOT measured for THIS
-  pedal; a better-grounded provisional stand-in than the old 3.27 doc worked-example, not a final
-  value), **kOutputMakeup = 1.0** (interim). Both re-anchored from NoAmp's own captures in Phase 10 —
-  don't treat as final. (2) **LEVEL is modelled INSIDE the DSP** (the pedal's LEVEL pot, in V1EarlyBlendLevelStage),
+- **Phase 3 (integration) facts.** (1) **⚠ DO NOT quote calibration constants from this file — read
+  `src/dsp/Calibration.h`.** It is the single source of truth and this section was stale for a week
+  (it claimed kInputRef=0.87 and kOutputMakeup=1.0 long after both had moved, which is exactly how
+  L-008's stack got built on a number nobody re-checked). As of 2026-07-17 the actual values are
+  **kInputRef = 1.3** (fit on V2's clip onset ONLY — V1E disagrees by ~13 dB; see Gap I, DEFERRED)
+  and **kOutputMakeup[3] = { 1.084, 1.121, 0.618 }** (V1E/V1L/V2, T-002-anchored to dry-path unity at
+  blend=0 / level=0.5 — NOT capture-level-fitted). `kDryGain` is **DELETED** — never reintroduce it
+  (ISS-008). (2) **LEVEL is modelled INSIDE the DSP** (the pedal's LEVEL pot, in V1EarlyBlendLevelStage),
   so there is NO separate `volumeGain` scalar in the processor — output gain = `kOutputMakeup ·
   dbToGain(outTrim) / kInputRef` only (`outputGainFor()`). Don't go looking for a volume taper to
   fit; LEVEL's law is the circuit. (3) Measured dry-path (blend=0) gain at LEVEL noon = **−0.70 dB**

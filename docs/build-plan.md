@@ -398,7 +398,15 @@ is unavoidably a fresh session anyway (new data, new analysis), so no context to
 
 ---
 
-## Phase 10 — Capture validation  *(BLOCKED until user provides captures; then Opus 4.8 / high)*
+## Phase 10 — Capture validation  *(IN PROGRESS; Opus 4.8 / high)*
+
+> **⛔ THE CAPTURE MATRIX IS FINAL — 11 files, no more are obtainable (user, 2026-07-17).** The pedal
+> is gone. No new capture, no re-capture, no matched pair, no new test signal, EVER. This phase's
+> remaining work must be done with `analysis/captures/*.wav` as it stands, plus the capture-free
+> references (schematic, `netlists.md`, `docs/reference-fr-targets.md`'s SPICE §-targets). Where the
+> evidence cannot arbitrate: **pick the schematic-faithful answer and document the guess.**
+> `validation-and-capture.md`'s capture PROCEDURE is now history — read it for how the existing files
+> were made and what their limits are, never as a plan. Live state: `docs/phase10-gap-audit.md`.
 
 Read: `docs/validation-and-capture.md`, `docs/calibration-and-gain-staging.md`, `analysis/*.py`.
 Anchor `kInputRef`, calibrate output makeup per revision, run the four analyses (FR / swept-THD /

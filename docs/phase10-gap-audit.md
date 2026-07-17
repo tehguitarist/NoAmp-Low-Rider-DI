@@ -32,11 +32,18 @@
   `analysis/fr_offset_decompose.py` proves the makeup moves shape by 0.0000 dB). `fr_check` now
   reports **SHAPE** (median offset removed) plus `offset` separately. See CLAUDE.md **L-005**.
   Re-derive with `ab_report.py` (shape) or `analysis/v1l_shape_localise.py` (per-band).
-- **THD above 9.5 kHz DOES NOT EXIST on this rig — it is not a tooling gap.** Farina can only see
-  order N while `N*f <= SWEEP_F1` (20 kHz), so THD needs at least H2 ⇒ the ceiling is 9.5 kHz. Even a
-  perfect test signal cannot beat **12 kHz at 48 kHz** (H2 would land past Nyquist). Reaching
-  9.5–12 kHz would need a NEW test signal sweeping to 24 kHz — i.e. **re-capturing the pedal**.
-  Do not accept a task framed as "THD to 18 kHz"; the quantity is undefined there.
+- **⛔ THE CAPTURE MATRIX IS FINAL — 11 files, no more are obtainable (user, 2026-07-17).** The pedal
+  is gone. No new capture, no re-capture, no matched pair, no new test signal, EVER. Never write a
+  plan or a next-step that needs one. Where the evidence cannot arbitrate, **pick the
+  schematic-faithful answer and document the guess** — the schematic, `netlists.md` and the author's
+  SPICE §-targets are capture-free and remain fully available. **`dsp.md`'s "isolate a coupled control
+  with a MATCHED-PAIR capture" is dead as a tactic on this project.** Full consequences: CLAUDE.md's
+  "THE CAPTURE MATRIX IS FINAL" block.
+- **THD above 9.5 kHz DOES NOT EXIST on this rig — it is not a tooling gap, and it is now PERMANENT.**
+  Farina can only see order N while `N*f <= SWEEP_F1` (20 kHz), so THD needs at least H2 ⇒ the ceiling
+  is 9.5 kHz. Even a perfect test signal cannot beat **12 kHz at 48 kHz** (H2 would land past
+  Nyquist). Reaching 9.5–12 kHz would need a 24 kHz sweep ⇒ a re-capture ⇒ **impossible**.
+  Do not accept a task framed as "THD to 18 kHz", and do not re-raise "extend THD coverage".
 - **The measurable ORDER COUNT falls with frequency** (H7 dies at 2714 Hz, H2 last at 9500 Hz), so an
   absolute THD(f) curve steps DOWN each time an order drops out. A plugin-vs-pedal **delta** is fair
   (both sides lose the same orders); an **absolute** read across that boundary is not. The per-band
@@ -61,6 +68,21 @@
 **Re-ranked 2026-07-17** on the corrected SHAPE metric (L-005). Level-independent FR shape rms,
 median per revision: **V1E 1.27 | V2 2.96 | V1L 5.30 dB**. V1L is the WORST revision — the pre-L-005
 ranking was distorted by level offsets and pointed at V2.
+
+> **⛔ Re-scoped 2026-07-17: THE CAPTURE MATRIX IS FINAL (11 files, no more obtainable).** Every gap
+> below must now be closed with what we have plus the capture-free references. **Three gaps are
+> partly or wholly UNARBITRABLE and that is a permanent state, not a TODO:**
+>
+> | Gap | What died with the matrix | Honest end-state |
+> |---|---|---|
+> | **H err 2** | the PRESENCE-only matched pair | try §1 re-read + S-K floor-out; else **stay schematic-faithful and document the ~12 dB capture disagreement** |
+> | **J + E** | the BLEND-only matched pair | **ONE item, permanently confounded.** Identify J's mechanism from its SHAPE (narrow blend-monotonic null vs E's broad hump); fit E on **V2 only** |
+> | **I** | — (deferred by decision, not by the matrix) | kInputRef stays 1.3; V1E-vs-V2 13 dB gap unresolved |
+>
+> **A gap that cannot be arbitrated is CLOSED as "best effort, documented", not left open forever.**
+> Prefer the schematic-faithful answer, say it is a judgement call, and name the alternative you
+> could not rule out. **Do not fit a value the evidence cannot constrain** — that is precisely how
+> Gap I's four-deep compensator stack was built (L-008).
 
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
@@ -445,10 +467,23 @@ the knob. Do not let the voided note suppress it.
 
 **Why only V1L shows it — a MATRIX limit, not a revision property.** V1L is the only revision with
 blend swept (1.00/0.65/0.30). **V1E has no BL<1.00 capture at all** and V2's are all ≥0.90, where any
-phase fault is invisible by construction. Assume this affects all three until a capture says
-otherwise. **Confounder:** BASS also moves across those three V1L captures (0.4/0.6/0.4), and Gap E
-lives at 250–430 Hz — a matched-pair capture (BLEND only) would isolate it cleanly (`dsp.md`
-"Isolate a coupled control with a MATCHED-PAIR capture").
+phase fault is invisible by construction. Assume this affects all three — **and no capture will ever
+say otherwise (the matrix is FINAL).**
+
+**⛔ J AND E ARE PERMANENTLY CONFOUNDED — treat them as ONE item.** BASS moves across the three V1L
+captures (0.4/0.6/0.4) *and* Gap E lives at exactly 250–430 Hz. A BLEND-only matched pair would have
+separated them in one capture; **it will never exist, so stop planning around it.** Consequences:
+  * **Do NOT fit a component value against the 285 Hz residual.** Any fit would silently absorb the
+    other gap. Two entangled causes and one equation.
+  * **The capture-free evidence still discriminates the MECHANISM, which is what matters.** J's
+    signature is a *narrow, deep, blend-monotonic null* (−23.8 @285 but −4.7 @202 and −3.4 @403);
+    E's is a *broad ~3 dB hump* correlated with the MID-shift throw. A phase cancellation and an EQ
+    error do not look alike even when they overlap — so the mechanism can be identified from the
+    shape, even though the magnitudes cannot be apportioned.
+  * **Best-effort resolution:** find the phase error by construction, not by fitting — compare the
+    plugin's wet-path GROUP DELAY at 285 Hz against the analytic cascade (capture-free, and the WDF/
+    MNA discretisation is the prime suspect). If the model's phase is right and the null persists,
+    document J as unresolvable and leave it.
 
 ---
 
@@ -504,9 +539,9 @@ C33 2.2n, C34 1n).
 across V1L's three captures: **−25.3** (BL1.00, P0.74) → **+6.2** (BL0.65, P0.70) → **−1.9**
 (BL0.30, P0.65). A fixed cap cannot produce a sign flip, and PRESENCE (a migrating ~4.8 kHz peak,
 §3) differs across all three — so a single-capture fit would absorb a PRESENCE error into C42. Fit
-the **SPREAD** across captures (the `kDriveEndR` lesson), or isolate PRESENCE with a matched-pair
-capture (`dsp.md` "Isolate a coupled control with a MATCHED-PAIR capture"). Note Gap F (V1L blend
-residual, +6 dB at BL=0.65) may be the same phenomenon seen at a different blend.
+the **SPREAD** across captures (the `kDriveEndR` lesson). **The matched-pair route is GONE — the
+matrix is FINAL (2026-07-17); PRESENCE can never be isolated by capture. Do not propose it.** Note
+Gap F (V1L blend residual, +6 dB at BL=0.65) may be the same phenomenon seen at a different blend.
 
 ### H — ATTRIBUTED 2026-07-17: it is TWO errors, and C42 is ELIMINATED
 
@@ -631,18 +666,27 @@ the wet path does *without* presence:
 point at 9.16 kHz, inside §1's own ±⅓-octave tolerance) AND follows the schematic (R48/R49=33k, read
 independently by netlists.md and circuit.md, no value flag). Two references disagree by ~12 dB and
 the plugin faithfully implements one of them. **This is an arbitration, not a fitting problem** —
-which is exactly why "do NOT retune the cab-sim or presence against the capture" stands. Ways to
-arbitrate, none yet run:
-  * A **matched-pair capture** isolating PRESENCE alone (dsp.md) — differences cancel everything else
-    and measure the cell directly against §3.
-  * Re-read the §1 graph for V1L's top octave specifically (it is a *reading* of the author's sim; the
-    −40 dB point is near the graph's edge, the least-supported part of any plotted curve — N-004's
-    lesson applied to the SPICE reference instead of to a capture).
-  * Check whether the author's SPICE modelled the op-amps ideally: an ideal 4th-order cab-sim rolls
-    off forever, but a REAL S-K's stopband FLOORS OUT (finite op-amp output impedance + the C14
-    positive-feedback path feeding through). That would make the real pedal brighter than its own
-    SPICE up top — the right sign — but the TLC2264 still has ~35 dB of loop gain at 12.5 kHz, so
-    quantify it before believing it.
+which is exactly why "do NOT retune the cab-sim or presence against the capture" stands.
+
+**⛔ THE MATRIX IS FINAL (2026-07-17) — the cleanest arbiter is now IMPOSSIBLE.** A PRESENCE-only
+matched pair would have settled this in one capture. It will never exist. **Do not propose it.**
+What remains, all capture-free:
+  * **Re-read the §1 graph for V1L's top octave.** It is a *reading* of the author's sim, and the
+    −40 dB point sits near the graph's **edge** — the least-supported part of any plotted curve.
+    N-004's lesson ("never anchor on the least-supported point of your excitation") applies to a
+    SPICE reference exactly as it does to a capture. **Cheapest remaining move, and it needs nothing
+    but `schematics/crops/fr/`.**
+  * **Quantify the real S-K's stopband floor-out.** An ideal 4th-order cab-sim rolls off forever; a
+    REAL Sallen-Key's stopband FLOORS OUT (finite op-amp output impedance, plus the C14
+    positive-feedback path feeding straight through as the loop gain dies). That is the right SIGN —
+    it makes the real pedal brighter than its own ideal SPICE up top. But the TLC2264 still has
+    ~35 dB of loop gain at 12.5 kHz, so **put a number on it before believing it**; if it cannot
+    reach ~12 dB it is not the answer.
+  * **Accept and document.** If neither closes it, the honest resolution is: **stay faithful to the
+    schematic + §1** (which the plugin already is), record the ~12 dB capture disagreement as a known,
+    bounded, unarbitrable residual, and do NOT bend the cab-sim to a capture that the SPICE
+    contradicts. V1L's top octave is ~−40 dB of a wet path that is itself blended down — this is the
+    least audible band in the pedal, and a wrong "fix" here would be permanent and unfalsifiable.
 
 **⚠ The old hypothesis "the real circuit uses TL072 op-amps with finite GBW" is FACTUALLY WRONG and
 is deleted.** circuit.md is explicit: *"TL072 only appears in the XLR driver, which we're not
@@ -791,8 +835,11 @@ confirm the error is **pre-tone-stack**. Look at the MID stage and the wet path,
 250–430 Hz error in the whole matrix is **V1L D0.40 BL0.30 at −23.8 dB @285 Hz**, not V2's ~3 dB.
 Across all 11 captures the 285 Hz band reads median |Δ| 2.46 dB but **max 23.78 dB**. Before treating
 E as a V2 MID-stage problem, separate it from **Gap J** — J's blend-monotonic notch sits in exactly
-this band on V1L, and the three V1L captures move BASS (0.4/0.6/0.4) *and* BLEND together, so E and J
-are currently confounded with each other. A BLEND-only matched pair resolves both at once.
+this band on V1L, and the three V1L captures move BASS (0.4/0.6/0.4) *and* BLEND together.
+**⛔ E and J are PERMANENTLY confounded: the matrix is FINAL and the BLEND-only pair that would have
+resolved both will never exist. Treat them as ONE item** (see Gap J). E's own V2 evidence
+(~3 dB, correlating with the MID-shift throw) is uncontaminated by J — V2's blends are all ≥0.90,
+where a blend-phase null cannot act — so **fit E on V2 only, and never on V1L's 285 Hz residual.**
 
 ---
 

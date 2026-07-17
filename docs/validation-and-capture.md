@@ -4,9 +4,33 @@ How to measure how close the plugin is to the real pedal, and how to capture the
 measurement is actually trustworthy. Companion to `calibration-and-gain-staging.md` (that doc sets
 levels; this one verifies them and the rest of the model against the real thing).
 
+> ## ⛔ FOR THIS PEDAL, THE CAPTURE HALF OF THIS DOC IS HISTORY (2026-07-17)
+>
+> **The NoAmp capture matrix is FINAL: 11 files in `analysis/captures/`, and no more are obtainable
+> — the pedal is gone.** No new capture, no re-capture, no matched pair, no new test signal, ever.
+>
+> - **The MEASUREMENT half (§§ on FR / swept-THD / null / knob-tracking) is still fully live** — that
+>   is the harness in `analysis/`, and it runs against the 11 files we have.
+> - **The CAPTURE half (the matrix advice, the one-knob-at-a-time discipline, the "spend your
+>   recapture budget" guidance) is now a POST-MORTEM, not a plan.** Read it to understand what the
+>   existing files can and cannot answer. Never read it as an action.
+> - **It remains the template's guidance for the NEXT pedal** — the lessons below are generic and
+>   were dearly bought. They just cannot be acted on here.
+>
+> **What this pedal's matrix permanently cannot answer** (do not re-discover these): V1E has **no
+> BLEND<1.00 capture at all**; V2's are all **≥0.90**; V2 **BLEND=0.50 has none** (its only file was
+> corrupt and is quarantined — ISS-011); only V1L sweeps blend, and its three files move DRIVE and
+> BASS at the same time, so **Gap J and Gap E are permanently confounded**. There are exactly **two**
+> blend-matched pairs in the whole matrix. THD is capped at **9.5 kHz** by the 20 kHz sweep.
+>
+> **The consequence for modelling:** where the captures cannot arbitrate, be faithful to the
+> **schematic** and the author's **SPICE §-targets** (`reference-fr-targets.md`), which are
+> capture-free and remain fully available — and **label the guess** (CLAUDE.md L-008).
+
 > **The single biggest lesson: the test signal is almost never the limitation — the capture
 > SETTINGS MATRIX is.** A perfect signal captured at the wrong/confounded settings can't be fit.
-> Spend your recapture budget on the matrix (§3), not on the signal.
+> Spend your recapture budget on the matrix (§3), not on the signal. **This project is the proof:
+> the matrix closed with V1E never captured below full wet, and that hole is now permanent.**
 
 The reusable harness lives in `analysis/`:
 - `gen_test_signal.py` — the comprehensive A/B signal. A **bank of 5 full-range 20→20k sweeps at
