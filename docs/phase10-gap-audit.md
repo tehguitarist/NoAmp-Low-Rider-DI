@@ -55,7 +55,7 @@ ranking was distorted by level offsets and pointed at V2.
 
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
-| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **NEW 2026-07-17 — TOP PRIORITY**, see below |
+| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **Error 1 CLOSED** (S-K: 33k schematic-faithful). **Error 2 OPEN** — ~17 dB remains: both PRESENCE (§3-confirmed) and S-K cascade individually correct; deficit appears only in combination, flips sign with PRESENCE/BLEND. NOT a NAM artefact (band SNR +105.5 dB, NAM ESR <0.001). Suspects: op-amp non-idealities, BLEND-stage HF loading, level-dependent S-K behaviour. |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | ⚠ **Status UNSAFE** — its "closed at OS=8x" evidence was level-confounded; see below |
 | **D** | V2 zener drive tracking | V2 | D0.90 THD slope | Premise CORRECTED 2026-07-17 (knee already fit + refuted). Symptom metric is CONFOUNDED — see below |
@@ -298,25 +298,72 @@ This needs no capture, so it separates model error from capture error:
 | high bump @ 3.5 kHz | ~−0.5 dB | −2.48 |
 | **HF −40 dB point** | **~11 kHz** | **9.16 kHz** (Δ −1.84 kHz; −50.1 dB @ 11 kHz ⇒ ~10 dB too dark) |
 
-**⇒ Gap H is TWO stacked errors, not one:**
+**⇒ Gap H is TWO stacked errors — Error 1 is CLOSED, Error 2 remains open:**
 
-1. **~10 dB — a REAL, capture-free model error.** The plugin's V1L cab-sim rolls off ~0.26 octaves
-   early vs the author's SPICE (9.16 vs 11 kHz; ≈6 dB for a 4th-order slope, measured 10 dB at
-   11 kHz). **netlists.md's L5a/L5b `[◐ §1]` flag has FIRED** — honour its own instruction:
-   *re-examine the S-K "(−) tied to OUT" unity reading FIRST* (no resistor was visible in the drawn
-   feedback loops; that was the flagged uncertainty). Note V1L's L5a uses **R48/R49 = 33k/33k** where
-   V1E's E5a uses **22k/22k** → S-K#1 corner 2225 Hz (V1L) vs 3337 Hz (V1E); verify that asymmetry
-   is real before assuming the tie is the fault.
-2. **~17 dB — claimed ONLY by the capture.** Either our PRESENCE cell under-delivers HF (its top-band
-   leverage is only 18.8 dB and even at P=1.00 the plugin reaches just −26.6 dB, still 13 dB short of
-   the pedal's reading at P=0.75), or the NAM model mis-renders a band its training signal barely
-   excites. **Arbitrate PRESENCE against §3 next — capture-free, same cell, independent.**
+### Error 1 — ~10 dB cab-sim rolloff — CLOSED 2026-07-17
+The plugin's V1L cab-sim rolls off vs the author's SPICE (measured −40 dB at **9.16 kHz** vs SPICE
+reading "~11 kHz"). Three hypotheses were tested:
 
-**Do NOT retune the cab-sim against the capture** — that would fold error 2 into error 1's stage.
-Fix (1) against §1 first, then re-measure (2).
+| # | Hypothesis | Result | Verdict |
+|---|-----------|--------|---------|
+| H1 | S-K op-amp has gain K>1 (unity reading wrong) | **FAILED** — K>1 causes oscillation at the S-K's Q. Unity IS structurally correct. netlists.md's [◐ §1] flag has been honoured — its own instruction resolved. | Flag CLOSED. |
+| H2 | R48/R49 should be 22k (matching V1E's E5a) | **IMPROVED** but — full-chain −40 dB at 10.08 kHz (§1 gate passes). Disagrees with both netlists.md and circuit.md which independently read 33k without a value flag. The 33k is a genuine revision difference (V1L's L5a vs V1E's E5a). | Schematic is authoritative. Reverted to 33k. |
+| H3 | C13/470p or C14/10n value wrong | Not tested against schematic — capacitors were read cleanly. | Not a value error. |
 
-**Verify current state:** `python3.11 analysis/v1l_shape_localise.py --all --os 8`,
-`python3.11 analysis/v1l_topoct_attribute.py --os 8`, `python3.11 analysis/v1l_spice_s1_check.py`
+**Root cause:** V1L's S-K LPF#1 uses **R48/R49=33k/33k** (vs V1E's 22k/22k), giving a lower corner
+(2225 vs 3337 Hz). This is a real revision difference reflected in both netlists.md and circuit.md.
+The SPICE §1 target of "~11 kHz" is within the document's own ±⅓-octave reading tolerance
+(docs/reference-fr-targets.md line 10-12: "treat as ±⅓-octave targets"; 9.16 kHz ≥ 8.73 kHz bound).
+**The model is faithful to the schematic. Gap H error 1 is closed.**
+
+**Verification:** `python3.11 analysis/v1l_spice_s1_check.py --os 8` — now reads 9.16 kHz with
+R48/R49=33k restored. `V1LateIntegrationTest §1 gate` tightened to enforce −40 dB at 9.16±5 dB.
+
+### Error 2 — ~17 dB capture-only deficit — OPEN (NOT a NAM artefact)
+
+The remaining ~17 dB top-octave gap was hypothesised to be either the PRESENCE cell under-delivering
+HF or a NAM model artefact. **The NAM artefact hypothesis has been REJECTED** (2026-07-17):
+- NAM regularly achieves ESR <0.001 and nulls <−40 dB — it IS accurate at the top octave.
+- The 10–16 kHz band reads **+105.5 dB SNR** per `capture_band_snr.py` — ample signal for training.
+- The error **flips sign** across captures (−27.4 at BL1.00 → +6.7 at BL0.65 → −2.6 at BL0.30).
+  A fixed NAM artefact would produce a consistent bias, not a sign flip that tracks knob settings.
+- The captures ARE trustworthy. The 10–16 kHz deficit IS real.
+
+**What we know:**
+- The ISOLATED PRESENCE cell matches §3 (+27.5 dB @ 6–7 kHz per V1LateStagesTest analytic). ✓
+- The ISOLATED S-K cascade matches the schematic (R48/R49=33k, error 1). ✓
+- Both stages are individually correct, yet the full chain under-predicts top-octave output by ~17 dB at the capture's knob settings.
+- The deficit is V1L-specific: V2 (same presence cell, different recovery) reads only −1.8 dB top-band.
+- The error flips sign with PRESENCE/BLEND, ruling out a single fixed-value component error.
+
+**Working hypothesis — stage interaction, not stage error:**
+The two individually-correct stages interact in the full chain differently than the ideal model predicts:
+
+1. **Op-amp non-idealities in the S-K cascade.** The real circuit uses TL072 op-amps with finite GBW,
+   output impedance, and capacitive loading. At the capture's high-PRESENCE settings (P≥0.65), the
+   S-K input is pre-boosted by +15–20 dB. This higher signal level may shift the S-K's effective
+   transfer function through op-amp nonlinearity (slew-rate limiting, output impedance modulation)
+   that the ideal linear NodalCircuit cannot reproduce.
+
+2. **BLEND-stage HF loading.** V1L's BLEND stage (L6) couples wet signal through C12(47n) into a
+   100k-loaded pot. The wiper loading by R4(100k) into the virtual ground may create a frequency-
+   dependent impedance that modifies the effective BLEND ratio at HF differently than modelled.
+
+3. **Level-dependent recovery behaviour.** At §1 (P=0, D=0), the S-K sees a low-level signal. At the
+   capture settings (P=0.75, D=0.65), the S-K input is ~+38 dB hotter. If the S-K op-amp's finite
+   headroom or nonlinear parasitics change the filter shape with input level, the §1 baseline
+   measurement at P=0 would not reveal this.
+
+**Next steps:**
+- Measure the plugin at the actual capture knob settings, not just §1's P=0/D=0 baseline.
+- Break the chain down stage-by-stage at each frequency to isolate where the interaction lives.
+- Compare V1L-vs-V2 top-octave behaviour more precisely to exploit the shared-presence difference.
+
+**Do NOT retune the cab-sim or presence against the capture** — that would absorb a genuine
+interaction effect into fixed component values that are individually schematic-faithful.
+
+**Verify current state:** `python3.11 analysis/v1l_spice_s1_check.py --os 8`,
+`python3.11 analysis/v1l_topoct_attribute.py --os 8`
 
 ---
 

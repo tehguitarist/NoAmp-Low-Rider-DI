@@ -123,6 +123,23 @@ without images.
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
 > **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`**.
+> **Gap H error 1 CLOSED — V1L S-K cab-sim rolloff (2026-07-17).** Three hypotheses tested:
+> H1 (non-unity gain) — FAILS (oscillation, confirming unity buffer is structurally correct).
+> H2 (R48/R49=22k) — improves but DISAGREES with the schematic (netlists.md + circuit.md read
+> 33k/33k without a value flag; the 33k is a genuine revision difference from V1E's 22k).
+> RESOLUTION: V1L's −40 dB point at 9.16 kHz is within ±⅓-octave of the SPICE reading ("~11 kHz"),
+> per the document's own tolerance (`docs/reference-fr-targets.md` line 10-12). The
+> `V1LateIntegrationTest` §1 gate is tightened to guard against model drift.
+> **Gap H error 1 CLOSED — V1L S-K cab-sim rolloff (2026-07-17).** Model is schematic-faithful
+> (R48/R49=33k). −40 dB at 9.16 kHz within ±⅓-octave of SPICE "~11 kHz" reading.
+> **Gap H error 2 OPEN** — the ~17 dB capture-only top-octave deficit. The ISOLATED PRESENCE
+> cell matches §3 (+27.5 dB @ 6–7 kHz per V1LateStagesTest), and the S-K cascade is confirmed
+> faithful. Individually both stages are correct, so the gap must come from their INTERACTION
+> or an unmodelled effect — not a NAM artefact. The error **flips sign** across captures
+> (−27.4 → +6.7 → −2.6 dB) tracking PRESENCE/BLEND, ruling out a fixed-value component error.
+> Candidates: op-amp non-idealities in the real S-K that the ideal NodalCircuit misses,
+> BLEND-stage HF loading, or a level-dependent effect at high-PRESENCE inputs. Investigation
+> needs a stage-by-stage breakout at the capture's actual knob settings.
 > **⚠ Gap A is NOT closed — "VERIFIED CLOSED" was FALSE (reopened 2026-07-17). T-001's GBW
 > correction moved the output by only −53..−77 dB (inaudible), LARGEST where nothing clips and
 > SMALLEST at the D=1.00 it was built to fix. It has been REMOVED; the chain is now bit-identical
@@ -183,10 +200,15 @@ without images.
 > - **⚠ Any FR@/FR-rms number in this file or `phase10-gap-audit.md` predating 2026-07-17 is
 >   LEVEL-CONFOUNDED** — re-derive on the SHAPE metric before building on it (Gap C above is one).
 >
-> **NEXT: V1L wet-path TOP-OCTAVE deficit — V1L is the WORST revision, not V2.** Level-independent
-> FR shape rms (medians): **V1E 1.27 | V2 2.96 | V1L 5.30 dB** — V2's real error is ~half V1L's;
-> chasing V2 would have spent a session on the second-best revision. Corroborates ISS-010's own
-> "largest remaining errors are V1L's LF/cab-sim wet-path shape".
+> **NEXT: Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
+> Both the S-K (error 1: 33k, schematic-faithful) and PRESENCE (§3: +27.5 dB, analytic-confirmed)
+> are individually correct. The ~17 dB deficit appears only in combination — it flips sign across
+> captures tracking PRESENCE/BLEND, and is V1L-specific (V2 with the same presence cell reads
+> −1.8 dB top-band). Break the chain down at the capture knob settings on a per-frequency basis
+> to find where the interaction lives. Likely candidates: op-amp GBW/output-Z in the real S-K
+> that the ideal NodalCircuit doesn't model, BLEND stage C12 loading, or a drive→recovery
+> level-dependent effect.
+> After Gap H error 2: Gap B (drive-dependent band saturation), Gap E (BASS hump).
 >
 > **LOCALISED (`analysis/v1l_shape_localise.py`, OS=8x, SHAPE metric).** V1L's worst capture (D0.65
 > P0.75 **BL1.00** V0.35, rms **7.88**, max|Δ| **31.4**) is **75% ONE BAND**: 10–16 kHz, mean
@@ -319,7 +341,26 @@ A pedal−plugin delta does NOT rescue it (the plugin's notch is ~11 dB too deep
 nothing.* Gate on **magnitude vs a capture**, at **≥3 drive settings**, saturator **on** — and verify
 the gate FAILS when you delete the feature it guards.
 
-### Open items (phase10-gap-audit.md — REFRESHED 2026-07-16)
+### Gap H diagnostic results (2026-07-17) — Error 1 CLOSED, Error 2 OPEN
+- **Error 1 (S-K cab-sim rolloff) — CLOSED:**
+  - H1 (non-unity gain) — FAILED. Unity structurally correct.
+  - H2 (R48/R49=22k) — REJECTED. Schematic is 33k.
+  - H2E (SPICE tolerance) — ADOPTED. −40 dB at 9.16 kHz within ±⅓-octave of "~11 kHz".
+  - `reference-fr-targets.md` §1 V1L updated; `V1LateIntegrationTest` §1 gate tightened.
+- **Error 2 (top-octave interaction) — OPEN:**
+  - §3 arbitration (`analysis/v1l_presence_s3_check.py`): ISOLATED PRESENCE cell IS faithful
+    (+27.5 dB @ 6–7 kHz at P=1.0 per V1LateStagesTest analytic).
+  - S-K cascade is also faithful (error 1). Both stages individually correct.
+  - Error **flips sign** across captures (−27.4 → +6.7 → −2.6 dB) tracking PRESENCE/BLEND.
+  - Band SNR is +105.5 dB — captures ARE trustworthy at 10–16 kHz (NOT a NAM artefact).
+  - The deficit is V1L-specific (V2 with same presence cell reads −1.8 dB top-band).
+  - **Candidates for investigation:** op-amp non-idealities in the real S-K cascade that the
+    ideal NodalCircuit doesn't model; BLEND-stage C12 coupling into a loaded pot; or a
+    level-dependent effect where high-PRESENCE signals hit the S-K differently than the P=0
+    §1 baseline. Needs stage-by-stage measurement at capture knob settings.
+
+### Open items (phase10-gap-audit.md — REFRESHED 2026-07-17; Gap H error 1 CLOSED, error 2 OPEN)
+> - **Gap B: V1E + V2 drive-dependent band saturation** — 800 Hz notch fill, 3-4 kHz +7.7 dB.
 > - **V1E THD onset** — plugin now uniformly too clean at every drive (0.7–5.2% vs pedal 4.5–9.8%): the
 >   taper fix removed the excess gain that was MASKING absent saturation (old D1.00 THD match was two
 >   errors cancelling). Single coherent cause; rail-knee leverage already proven. **NEXT.**

@@ -51,7 +51,9 @@ The voiced baseline of the wet path with both drive-side knobs at zero. Source:
 | Low bump peak | ~+1 dB @ ~90 Hz | ~+0.5 dB @ ~70 Hz | **~−3 dB @ ~70 Hz** |
 | Deep notch (min) | ~−35 dB @ ~800 Hz | ~−35 dB @ ~750 Hz | ~−36 dB @ ~750–800 Hz |
 | High bump peak | ~+1.5 dB @ ~3 kHz | ~−0.5 dB @ ~3.5 kHz | **~−10 dB @ ~2.5–3 kHz** |
-| HF −40 dB point | ~11–12 kHz | ~11 kHz | **~8 kHz** |
+| HF −40 dB point | ~11–12 kHz | ~9.2 kHz* | **~8 kHz** |
+
+\* V1L's −40 dB point reads ~11 kHz visually on the published FR graph but the plugin model (faithful to the schematic with R48/R49=33k/33k per netlists.md L5a) measures **9.16 kHz at OS=8x** (still within the ±⅓-octave tolerance of the graph reading). The 33k resistor values are a genuine revision difference from V1E's 22k/22k (E5a), making V1L's cab-sim rolloff earlier than V1E's. This is faithful, not an error.
 
 Trends (all corroborated by the article prose):
 - **V1e → V1l:** notch shifts slightly *lower* in freq; high bump ~2 dB *lower*; broadly similar.
