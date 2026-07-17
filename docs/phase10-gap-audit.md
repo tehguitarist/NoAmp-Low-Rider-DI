@@ -23,6 +23,21 @@
 - **`kOutputMakeup` is a free global scalar**, so it absorbs any uniform level error. Never fit a gain
   parameter on absolute offset — fit on the offset **SPREAD** across captures (makeup shifts all of
   them equally and cannot fix spread), then let makeup take the common part.
+- **⚠ EVERY FR NUMBER IN THIS FILE PREDATING 2026-07-17 IS LEVEL-CONFOUNDED — re-derive before
+  acting on it.** `ab_report.fr_check` did NOT gain-normalize until 2026-07-17: it read a raw
+  `plugin − pedal` dB difference against NAM-normalized captures, so it silently included any level
+  offset. It looked correct only because `kOutputMakeup` had been FIT to those captures (offset ≈ 0
+  by construction); T-002 re-anchored it to dry-path unity (V2 +14.02 dB) and the metric promptly
+  invented a "V2 broadband FR shape mismatch" out of that scalar (**VOID — do not re-open**;
+  `analysis/fr_offset_decompose.py` proves the makeup moves shape by 0.0000 dB). `fr_check` now
+  reports **SHAPE** (median offset removed) plus `offset` separately. See CLAUDE.md **L-005**.
+  Re-derive with `ab_report.py` (shape) or `analysis/v1l_shape_localise.py` (per-band).
+- **Capture SNR is NEVER the limitation.** These are NAM MODEL outputs, so the inter-segment
+  "silence" is a net emitting ~zero (−146..−160 dBFS): every band of every capture measures
+  **84–129 dB SNR** (`analysis/capture_band_snr.py`). A quiet band is not a noisy band — do not
+  dismiss an HF/LF error as "below the capture's noise floor" (tested and refuted 2026-07-17).
+  (It does NOT follow that a quiet band is accurate — that measures the model's noise floor, not its
+  fidelity 25 dB below peak.)
 - **The rail is LOCKED at ±4.2 V** (circuit.md: VCC 8.4 = 9 V − D5's 0.6 V). A result that requires
   moving it is evidence of a different un-modelled mechanism, not a licence to move it.
 - **`RecoverySaturator`'s `gain` is a tanh/linear BLEND**, not a depth. gain=0.08 is a near no-op at
@@ -34,21 +49,30 @@
 
 ## Priority order
 
+**Re-ranked 2026-07-17** on the corrected SHAPE metric (L-005). Level-independent FR shape rms,
+median per revision: **V1E 1.27 | V2 2.96 | V1L 5.30 dB**. V1L is the WORST revision — the pre-L-005
+ranking was distorted by level offsets and pointed at V2.
+
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
-| **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D |
-| **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | Open — bilinear warp |
+| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **NEW 2026-07-17 — TOP PRIORITY**, see below |
+| **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
+| **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | ⚠ **Status UNSAFE** — its "closed at OS=8x" evidence was level-confounded; see below |
 | **D** | V2 zener drive tracking | V2 | D0.90 THD slope | Premise CORRECTED 2026-07-17 (knee already fit + refuted). Symptom metric is CONFOUNDED — see below |
-| **A′** | T-001 GBW correction is a no-op | V1E | 0.12% THD vs pedal 9.79% | **REOPENED 2026-07-17** — 4 compounding faults, see below |
-| **G** | THD-vs-f is not a usable metric on this pedal | all | twin-T notches the fundamental | **NEW 2026-07-17** — blocks A/A′/D framing |
 | **E** | BASS 250–430 Hz hump (ex-P2) | V2 | ~3 dB at BASS≠0.65 | Open — uncontaminated post-ISS-008 |
-| **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — impedance loading |
-| ~~A~~ | THD-vs-frequency slope | V1E | **CLOSED** by T-001 GBW correction (2026-07-17) |
-| ~~P3~~ | V1L level staging | V1L | **DONE** (superseded by T-002, 2026-07-17) |
-| ~~P4~~ | V1E sub-100 Hz droop | V1E | **DONE** (C12=220n) |
-| ~~P5~~ | V2 H2 at low drive | V2 | **DONE** (knee 0.150/offset 0.080) |
-| ~~P6~~ | V1E max-drive FR collapse | V1E | **DONE** (kDriveEndR=8k + GbwCorrection.h) — see below |
-| ~~P7~~ | V2 3–4 kHz dip | V2 | Folded into C |
+| **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — impedance loading. **May be partly H** (BL0.65's top band reads +6.2 dB on SHAPE) |
+| ~~G~~ | THD-vs-f is not a usable metric on this pedal | all | twin-T notches the fundamental | **STANDING FINDING** (2026-07-17) — not a gap to close; it BLOCKS the A/A′/D framing |
+| ~~A / A′~~ | THD-vs-frequency slope / T-001 GBW no-op | V1E | 0.12% THD vs pedal 9.79% | **VOID 2026-07-17.** T-001 REMOVED (inert, −53..−77 dB); the motivating metric is itself an artefact per G. Do not re-open without a non-THD-vs-f metric |
+| ~~P3~~ | V1L level staging | V1L | NULL clean gain | **DONE** (superseded by T-002, 2026-07-17) |
+| ~~P4~~ | V1E sub-100 Hz droop | V1E | LF shelf | **DONE** (C12=220n) |
+| ~~P5~~ | V2 H2 at low drive | V2 | H2 Δ | **DONE** (knee 0.150/offset 0.080) |
+| ~~P6~~ | V1E max-drive FR collapse | V1E | D1.00 FR rms | **DONE** (`kDriveEndR`=8k). ⚠ NOT GbwCorrection.h — that was T-001, since REMOVED (see A/A′) |
+| ~~P7~~ | V2 3–4 kHz dip | V2 | 3–4k | Folded into C |
+
+> **Dead code:** `src/dsp/GbwCorrection.h` still exists but has **zero references** in `src/` or
+> `tests/` — orphaned by T-001's removal (4937e6e). Its maths was corrected before the feature was
+> pulled, so it is a working-but-unused header. Delete it or keep it deliberately; do not mistake its
+> presence for T-001 being live.
 
 ---
 
@@ -187,6 +211,53 @@ C32/C29 22p→15p (zero effect — confirms the error is pre-tone-stack), C42 10
 
 Likely needs prewarp or an extension of the oversampled region — see `dsp.md` "Top-octave accuracy".
 Note `utils/Prewarp.h` exists and is unused.
+
+**⚠ STATUS UNSAFE — this gap's "CLOSED at OS=8x" verdict rests on confounded evidence (2026-07-17).**
+CLAUDE.md recorded Gap C closed because *"all V2 12k FR@ anchors positive (+6 to +22 dB)"*. Those are
+plugin-vs-PEDAL anchors read on the OLD raw FR metric, so they carried T-002's **+14.02 dB** level
+offset (L-005). On the corrected SHAPE metric V2's 12k anchors are **mixed, not all-positive**:
+`−7.3, −2.5, +8.1, +5.3, −2.4`. The underlying claim (the 12.5k/16k deficit was an OS=1x artifact)
+may well still hold — a 1x-vs-8x comparison is plugin-vs-plugin and needs no capture — but the cited
+proof does not support it. **Re-derive on SHAPE before treating C as closed or as open.**
+
+---
+
+## H: V1L wet-path TOP-OCTAVE deficit (NEW 2026-07-17 — TOP PRIORITY)
+
+**V1L is the worst revision on the corrected SHAPE metric** (median shape rms V1E 1.27 | V2 2.96 |
+**V1L 5.30 dB**). Its worst capture — `V1L V1030 BL1700 T1000 B1100 D1330 P1430` (D0.65 P0.74
+**BL1.00** V0.35), shape rms **7.88**, max|Δ| **31.4** — is **75% a single band**:
+
+| band | mean shape | worst | share of mean-square |
+|---|---|---|---|
+| **top 10k–16k** | **−25.3 dB** | **−31.4 @ 12473 Hz** | **74.6%** |
+| cab 5k–10k | −3.9 | −15.6 @ 9899 Hz | 8.6% |
+| LF 40–100 | −7.8 | −9.9 @ 40 Hz | 7.1% |
+
+Negative = **plugin too DARK**. BL=1.00 is FULL WET ⇒ the fault is in V1L's **wet path**, not the
+blend. The cross-revision control makes it **V1L-specific** (mean 10–16k shape: V1E −0.0 | V2 −1.8 |
+**V1L −7.0**), so suspect V1L's OWN wet-path HF elements — per netlists.md's reuse map the ones V1E
+and V2 do not share are **L5d's wet make-up buffer (C42 4.7n ∥ R27 22k**, the +10.1 dB → unity
+rolloff) and V1L's L5a/L5b S-K cab-sim LPF values (R48/R49 33k, C14 10n, C13 470p / R35/R34 33k,
+C33 2.2n, C34 1n).
+
+**Ruled out / do NOT re-run:**
+
+| Candidate | Verdict |
+|---|---|
+| "10–16k is below the NAM noise floor, so −31 dB is noise" | **REFUTED 2026-07-17** (`capture_band_snr.py`): that band reads **+105.5 dB SNR**, −25.0 dB re its own peak band. Noise floor is −146..−160 dBFS. SNR is never the limitation on these captures |
+| C10 / R14 (V1L wet HP) | **EXONERATED** (ISS-009, schematic re-crop + §1). Do NOT re-raise C10 |
+| A `kDryGain`-style per-path scalar | **DELETED, never reintroduce** (ISS-008) |
+
+**⚠ Fit trap — do NOT fit C42 against the 7.88 capture alone.** The top-band error **flips sign**
+across V1L's three captures: **−25.3** (BL1.00, P0.74) → **+6.2** (BL0.65, P0.70) → **−1.9**
+(BL0.30, P0.65). A fixed cap cannot produce a sign flip, and PRESENCE (a migrating ~4.8 kHz peak,
+§3) differs across all three — so a single-capture fit would absorb a PRESENCE error into C42. Fit
+the **SPREAD** across captures (the `kDriveEndR` lesson), or isolate PRESENCE with a matched-pair
+capture (`dsp.md` "Isolate a coupled control with a MATCHED-PAIR capture"). Note Gap F (V1L blend
+residual, +6 dB at BL=0.65) may be the same phenomenon seen at a different blend.
+
+**Verify current state:** `python3.11 analysis/v1l_shape_localise.py --all --os 8`
 
 ---
 
@@ -334,6 +405,9 @@ Do not re-measure until after the V2 zener knee fit — V2 improvements may shif
 | `harmonic_report.py` | Per-harmonic H2..H7 vs pedal |
 | `sat_refine.py` / `sat_calibrate.py` | Saturation parameter grids |
 | `v2_hump_measure.py` / `v2_hump_correlate.py` | V2 250–800 Hz hump vs BASS knob |
+| `fr_offset_decompose.py` | **Splits FR error into LEVEL offset vs SHAPE** — proves a makeup scalar is shape-neutral (L-005). Run this before believing any FR offset |
+| `v1l_shape_localise.py` | **Which BAND owns a revision's shape rms**, + cross-revision control (shared stage vs revision-specific). `--all` |
+| `capture_band_snr.py` | Per-band capture SNR vs its own silence gap — settles "is this band measurable?" (answer so far: always yes) |
 
 Always rebuild **everything** before trusting a gate:
 

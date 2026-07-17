@@ -66,6 +66,9 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `sat_decision.py` | Per-revision RMS scores for sat param decision | — |
 | `inref_scan.py` | kInputRef THD-vs-level fit from clip onset | `--values`, `--metric`, `--os` |
 | `gen_test_signal.py` | Comprehensive A/B reference signal (append-only) | — |
+| `fr_offset_decompose.py` | Splits FR error into LEVEL offset vs SHAPE; proves a makeup scalar is shape-neutral (L-005) | `--filter`, `--os` |
+| `v1l_shape_localise.py` | Localises FR-shape error into bands + cross-revision control (which stage owns it) | `--all`, `--os` |
+| `capture_band_snr.py` | Per-band SNR of each capture vs its own silence gap — can a band arbitrate an error at all? | `--filter`, `--min-snr` |
 
 **ALWAYS write new analysis commands as scripts in `analysis/`** — never as inline Python in a
 tool call. Inline commands block the terminal on long-running harmonic/THD scans and the output

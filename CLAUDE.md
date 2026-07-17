@@ -146,15 +146,71 @@ without images.
 > 5. **V2 saturator re-verification** — sat_refine.py --rev V2: current (0.04, 0.150, 0.080)
 >    already at best (RMS 7.6). No change. V2's zener dominates THD; saturator is negligible.
 > 6. **V1E saturator post-GBW** — (0.40, 0.25, 0.020) still optimal at D0.50. No change.
-> 7. **Gap C (V2 bilinear warp) — CLOSED at OS=8x.** All V2 12k FR@ anchors positive (+6 to +22 dB).
->    The 12.5k/16k deficit from the old gap audit was an OS=1x artifact.
+> 7. **Gap C (V2 bilinear warp) — CLOSED at OS=8x, but ⚠ RE-CHECK ITS EVIDENCE.** The OS=1x-artifact
+>    conclusion may well hold, but the cited proof ("all V2 12k FR@ anchors positive, +6 to +22 dB")
+>    is plugin-vs-PEDAL and therefore carried the +14 dB level offset below. On the SHAPE metric V2's
+>    12k anchors are **mixed** (−7.3, −2.5, +8.1, +5.3, −2.4) — not all-positive. Re-derive before
+>    citing Gap C as closed.
 > **ISS-010: linear headroom still 10-21 dB.** The V1L saturator helped THD but didn't materially
 > change the linear headroom. The largest remaining errors are V1L's LF/cab-sim wet-path shape
-> and V2's drive-dependent zener behavior (NOT knee params; root cause still unknown).
-> **NEXT: V2 broadband FR shape mismatch — every V2 capture shows +10-20 dB at ALL FR@ anchors,
-> even at BL=1.00. Investigate whether this is a baseline EQ/level offset in the V2 wet path
-> or a stage-gain mismatch (V2's LEVEL stage has +4.18 dB dry gain — may be propagating
-> offset into wet path via the BLEND pot's frequency-dependent leakage).**
+> and V2's drive-dependent zener behavior (NOT knee params; root cause still unknown). (The null/
+> linear-removed columns ARE gain-matched, so ISS-010 is NOT affected by the FR offset bug below.)
+>
+> ### ⚠ "V2 broadband FR shape mismatch" — VOID, A METRIC ARTEFACT (2026-07-17) — do not re-open
+>
+> The old NEXT ("every V2 capture shows +10-20 dB at ALL FR@ anchors, even at BL=1.00 — investigate a
+> V2 wet-path EQ/level offset or the BLEND pot leaking the LEVEL stage's +4.18 dB dry gain") is
+> **refuted and deleted**. `ab_report.fr_check` did **NOT** gain-normalize (raw `d_ren − d_cap`),
+> despite the module docstring claiming "Every null/FR comparison normalizes gain first and reads
+> SHAPE". The captures are NAM-normalized ⇒ absolute level is arbitrary. It only ever LOOKED right
+> because `kOutputMakeup` was FIT to these captures (offset ≈ 0 by construction); **T-002 re-anchored
+> it to dry-path unity (V2: 0.123 → 0.618 = +14.02 dB) and the whole "mismatch" is that scalar.**
+>
+> - **Proven, not argued** (`analysis/fr_offset_decompose.py`, all 11 captures): switching between the
+>   pre/post-T-002 makeup moves `offset` by exactly its own dB value (**err 0.0000**) and moves
+>   rms(SHAPE) by **0.0000 dB**. A flat output scalar cannot bend an FR. **T-002 is vindicated as
+>   shape-neutral** — its Calibration.h claim was right; only its stated *reason* ("ab_report
+>   gain-matches per file") was false.
+> - **"Even at BL=1.00" was itself the tell.** Blend leakage MUST vanish at full wet, so its
+>   persistence at BL=1.00 was already evidence AGAINST the blend hypothesis. The note recorded the
+>   fact that refuted its own hypothesis. (Contrast ISS-008, where "invisible at BL=1.00, growing as
+>   BL falls" correctly fingered a dry-leg-only fault. Uniform AT BL=1.00 ⇒ a global scalar.)
+> - **FIXED:** `fr_check` now reports SHAPE (median offset removed) **and** `offset` separately —
+>   strictly more info, not a loosened gate; true level still lives in `null_check`'s `gain_lin`.
+>   Corroboration that SHAPE is the right metric: it independently reproduces the documented P6
+>   residuals the offset had buried (V1E D1.00 → 800 Hz **−10.8 dB** ≈ "notch 11 dB too deep";
+>   3–4 kHz **+7.6/+8.0** ≈ "+8.7 dB").
+> - **⚠ Any FR@/FR-rms number in this file or `phase10-gap-audit.md` predating 2026-07-17 is
+>   LEVEL-CONFOUNDED** — re-derive on the SHAPE metric before building on it (Gap C above is one).
+>
+> **NEXT: V1L wet-path TOP-OCTAVE deficit — V1L is the WORST revision, not V2.** Level-independent
+> FR shape rms (medians): **V1E 1.27 | V2 2.96 | V1L 5.30 dB** — V2's real error is ~half V1L's;
+> chasing V2 would have spent a session on the second-best revision. Corroborates ISS-010's own
+> "largest remaining errors are V1L's LF/cab-sim wet-path shape".
+>
+> **LOCALISED (`analysis/v1l_shape_localise.py`, OS=8x, SHAPE metric).** V1L's worst capture (D0.65
+> P0.75 **BL1.00** V0.35, rms **7.88**, max|Δ| **31.4**) is **75% ONE BAND**: 10–16 kHz, mean
+> **−25.3 dB**, worst **−31.4 @ 12.5 kHz** — the plugin is far too DARK up top. BL=1.00 is FULL WET
+> ⇒ the fault is in V1L's WET path, not the blend. Cross-revision control confirms it is
+> V1L-SPECIFIC (mean 10–16k shape: V1E −0.0 | V2 −1.8 | **V1L −7.0**), so it is one of V1L's OWN
+> stages — prime suspects are the only wet-path HF elements V1E/V2 don't share: **L5d's C42 4.7n ∥
+> R27 22k** (the +10.1 dB make-up buffer's rolloff to unity, V1L-only per netlists.md/reuse map) and
+> the L5a/L5b S-K cab-sim LPF values. **C10/R14 are EXONERATED — do NOT re-raise C10** (ISS-009).
+> - **⚠ The band is NOT drive-independent across captures** — top-band shape swings −25.3 (BL1.00,
+>   P0.74) → **+6.2** (BL0.65, P0.70) → −1.9 (BL0.30, P0.65). Sign FLIPS. PRESENCE (which peaks
+>   ~4.8 kHz and migrates, §3) differs across all three, so do NOT fit C42 against the 7.88 capture
+>   alone — a single-capture fit will absorb a PRESENCE error into a fixed cap. Use a matched-pair or
+>   fit the SPREAD (the kDriveEndR lesson: fit the spread, let a scalar absorb the common offset).
+> - **A hypothesis I tested and REFUTED — do not re-run it:** "the 10–16k band on a full-wet V1L
+>   capture is below the NAM model's noise floor, so −31 dB is noise" (§1 says V1L's wet path is
+>   ~−40 dB by 11–12 kHz, so this was plausible, and it is the ISS-011 pattern). **FALSE.**
+>   `analysis/capture_band_snr.py` measures each file's own inter-segment silence gap: **every band of
+>   every V1L capture has 84–129 dB SNR** (noise floor −146..−160 dBFS; the 10–16k band on the 7.88
+>   capture reads **+105.5 dB SNR**, sitting −25.0 dB re its own peak band). **Durable fact: these
+>   captures are NAM MODEL OUTPUT, so "silence" is a net emitting ~zero — there is no analog noise
+>   floor and SNR is NEVER a reason to distrust a band.** (Caveat: that measures the model's noise
+>   floor, not its ACCURACY 25 dB below peak — high SNR refutes "we're measuring noise"; it does not
+>   by itself prove a quiet band is trustworthy.)
 >
 > ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
@@ -359,6 +415,21 @@ the gate FAILS when you delete the feature it guards.
   Gate on **magnitude against a capture**, across **≥3 knob settings**, with neighbouring stages ON —
   and prove the gate FAILS when the feature it guards is deleted. Sibling of L-001: a gate written
   against a THEORETICAL prediction rather than a measurement will certify a no-op. See Gap A′.
+- **L-005: A metric compared against LEVEL-NORMALIZED captures must normalize level — and a
+  docstring is not evidence that it does.** `ab_report.fr_check` claimed (in the module docstring)
+  to gain-match and never did; it read a raw `plugin − pedal` dB difference against NAM-normalized
+  captures whose absolute level is arbitrary. It stayed invisible for the worst possible reason:
+  `kOutputMakeup` was FIT to those captures, so the offset was ~0 **by construction** — the metric
+  was silently measuring "how well did we fit the makeup", and looked fine. The instant T-002 moved
+  that anchor for an unrelated (and correct) reason, the metric manufactured a "V2 broadband FR
+  mismatch" out of a pure scalar. **Three tells, any one of which was enough:** (1) the offset was
+  UNIFORM across all anchors — real EQ faults are frequency-selective; (2) it appeared on all five
+  V2 captures at once, including BL=1.00, where the proposed blend-leakage mechanism *cannot* act;
+  (3) its size (+14.0 dB) exactly equalled a constant that had just changed. **Distinct from L-001:**
+  nothing was widened to hide it — `git log -L :fr_check:` shows it was born raw, so "suspect the
+  fit, git log -L the gate" would NOT have caught this. The check that does: **ask what the metric
+  reads when the model is perfect but the level is arbitrary.** Sibling of L-004 (which asks whether
+  the *phenomenon* is an artefact); this asks whether the *comparison* is.
 - **L-004: Before modelling a mechanism, check the metric that motivated it isn't an artefact.**
   T-001 modelled finite GBW to fix a "THD-vs-frequency slope" that is very likely just the twin-T
   notching the FUNDAMENTAL (harmonics are generated downstream and pass unattenuated, so THD inflates

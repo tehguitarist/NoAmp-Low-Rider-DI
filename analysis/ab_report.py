@@ -8,7 +8,9 @@ For every capture in analysis/captures/ this:
   3. aligns both the capture and the render onto the reference timeline, and
   4. reports the four Phase-10 checks per docs/validation-and-capture.md:
        FR      — 1/6-oct (+densified interest-band) frequency response, plugin vs pedal, on the
-                 CLEAN sweep; max/RMS deviation + per-interest-band deltas.
+                 CLEAN sweep; max/RMS deviation + per-interest-band deltas. Reported as SHAPE (a
+                 per-file level offset is removed and reported separately — see fr_check's note;
+                 the captures are level-normalized, so a raw dB difference is not interpretable).
        THD     — continuous Farina THD(f) on the driven sweeps, plugin vs pedal, at anchor freqs.
        NULL    — optimal-gain-matched null depth (linear, on the clean sweep; and full, on a driven
                  sweep) + the linear-removed floor (how much of the residual is nonlinear/capture).
@@ -20,9 +22,12 @@ For every capture in analysis/captures/ this:
 
 WHY gain-matched everything: the captures are NAM-model output (level-normalized), so absolute
 level is NOT trustworthy (memory: noamp-capture-pipeline). Every null/FR comparison normalizes gain
-first and reads SHAPE. `kInputRef` is anchored from clip-onset SHAPE (THD-vs-input-level), not level
-— use --in-ref-scan data (the driven-sweep THD tables printed here) to slide it; this script reports,
-it does not auto-fit the calibration constants.
+first and reads SHAPE — NULL fits an optimal gain, FR removes a median offset (this was NOT true of
+FR until 2026-07-17; the un-normalized version manufactured a phantom "V2 broadband FR mismatch" out
+of T-002's kOutputMakeup re-anchor — read fr_check's note before touching it). `kInputRef` is
+anchored from clip-onset SHAPE (THD-vs-input-level), not level — use --in-ref-scan data (the
+driven-sweep THD tables printed here) to slide it; this script reports, it does not auto-fit the
+calibration constants.
 
 Usage:
   python3 analysis/ab_report.py [options]      # run from repo root
@@ -62,17 +67,44 @@ def render_plugin(binpath, args, out_path, os_factor):
 
 
 def fr_check(cap_al, ren_al, orig):
-    """FR magnitude (dB) of pedal and plugin on the clean sweep, + their difference on the grid."""
+    """FR of pedal vs plugin on the clean sweep, split into a LEVEL offset and a SHAPE error.
+
+    ⚠ WHY THIS SPLITS (2026-07-17) — DO NOT COLLAPSE IT BACK TO A RAW DIFFERENCE.
+    The captures are NAM-model output = LEVEL-NORMALIZED (memory: noamp-capture-pipeline), so their
+    absolute level is arbitrary and a RAW `d_ren - d_cap` is only readable if the plugin's absolute
+    level happens to sit on that arbitrary normalization. This function was raw from 9aeccd5 until
+    2026-07-17 and it only ever LOOKED right because kOutputMakeup was FIT to these captures, forcing
+    the offset to ~0 by construction. T-002 (f7e47f2) re-anchored kOutputMakeup to dry-path unity
+    (V2: 0.123 -> 0.618 = +14.02 dB) and every V2 FR@ anchor promptly moved +10..20 dB — which was
+    logged as a "V2 broadband FR shape mismatch" and nearly cost a session modelling a wet-path EQ
+    mechanism that does not exist.
+
+    `analysis/fr_offset_decompose.py` proved the offset is PURE LEVEL: across all 11 captures the
+    makeup change moved `offset` by exactly its own dB value (err 0.0000) and moved rms(SHAPE) by
+    0.0000 dB. A flat output scalar cannot bend a frequency response — so the offset carries no
+    shape information and must not be summed into the shape error.
+
+    Nothing is discarded: `offset` is reported alongside, and true level lives in null_check's
+    gain_lin (meaningful only within the identically-staged V1E+V2 set — V1L is variably staged).
+
+    Returns rms/max_abs = SHAPE (level-independent, the real error) plus offset and the raw values.
+    """
     inp = A.seg_of(orig, "sweep_clean")
     f, H_cap = A.transfer(A.seg_of(cap_al, "sweep_clean"), inp)
     f, H_ren = A.transfer(A.seg_of(ren_al, "sweep_clean"), inp)
     grid = np.array([x for x in A.analysis_freqs() if 40.0 <= x <= 16000.0])
     d_cap = np.interp(grid, f, H_cap)
     d_ren = np.interp(grid, f, H_ren)
-    diff = d_ren - d_cap                      # plugin minus pedal, dB
+    diff = d_ren - d_cap                      # plugin minus pedal, dB (level-confounded)
+    offset = float(np.median(diff))           # median: robust to a few outlier bands
+    shape = diff - offset                     # the level-independent error
+    # anchors reported as SHAPE (offset removed) — raw kept for continuity/level bookkeeping.
     anchors = {t: (float(np.interp(t, f, H_cap)), float(np.interp(t, f, H_ren))) for t in FR_ANCHORS}
-    return dict(max_abs=float(np.max(np.abs(diff))),
-                rms=float(np.sqrt(np.mean(diff ** 2))),
+    return dict(max_abs=float(np.max(np.abs(shape))),
+                rms=float(np.sqrt(np.mean(shape ** 2))),
+                offset=offset,
+                rms_raw=float(np.sqrt(np.mean(diff ** 2))),
+                max_abs_raw=float(np.max(np.abs(diff))),
                 anchors=anchors)
 
 
@@ -139,9 +171,11 @@ def print_one(res):
     print(f"\n=== {res['rev']}  {pots}{extra}")
     print(f"    {res['name']}")
     fr = res["fr"]
-    print(f"  FR   max|Δ|={fr['max_abs']:5.2f} dB  rms={fr['rms']:4.2f} dB   (plugin−pedal)")
-    line = "  FR@  " + "  ".join(f"{t}:{ren-cap:+.1f}" for t, (cap, ren) in fr["anchors"].items())
-    print(line + "   dB")
+    print(f"  FR   max|Δ|={fr['max_abs']:5.2f} dB  rms={fr['rms']:4.2f} dB   (SHAPE, level-independent)")
+    print(f"       level offset={fr['offset']:+6.2f} dB  (captures are NAM level-normalized ⇒ offset is "
+          f"NOT shape; see fr_check)")
+    line = "  FR@  " + "  ".join(f"{t}:{ren-cap-fr['offset']:+.1f}" for t, (cap, ren) in fr["anchors"].items())
+    print(line + "   dB (SHAPE)")
     nd = res["null"]
     print(f"  NULL clean={nd['null_lin']:6.1f} dB (gain {nd['gain_lin']:+.1f})  "
           f"driven={nd['null_drv']:6.1f} dB (gain {nd['gain_drv']:+.1f})")
@@ -212,12 +246,14 @@ def main():
     if a.csv:
         with open(a.csv, "w", newline="") as fh:
             w = csv.writer(fh)
-            w.writerow(["rev", "file", "fr_max_abs_dB", "fr_rms_dB", "null_clean_dB", "null_driven_dB",
+            w.writerow(["rev", "file", "fr_shape_max_abs_dB", "fr_shape_rms_dB", "fr_level_offset_dB",
+                        "fr_raw_rms_dB", "null_clean_dB", "null_driven_dB",
                         "lr_clean_dB", "lr_driven_dB", "level_gain_clean_dB"])
             for r in results:
                 if not r:
                     continue
                 w.writerow([r["rev"], r["name"], f"{r['fr']['max_abs']:.2f}", f"{r['fr']['rms']:.2f}",
+                            f"{r['fr']['offset']:.2f}", f"{r['fr']['rms_raw']:.2f}",
                             f"{r['null']['null_lin']:.1f}", f"{r['null']['null_drv']:.1f}",
                             f"{r['null']['lr_lin']:.1f}", f"{r['null']['lr_drv']:.1f}",
                             f"{r['null']['gain_lin']:.2f}"])
@@ -227,10 +263,17 @@ def main():
     if ok:
         print("\n" + "=" * 70)
         print(f"SUMMARY  ({len(ok)}/{len(results)} analysed)")
-        print(f"  median FR max|Δ| : {np.median([r['fr']['max_abs'] for r in ok]):.2f} dB")
+        print(f"  median FR shape rms : {np.median([r['fr']['rms'] for r in ok]):.2f} dB")
+        print(f"  median FR shape max|Δ|: {np.median([r['fr']['max_abs'] for r in ok]):.2f} dB")
         print(f"  median clean null: {np.median([r['null']['null_lin'] for r in ok]):.1f} dB")
         print(f"  median driven null:{np.median([r['null']['null_drv'] for r in ok]):.1f} dB")
         print("  (V1L is shape-only — variably staged; its LEVEL/gain columns are not comparable.)")
+        print("\n  FR shape rms by revision (level-independent ⇒ the real ranking):")
+        for rev in ("V1E", "V1L", "V2"):
+            rs = [r["fr"]["rms"] for r in ok if r["rev"] == rev]
+            if rs:
+                print(f"    {rev:4} " + "  ".join(f"{v:5.2f}" for v in sorted(rs))
+                      + f"   median {np.median(rs):.2f} dB")
 
 
 if __name__ == "__main__":
