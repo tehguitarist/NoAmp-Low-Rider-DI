@@ -122,16 +122,16 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`**.
-> **Gap H error 1 CLOSED — V1L S-K cab-sim rolloff (2026-07-17).** Three hypotheses tested:
-> H1 (non-unity gain) — FAILS (oscillation, confirming unity buffer is structurally correct).
-> H2 (R48/R49=22k) — improves but DISAGREES with the schematic (netlists.md + circuit.md read
-> 33k/33k without a value flag; the 33k is a genuine revision difference from V1E's 22k).
-> RESOLUTION: V1L's −40 dB point at 9.16 kHz is within ±⅓-octave of the SPICE reading ("~11 kHz"),
-> per the document's own tolerance (`docs/reference-fr-targets.md` line 10-12). The
-> `V1LateIntegrationTest` §1 gate is tightened to guard against model drift.
-> **Gap H error 1 CLOSED — V1L S-K cab-sim rolloff (2026-07-17).** Model is schematic-faithful
-> (R48/R49=33k). −40 dB at 9.16 kHz within ±⅓-octave of SPICE "~11 kHz" reading.
+> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-18).** All work is on **`main`**.
+> **Read the "📋 GAP STATUS AT A GLANCE" table and the "⛔ CAPTURE MATRIX IS FINAL" block below FIRST**
+> — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
+> now best-effort (schematic-faithful) because no capture can arbitrate them.
+> **Last change: Gap H error 1 FIXED (R48/R49 33k→22k, §1-match override, commit 4eafd33), 23/23
+> green, reports regenerated.** ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
+> that used to sit here was OVERTURNED — it rested on a §1 target that had been edited to the model's
+> value (L-001) and on splitting two summing causes. Do not restore it.
+> **Next actionable item: Gap H error 2** (~19 dB, dominant, likely best-effort). Then Gap C, Gap J+E.
+> Gap I and Gap D are DEFERRED (blocked on the external kInputRef question, not on effort).
 > **Gap H error 2 OPEN** — the ~17 dB capture-only top-octave deficit. The ISOLATED PRESENCE
 > cell matches §3 (+27.5 dB @ 6–7 kHz per V1LateStagesTest), and the S-K cascade is confirmed
 > faithful. Individually both stages are correct, so the gap must come from their INTERACTION
@@ -229,6 +229,28 @@ without images.
 >   not ruled out. A documented guess is honest; a guess that reads like a measurement is the L-008
 >   failure mode that produced the Gap I stack.
 >
+> ## 📋 GAP STATUS AT A GLANCE (2026-07-18) — full detail in `docs/phase10-gap-audit.md`
+>
+> **The complete gap ledger. A fresh session should start here, then read the cited §.** "Best-effort"
+> = the FINAL matrix cannot arbitrate it; be schematic-faithful and document (see the matrix block ↑).
+>
+> | Gap | What | Status → next action |
+> |---|---|---|
+> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | **OPEN, the biggest live item.** Not PRESENCE/S-K/corner/compression. **← START HERE.** Likely best-effort (schematic + §1 already satisfied; only the NAM capture disagrees). |
+> | **C** | V2 12.5k/16k HF (−5.9/−19.1 dB) | **OPEN, status was UNSAFE** — its "closed" evidence was level-confounded. **Re-derive on the SHAPE metric first**, then treat (bilinear warp of the recovery LPF cascade; `Prewarp.h` exists, unused). |
+> | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
+> | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
+> | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
+> | **I** | THD-vs-LEVEL slope wrong (V1E flat, V2 2× steep) | **DEFERRED by user** — a 4-deep compensator stack; blocked on a 13 dB V1E-vs-V2 `kInputRef` dispute that needs the NAM capture levels (external). `kInputRef` stays 1.3. |
+> | **D** | V2 zener drive tracking | **DEFERRED** — parked behind Gap I (almost certainly the same under-clamping zener). |
+> | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
+> | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
+> | **A/A′, P3–P7** | (various) | ✅ DONE/VOID — see table below. |
+>
+> **Deferred items (I, D) are blocked on external input, not on effort** — don't try to "fix" them;
+> they need the per-revision NAM capture input levels to resolve the kInputRef dispute. Everything
+> else is workable now with the tools + capture-free references in hand.
+>
 > ### 2026-07-17 (later session): METRIC FIXES + TWO NEW GAPS — read `phase10-gap-audit.md` M / I / J
 >
 > **ACCEPTANCE TARGETS SET BY THE USER:** FR within **1.5 dB** (60 Hz–12 kHz) / **3 dB** at the
@@ -306,13 +328,15 @@ without images.
 >   at the capture's **P=0.75** the cell gives **+10.1 dB** @12.5 kHz; its absolute **ceiling** at
 >   P=1.00 is **+27.3 dB**. Subtracting it, **the capture implies V1L's wet path is −28.3 dB @12.5
 >   kHz while SPICE §1 says −40 dB — an 11.7 dB disagreement.**
-> - **⇒ THE CONFLICT IS CAPTURE vs SPICE, NOT plugin vs schematic.** The plugin follows §1 (−40 dB at
->   9.16 kHz, inside its own ±⅓-octave tolerance) AND the schematic (R48/R49=33k, read independently
->   twice). Two references disagree by ~12 dB; the plugin implements one faithfully. **This is an
->   ARBITRATION, not a fit** — which is why "do NOT retune the cab-sim/presence against the capture"
->   stands. Arbitration options are listed in the gap audit (matched-pair PRESENCE capture; re-read
->   §1's top octave, which sits at the graph's least-supported edge — N-004 applied to SPICE; or
->   quantify real-S-K stopband floor-out, but the TLC2264 still has ~35 dB loop gain at 12.5 kHz).
+> - **⇒ ERROR 2 IS CAPTURE vs SPICE.** (Note: error 1 — model darker than SPICE — was resolved
+>   2026-07-18 by the R48/R49→22k override, so the model now follows §1 at ~10.1 kHz. Error 2 is the
+>   SEPARATE, larger gap: the capture implies ~12 dB MORE top-octave HF than SPICE itself has.) Since
+>   the plugin already satisfies both §1 and the schematic, and only the NAM capture wants more, **this
+>   is an ARBITRATION with no arbiter — the matrix is FINAL.** "Do NOT retune the cab-sim/presence
+>   against the capture" stands; likely best-effort schematic-faithful. (The matched-pair PRESENCE
+>   capture that would have arbitrated is GONE — matrix FINAL. Remaining capture-free angles: quantify
+>   the real-S-K stopband floor-out, but the TLC2264 still has ~35 dB loop gain at 12.5 kHz, so put a
+>   number on it before believing it.)
 > - **⚠ "The real circuit uses TL072 op-amps" was FACTUALLY WRONG and is deleted.** circuit.md:
 >   *"TL072 only appears in the XLR driver, which we're not modelling."* V1L's S-K is **TLC2264**
 >   (CMOS, GBW **0.72 MHz**) — not a TL072 (bipolar, 3 MHz). Use the right part's numbers.
@@ -337,15 +361,14 @@ without images.
 > already satisfied and only the NAM capture disagrees, close it best-effort schematic-faithful and
 > document the residual. Then Gap J+E (**one item — permanently confounded**) / Gap C.
 >
-> **Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
-> Both the S-K (error 1: 33k, schematic-faithful) and PRESENCE (§3: +27.5 dB, analytic-confirmed)
-> are individually correct. The ~17 dB deficit appears only in combination — it flips sign across
-> captures tracking PRESENCE/BLEND, and is V1L-specific (V2 with the same presence cell reads
-> −1.8 dB top-band). Break the chain down at the capture knob settings on a per-frequency basis
-> to find where the interaction lives. Likely candidates: op-amp GBW/output-Z in the real S-K
-> that the ideal NodalCircuit doesn't model, BLEND stage C12 loading, or a drive→recovery
-> level-dependent effect.
-> After Gap H error 2: Gap B (drive-dependent band saturation), Gap E (BASS hump).
+> **Gap H error 2 (~19 dB, DOMINANT, OPEN) — read `phase10-gap-audit.md` §H "Error 2" for the live
+> analysis.** Do not re-derive from here. Established: error 1 is now FIXED (S-K = **22k**, not the
+> stale "33k schematic-faithful" that used to be written here); PRESENCE (§3, +27.5 dB) and the S-K
+> cascade are each individually correct; the deficit is V1L-specific, LEVEL-INDEPENDENT (linear, not
+> compression), and NOT the PRESENCE cell (authority argument). It is a CAPTURE-vs-SPICE
+> disagreement; the "op-amp GBW (TL072)" candidate is **DELETED** — wrong part (V1L's S-K is
+> TLC2264). Given the FINAL matrix it may be best-effort (schematic + §1 already satisfied).
+> After error 2: Gap C, then Gap J+E.
 >
 > **LOCALISED (`analysis/v1l_shape_localise.py`, OS=8x, SHAPE metric).** V1L's worst capture (D0.65
 > P0.75 **BL1.00** V0.35, rms **7.88**, max|Δ| **31.4**) is **75% ONE BAND**: 10–16 kHz, mean
@@ -484,25 +507,30 @@ A pedal−plugin delta does NOT rescue it (the plugin's notch is ~11 dB too deep
 nothing.* Gate on **magnitude vs a capture**, at **≥3 drive settings**, saturator **on** — and verify
 the gate FAILS when you delete the feature it guards.
 
-### Gap H diagnostic results (2026-07-17) — Error 1 CLOSED, Error 2 OPEN
-- **Error 1 (S-K cab-sim rolloff) — CLOSED:**
-  - H1 (non-unity gain) — FAILED. Unity structurally correct.
-  - H2 (R48/R49=22k) — REJECTED. Schematic is 33k.
-  - H2E (SPICE tolerance) — ADOPTED. −40 dB at 9.16 kHz within ±⅓-octave of "~11 kHz".
-  - `reference-fr-targets.md` §1 V1L updated; `V1LateIntegrationTest` §1 gate tightened.
-- **Error 2 (top-octave interaction) — OPEN:**
+### Gap H diagnostic results — Error 1 FIXED 2026-07-18, Error 2 OPEN
+- **Error 1 (S-K cab-sim rolloff) — FIXED (R48/R49 33k→22k, §1-match override):**
+  - H1 (non-unity gain) — FAILED. Unity structurally correct. (durable)
+  - H2 (R48/R49=22k) — ⚠ was REJECTED 2026-07-17 on "schematic is 33k", **that rejection is now
+    REVERSED**: the §1 cross-revision SPACING (`s1_crossrev_check.py`) showed 33k separates V1E/V1L
+    0.30 octave more than the author's own sim, and the user chose the sim. **22k applied.** −40 dB
+    point 9.16→10.08 kHz; worst-capture top band −25.3→−19.0 dB. Gate rebuilt with teeth (fails 33k).
+  - The old "H2E: 9.16 kHz within tolerance, schematic-faithful" verdict is VOID — it rested on a §1
+    target that had been edited to the model's own value (L-001).
+- **Error 2 (~19 dB, top-octave, DOMINANT) — OPEN:**
   - §3 arbitration (`analysis/v1l_presence_s3_check.py`): ISOLATED PRESENCE cell IS faithful
     (+27.5 dB @ 6–7 kHz at P=1.0 per V1LateStagesTest analytic).
   - S-K cascade is also faithful (error 1). Both stages individually correct.
   - Error **flips sign** across captures (−27.4 → +6.7 → −2.6 dB) tracking PRESENCE/BLEND.
   - Band SNR is +105.5 dB — captures ARE trustworthy at 10–16 kHz (NOT a NAM artefact).
   - The deficit is V1L-specific (V2 with same presence cell reads −1.8 dB top-band).
-  - **Candidates for investigation:** op-amp non-idealities in the real S-K cascade that the
-    ideal NodalCircuit doesn't model; BLEND-stage C12 coupling into a loaded pot; or a
-    level-dependent effect where high-PRESENCE signals hit the S-K differently than the P=0
-    §1 baseline. Needs stage-by-stage measurement at capture knob settings.
+  - LEVEL-INDEPENDENT ⇒ linear, not compression (`v1l_topoct_level_check.py`).
+  - **Candidates (2026-07-18, after error 1's fix):** NOT op-amp GBW (that was the wrong-part TL072
+    hypothesis, DELETED — V1L's S-K is TLC2264); NOT PRESENCE (authority argument). Remaining: the
+    C42 wet-buffer's real HF shape, a wet-path stage interaction, or a genuine schematic-vs-SPICE
+    disagreement that the FINAL matrix cannot arbitrate ⇒ **likely best-effort schematic-faithful**.
+    See `phase10-gap-audit.md` §H "Error 2" — that is the authoritative copy.
 
-### Open items (phase10-gap-audit.md — REFRESHED 2026-07-17; Gap H error 1 CLOSED, error 2 OPEN)
+### Open items (see phase10-gap-audit.md for the live copy; Gap H error 1 FIXED 2026-07-18, error 2 OPEN)
 > - **Gap B: V1E + V2 drive-dependent band saturation** — 800 Hz notch fill, 3-4 kHz +7.7 dB.
 > - **V1E THD onset** — plugin now uniformly too clean at every drive (0.7–5.2% vs pedal 4.5–9.8%): the
 >   taper fix removed the excess gain that was MASKING absent saturation (old D1.00 THD match was two

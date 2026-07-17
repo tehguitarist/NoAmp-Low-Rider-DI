@@ -91,10 +91,11 @@ ranking was distorted by level offsets and pointed at V2.
 | **J** | **V1L 285 Hz blend-tracking notch** | V1L | shape at 285 Hz: **+1.5 / −2.5 / −23.8 dB** at BL 1.00 / 0.65 / 0.30 | **NEW 2026-07-17.** Narrow (−23.8 @285, −4.7 @202, −3.4 @403), deep, and **monotonic in BLEND** — invisible at full wet, deep as dry takes over = dry/wet **PHASE** cancellation. A scalar cannot do this (and `kDryGain` must never return — ISS-008). See below. |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | ⚠ **Status UNSAFE** — its "closed at OS=8x" evidence was level-confounded; see below |
-| **D** | V2 zener drive tracking | V2 | D0.90 THD slope | Premise CORRECTED 2026-07-17 (knee already fit + refuted). Symptom metric is CONFOUNDED — see below |
-| **E** | BASS 250–430 Hz hump (ex-P2) | V2 | ~3 dB at BASS≠0.65 | Open — uncontaminated post-ISS-008 |
-| **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — impedance loading. **May be partly H** (BL0.65's top band reads +6.2 dB on SHAPE) |
+| **D** | V2 zener drive tracking | V2 | D0.90 THD slope | **PARKED 2026-07-18** — symptom metric confounded (G); knee/Cj/m all ruled out. **Likely a facet of Gap I** (V2 zener under-clamps at high drive); work I's V2 half first. D follows Gap I ⇒ DEFERRED |
+| **E** | BASS 250–430 Hz hump (ex-P2) | V2 | ~3 dB at BASS≠0.65 | Open — **fit on V2 ONLY** (V1L's 285 Hz is Gap J; permanently confounded, matrix FINAL) |
+| **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — impedance loading. **Likely the same phenomenon as H/J** at BL0.65 (top band +6.2 dB on SHAPE) |
 | ~~G~~ | THD-vs-f is not a usable metric on this pedal | all | twin-T notches the fundamental | **STANDING FINDING** (2026-07-17) — not a gap to close; it BLOCKS the A/A′/D framing |
+| ~~M~~ | Farina THD estimator artefact (spike at SWEEP_F1/N) | all | 2874 Hz phantom | **FIXED at source 2026-07-17** (order-limiting in analyze.py); coverage 3→9.5 kHz. Not a gap — a metric fix. See §M |
 | ~~A / A′~~ | THD-vs-frequency slope / T-001 GBW no-op | V1E | 0.12% THD vs pedal 9.79% | **VOID 2026-07-17.** T-001 REMOVED (inert, −53..−77 dB); the motivating metric is itself an artefact per G. Do not re-open without a non-THD-vs-f metric |
 | ~~P3~~ | V1L level staging | V1L | NULL clean gain | **DONE** (superseded by T-002, 2026-07-17) |
 | ~~P4~~ | V1E sub-100 Hz droop | V1E | LF shelf | **DONE** (C12=220n) |
@@ -694,43 +695,30 @@ it only recovers ~6 dB of the ~25 dB top-octave deficit. C42 was deliberately le
 (its residual overlaps Error 2). The old H1/H2/H3 hypothesis table below is superseded by this outcome
 and the cross-revision spacing analysis above.
 
-### ~~Error 1 — ~10 dB cab-sim rolloff — CLOSED 2026-07-17~~ (superseded; see above)
-The plugin's V1L cab-sim rolls off vs the author's SPICE (measured −40 dB at **9.16 kHz** vs SPICE
-reading "~11 kHz"). Three hypotheses were tested:
+**Durable sub-findings from the earlier error-1 investigation (kept; the rest is superseded):**
+- **H1 — the S-K's unity gain IS structurally correct.** Giving the op-amp K>1 (to test whether the
+  netlists.md "(−) tied to OUT" unity read was wrong) causes oscillation at the S-K's Q. The [◐ §1]
+  flag's own instruction ("re-examine the unity read first") is resolved: unity stands.
+- **H3 — C13/470p, C14/10n read cleanly; not a value error.**
+- (H2 "R48/R49 should be 22k" was found to IMPROVE but was then **reverted to 33k on 'schematic is
+  authoritative'**. That reversal is now itself reversed — the §1 SPACING analysis showed the
+  schematic and the author's own sim conflict, and the user chose the sim. 22k is applied. This is the
+  single most important lesson of Gap H: *"improves but disagrees with the schematic" is not a reason
+  to revert until you have checked the schematic against the author's OTHER reference (the sim).*)
 
-| # | Hypothesis | Result | Verdict |
-|---|-----------|--------|---------|
-| H1 | S-K op-amp has gain K>1 (unity reading wrong) | **FAILED** — K>1 causes oscillation at the S-K's Q. Unity IS structurally correct. netlists.md's [◐ §1] flag has been honoured — its own instruction resolved. | Flag CLOSED. |
-| H2 | R48/R49 should be 22k (matching V1E's E5a) | **IMPROVED** but — full-chain −40 dB at 10.08 kHz (§1 gate passes). Disagrees with both netlists.md and circuit.md which independently read 33k without a value flag. The 33k is a genuine revision difference (V1L's L5a vs V1E's E5a). | Schematic is authoritative. Reverted to 33k. |
-| H3 | C13/470p or C14/10n value wrong | Not tested against schematic — capacitors were read cleanly. | Not a value error. |
+### Error 2 — ~19 dB capture-only deficit — OPEN, DOMINANT (this is the real remaining work)
 
-**Root cause:** V1L's S-K LPF#1 uses **R48/R49=33k/33k** (vs V1E's 22k/22k), giving a lower corner
-(2225 vs 3337 Hz). This is a real revision difference reflected in both netlists.md and circuit.md.
-The SPICE §1 target of "~11 kHz" is within the document's own ±⅓-octave reading tolerance
-(docs/reference-fr-targets.md line 10-12: "treat as ±⅓-octave targets"; 9.16 kHz ≥ 8.73 kHz bound).
-**The model is faithful to the schematic. Gap H error 1 is closed.**
+The NAM-artefact hypothesis is REJECTED and the deficit is real:
+- NAM regularly achieves ESR <0.001 / nulls <−40 dB; the 10–16 kHz band reads **+105.5 dB SNR**
+  (`capture_band_snr.py`) — ample signal. The captures ARE trustworthy.
+- The error **flips sign** across captures (−27.4 @BL1.00 → +6.7 @BL0.65 → −2.6 @BL0.30) — a fixed
+  artefact can't do that; it tracks the knobs.
+- ISOLATED PRESENCE matches §3 (+27.5 dB @ 6–7 kHz ✓); ISOLATED S-K matches §1 (error 1 ✓). Both
+  stages individually correct, yet the full chain is ~19 dB too dark up top at the capture settings.
+- V1L-specific: V2 (same presence cell, different recovery) reads only −1.8 dB top-band.
 
-**Verification:** `python3.11 analysis/v1l_spice_s1_check.py --os 8` — now reads 9.16 kHz with
-R48/R49=33k restored. `V1LateIntegrationTest §1 gate` tightened to enforce −40 dB at 9.16±5 dB.
-
-### Error 2 — ~17 dB capture-only deficit — OPEN (NOT a NAM artefact)
-
-The remaining ~17 dB top-octave gap was hypothesised to be either the PRESENCE cell under-delivering
-HF or a NAM model artefact. **The NAM artefact hypothesis has been REJECTED** (2026-07-17):
-- NAM regularly achieves ESR <0.001 and nulls <−40 dB — it IS accurate at the top octave.
-- The 10–16 kHz band reads **+105.5 dB SNR** per `capture_band_snr.py` — ample signal for training.
-- The error **flips sign** across captures (−27.4 at BL1.00 → +6.7 at BL0.65 → −2.6 at BL0.30).
-  A fixed NAM artefact would produce a consistent bias, not a sign flip that tracks knob settings.
-- The captures ARE trustworthy. The 10–16 kHz deficit IS real.
-
-**What we know:**
-- The ISOLATED PRESENCE cell matches §3 (+27.5 dB @ 6–7 kHz per V1LateStagesTest analytic). ✓
-- The ISOLATED S-K cascade matches the schematic (R48/R49=33k, error 1). ✓
-- Both stages are individually correct, yet the full chain under-predicts top-octave output by ~17 dB at the capture's knob settings.
-- The deficit is V1L-specific: V2 (same presence cell, different recovery) reads only −1.8 dB top-band.
-- The error flips sign with PRESENCE/BLEND, ruling out a single fixed-value component error.
-
-### Error 2 — NARROWED 2026-07-17: it is CAPTURE-vs-SPICE, and it is LINEAR
+**⚠ After error 1's fix (22k), the worst capture's 10–16k shape is −19.0 dB (was −25.3). This ~19 dB
+is error 2.** The findings below NARROW it:
 
 **Two results, both cheap, both from existing data. They kill the leading hypotheses and reframe the
 gap. Read these before proposing anything.**
@@ -776,11 +764,12 @@ the wet path does *without* presence:
    => CAPTURE and SPICE disagree by               11.7 dB
 ```
 
-**⇒ THE CONFLICT IS CAPTURE vs SPICE — NOT plugin vs schematic.** The plugin follows SPICE (−40 dB
-point at 9.16 kHz, inside §1's own ±⅓-octave tolerance) AND follows the schematic (R48/R49=33k, read
-independently by netlists.md and circuit.md, no value flag). Two references disagree by ~12 dB and
-the plugin faithfully implements one of them. **This is an arbitration, not a fitting problem** —
-which is exactly why "do NOT retune the cab-sim or presence against the capture" stands.
+**⇒ ERROR 2 IS CAPTURE vs SPICE — NOT plugin vs schematic.** (The absolute numbers above are the
+pre-fix 33k state; after error 1's R48/R49→22k override the model follows §1 at ~10.1 kHz. Error 2 is
+the residual: the capture wants ~12 dB MORE top-octave HF than SPICE ITSELF has.) The plugin now
+satisfies both §1 and the schematic; only the NAM capture disagrees, and **no capture can arbitrate it
+— the matrix is FINAL.** This is an arbitration with no arbiter, not a fitting problem — which is
+exactly why "do NOT retune the cab-sim or presence against the capture" stands.
 
 **⛔ THE MATRIX IS FINAL (2026-07-17) — the cleanest arbiter is now IMPOSSIBLE.** A PRESENCE-only
 matched pair would have settled this in one capture. It will never exist. **Do not propose it.**
@@ -837,7 +826,17 @@ interaction effect into fixed component values that are individually schematic-f
 
 ---
 
-## D: V2 zener drive tracking — ROOT CAUSE FOUND (2026-07-17): GBW, not the knee
+## D: V2 zener drive tracking — PARKED: symptom metric confounded (Gap G); likely a facet of Gap I
+
+**Status (corrected 2026-07-18): NOT diagnosable with current metrics, all component fixes ruled
+out.** The old header "ROOT CAUSE FOUND: GBW" was wrong — this section's own body retracts the GBW
+hypothesis. Knee/Cj/m are all fit or refuted. What remains is a real but UN-MEASURABLE symptom.
+
+**⇒ Most likely the same root as Gap I (the V2 zener does not clamp hard enough at high drive).**
+Gap I records: at D0.90 the *pedal* is nearly level-independent in THD (zener clamping hard, 10.7→11.9%
+across 12 dB) while the *plugin climbs* (16.5→23.3%). That is the SAME D0.90 over-production this gap
+describes, seen in THD-vs-LEVEL (unconfounded) instead of THD-vs-FREQUENCY (confounded). **Work Gap I's
+V2 half first; D probably falls out of it.** Gap I is DEFERRED (kInputRef dispute), so D is too.
 
 At D0.90 the plugin over-produces 100 Hz THD (21.8% vs 11.5%) and under-produces 400 Hz (16.9% vs
 37.4%) — i.e. the plugin's THD **falls** with frequency where the pedal's **rises**.
