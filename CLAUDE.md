@@ -317,14 +317,25 @@ without images.
 >   *"TL072 only appears in the XLR driver, which we're not modelling."* V1L's S-K is **TLC2264**
 >   (CMOS, GBW **0.72 MHz**) — not a TL072 (bipolar, 3 MHz). Use the right part's numbers.
 >
-> **NEXT: arbitrate Gap H error 2 with the CAPTURE-FREE tools** (the matrix is FINAL — the PRESENCE
-> matched pair that would have settled it will never exist). Cheapest first: **re-read §1's V1L top
-> octave** from `schematics/crops/fr/` (the −40 dB point sits at the graph's least-supported EDGE —
-> N-004 aimed at SPICE rather than at a capture), then **quantify the real S-K's stopband floor-out**
-> (right sign, but the TLC2264 has ~35 dB of loop gain at 12.5 kHz — put a number on it before
-> believing it). If neither closes it: **stay faithful to the schematic + §1, document the ~12 dB
-> capture disagreement as an unarbitrable residual, and do NOT bend the cab-sim to it.**
-> Then Gap J+E (**one item — permanently confounded**) / Gap C.
+> ### Gap H error 1 — RESOLVED 2026-07-18 (R48/R49 33k→22k, §1-match override)
+> The §1 re-read paid off. `analysis/s1_crossrev_check.py`: at 33k the model separated V1E/V1L by
+> **0.30 octave more** than the author's overlaid §1 curves do (which call them "broadly similar"),
+> and V1E matched §1 while V1L missed by 0.26 — the robust *spacing* reading, immune to graph-edge
+> error. Root causes of the false "CLOSED": the §1 target had been **edited to the model's own value**
+> (L-001, `git log -L`-proven) and the two summing culprits (C42 + the 33k S-K corner) were killed
+> **one at a time**. Per the user's "match the sim" call, set **R48/R49 = 22k** (V1E's value, the one
+> recovery resistor that differs between revisions). Outcome: −40 dB point 9.16→10.08 kHz (within §1's
+> ±⅓-oct), worst-capture top band **−25.3→−19.0 dB**, V1L median trust-rms **5.63→4.81**, no
+> regression; §1 cell restored; gate rebuilt with teeth (measured to FAIL 33k). C42 left at schematic
+> 4.7n. Full detail + the L-008/L-001/L-003 lessons: gap-audit "Error 1". **23/23 green.**
+> **⚠ `analysis/reports/*` are STALE w.r.t. this change until the running regen finishes** (kicked off
+> 2026-07-18, `phase10-regen-22k.log`); re-read them only after it completes.
+>
+> **NEXT: Gap H error 2 (~19 dB, DOMINANT, still open).** Capture-only; NOT PRESENCE / S-K / the S-K
+> corner / compression. Suspects narrowed to a wet-path interaction or the C42 buffer's real HF shape.
+> **May be UNRESOLVABLE on the FINAL matrix** — if the capture-free references (schematic + §1) are
+> already satisfied and only the NAM capture disagrees, close it best-effort schematic-faithful and
+> document the residual. Then Gap J+E (**one item — permanently confounded**) / Gap C.
 >
 > **Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
 > Both the S-K (error 1: 33k, schematic-faithful) and PRESENCE (§3: +27.5 dB, analytic-confirmed)

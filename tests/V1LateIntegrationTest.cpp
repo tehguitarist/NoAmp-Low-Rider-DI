@@ -148,10 +148,16 @@ int main()
     }
 
     // --- 4. §1 full wet-path column: PRESENCE 0 / DRIVE 0 / BLEND 100% -----------------------------
-    // V1L's S-K LPF#1 uses R48/R49=33k/33k (netlists.md L5a) vs V1E's 22k/22k — this makes the
-    // rolloff earlier than V1E's, which is faithful per docs/reference-fr-targets.md §1 note.
-    // The -40 dB point is ~9.2 kHz (within ±⅓-octave of the SPICE graph's ~11 kHz reading).
-    // Guard: -40 dB point must be in the 8.0-10.5 kHz range (catches model drift).
+    // §1 target (docs/reference-fr-targets.md, V1-Late column): HF -40 dB point ~11 kHz.
+    // R48/R49 = 22k (§1-MATCH OVERRIDE of the schematic's 33k — see V1LateStages.h L5a comment and
+    // gap-audit Gap H error 1, user decision 2026-07-18) puts the model's -40 dB point at ~10.1 kHz.
+    // GATE DESIGN (L-001/L-003): do NOT pin the check to a single frequency equal to the model's own
+    // reading — that is a self-fulfilling gate (the prior version asserted -40 dB AT 9.16 kHz, which
+    // is true for ANY rolloff by construction). Instead SEARCH for the actual -40 dB crossing and
+    // assert it lands near §1's ~11 kHz. MEASURED at base rate: 22k reads 10.68 kHz, the old 33k
+    // reads 9.15 kHz. Range 10.0-12.0 kHz PASSES 22k with margin and FAILS 33k by 0.85 kHz — verified
+    // by temporarily reverting to 33k and watching this check fail. That is the L-003 teeth: reverting
+    // the §1-match override trips the gate, so the override cannot be silently undone.
     std::printf("FR §1 V1-Late full wet-path column (PRESENCE 0%%, DRIVE 0%%, BLEND 100%%):\n");
     {
         nalr::V1LateDSP dsp;
@@ -162,20 +168,29 @@ int main()
         const double lowBump = magnitudeDb(dsp, 70.0, 0.3);
         const double notch = magnitudeDb(dsp, 750.0, 0.3);
         const double highBump = magnitudeDb(dsp, 3500.0, 0.3);
-        const double hf11k = magnitudeDb(dsp, 11000.0, 0.3);
-        const double hfMinus40Target = magnitudeDb(dsp, 9160.0, 0.3); // expected -40 dB point
+        const double passband = lowBump; // §1 is normalised to its own low bump
+        // Search the -40 dB (re passband) crossing above the high bump by bisecting magnitude.
+        double flo = 4000.0, fhi = 20000.0;
+        for (int it = 0; it < 40; ++it)
+        {
+            const double fm = std::sqrt(flo * fhi);
+            if (magnitudeDb(dsp, fm, 0.3) - passband > -40.0)
+                flo = fm;
+            else
+                fhi = fm;
+        }
+        const double minus40Hz = std::sqrt(flo * fhi);
         std::printf("      LF edge @25Hz = %.1f dB (target ~-10 dB)\n", lfEdge);
         std::printf("      low bump @70Hz = %.1f dB (target ~+0.5 dB)\n", lowBump);
         std::printf("      deep notch @750Hz = %.1f dB (target ~-35 dB)\n", notch);
         std::printf("      high bump @3.5kHz = %.1f dB (target ~-0.5 dB)\n", highBump);
-        std::printf("      HF @9.16kHz = %.1f dB (verified -40 dB point, target ~-40)\n", hfMinus40Target);
-        std::printf("      HF @11kHz = %.1f dB (well below the -40 dB point)\n", hf11k);
+        std::printf("      HF -40 dB point = %.2f kHz (§1 target ~11 kHz; 22k override of 33k)\n", minus40Hz / 1000.0);
         check(lfEdge > -18.0 && lfEdge < 2.0, "§1 LF edge in range");
         check(lowBump > -5.0 && lowBump < 6.0, "§1 low bump in range");
         check(notch < -15.0, "§1 deep notch present (< -15 dB)");
         check(highBump > -6.0 && highBump < 6.0, "§1 high bump in range");
-        check(hfMinus40Target > -45.0 && hfMinus40Target < -35.0, "§1 -40 dB point anchored at ~9.2 kHz (R48/R49=33k)");
-        check(hf11k < notch + 12.0, "§1 HF at 11 kHz is well below the notch");
+        check(minus40Hz > 10000.0 && minus40Hz < 12000.0,
+              "§1 -40 dB point near ~11 kHz (R48/R49=22k §1-match; FAILS the old 33k build @9.15 kHz)");
     }
 
     // --- 5. §8 combined PRESENCE+DRIVE voicing checkpoints (BLEND 100%) ----------------------------

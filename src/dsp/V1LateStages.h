@@ -142,8 +142,21 @@ private:
     {
         // L5a -- S-K LPF #1 (IC2C, retuned). nodes: n1=0 n2=1 OUTa=2 nX=3 (R18/C23 junction).
         skA.setNumNodes(4);
-        skA.addResistor(NodalCircuit::kInput, 0, 33.0e3);     // R48
-        skA.addResistor(0, 1, 33.0e3);                        // R49
+        // R48/R49 = 22k — ⚠ §1-MATCH OVERRIDE of the schematic's 33k (user decision 2026-07-18,
+        // gap-audit Gap H error 1). netlists.md L5a + circuit.md both read 33k (with L5a's [◐ §1]
+        // self-validation flag), but that made V1L's cab-sim -40 dB point 9.16 kHz vs the author's
+        // own SPICE §1 (~11 kHz), and — the robust test — separated V1E/V1L by 0.30 octave more than
+        // §1's overlaid curves do (§1: "broadly similar"; analysis/s1_crossrev_check.py). 22k is not
+        // arbitrary: it is V1E's E5a value, and R48/R49 is the ONLY recovery-cascade resistor that
+        // differs between the revisions (S-K#2 R35/R34 is 33k in both). It moves V1L's -40 dB point
+        // to 10.08 kHz — within §1's stated ±⅓-octave tolerance — and halves the V1E/V1L spacing
+        // error. The captures are FINAL and cannot arbitrate this schematic-vs-SPICE conflict; per
+        // the user's call we follow the author's own sim. C42=4.7n is deliberately LEFT at its
+        // schematic value (its residual ~0.16-octave contribution is within tolerance and overlaps
+        // Gap H error 2 — do not also change it without error 2's own evidence). If the schematic is
+        // ever re-cropped and 33k is confirmed a third time, this is the intentional departure.
+        skA.addResistor(NodalCircuit::kInput, 0, 22.0e3);     // R48 (schematic 33k; §1-match override)
+        skA.addResistor(0, 1, 22.0e3);                        // R49 (schematic 33k; §1-match override)
         skA.addCapacitor(1, NodalCircuit::kDatum, 470.0e-12); // C13
         skA.addResistor(0, 3, 10.0e3);                        // R18
         skA.addCapacitor(3, NodalCircuit::kDatum, 47.0e-9);   // C23 (R18+C23 series shunt)

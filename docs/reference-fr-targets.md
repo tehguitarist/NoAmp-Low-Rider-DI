@@ -51,9 +51,18 @@ The voiced baseline of the wet path with both drive-side knobs at zero. Source:
 | Low bump peak | ~+1 dB @ ~90 Hz | ~+0.5 dB @ ~70 Hz | **~−3 dB @ ~70 Hz** |
 | Deep notch (min) | ~−35 dB @ ~800 Hz | ~−35 dB @ ~750 Hz | ~−36 dB @ ~750–800 Hz |
 | High bump peak | ~+1.5 dB @ ~3 kHz | ~−0.5 dB @ ~3.5 kHz | **~−10 dB @ ~2.5–3 kHz** |
-| HF −40 dB point | ~11–12 kHz | ~9.2 kHz* | **~8 kHz** |
+| HF −40 dB point | ~11–12 kHz | ~11 kHz* | **~8 kHz** |
 
-\* V1L's −40 dB point reads ~11 kHz visually on the published FR graph but the plugin model (faithful to the schematic with R48/R49=33k/33k per netlists.md L5a) measures **9.16 kHz at OS=8x** (still within the ±⅓-octave tolerance of the graph reading). The 33k resistor values are a genuine revision difference from V1E's 22k/22k (E5a), making V1L's cab-sim rolloff earlier than V1E's. This is faithful, not an error.
+\* **~11 kHz is the TRANSCRIBED value — restored 2026-07-18 after it had been silently edited to the
+model's own 9.2 kHz** (commit 513e492, the same commit that declared "error 1 CLOSED" — an L-001
+gate-widening; `git log -L 54,54:this-file`). Editing the reference to match the model destroys its
+purpose as an independent check, so the transcription stands and the model is judged against it.
+**The model now reads ~10.1 kHz** after R48/R49 were set to **22k (a §1-match OVERRIDE of the
+schematic's 33k)** — see gap-audit Gap H error 1 and the V1LateStages.h L5a comment. The 22k value
+is V1E's, and R48/R49 is the only recovery-cascade resistor that differs between the revisions; at
+33k the model separated V1E/V1L by 0.30 octave *more* than §1's overlaid curves do (§1 calls them
+"broadly similar"), which is the robust reading. 10.1 kHz is within §1's own ±⅓-octave tolerance of
+~11 kHz; the residual is C42's wet-buffer rolloff (kept at schematic 4.7n, overlaps Gap H error 2).
 
 Trends (all corroborated by the article prose):
 - **V1e → V1l:** notch shifts slightly *lower* in freq; high bump ~2 dB *lower*; broadly similar.

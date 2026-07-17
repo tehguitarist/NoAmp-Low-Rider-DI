@@ -87,7 +87,7 @@ ranking was distorted by level offsets and pointed at V2.
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
 | **I** | **THD-vs-LEVEL slope wrong** | V1E + V2 | V1E 101 Hz: pedal 0.4→4.5→7.0% vs plugin **3.1→5.3→5.3**; V2: pedal 0.4→2.8→7.6 vs plugin **0.4→4.9→14.5** | **NEW 2026-07-17.** The clip-onset metric that **survives Gap G** — read at a clean 101 Hz anchor, varying LEVEL not frequency. V1E's plugin is level-FLAT (8× too hot at −18 dBFS, too clean at −6) = a static nonlinearity; V2's slope is ~2× too steep. **ROOT CAUSE FOUND 2026-07-17 — a COMPENSATOR STACK (kInputRef → kDriveEndR → saturator), see section I. FIX DEFERRED by decision: kInputRef stays 1.3, the saturator stays as-is.** Blocked on a 13 dB V1E-vs-V2 disagreement about `kInputRef`. **Read section I in full before touching anything here — every candidate fix is entangled with the others.** |
-| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **⚠ Error 1 REOPENED 2026-07-18** — its "CLOSED" rested on a §1 target that had been EDITED to the model's own value (L-001, `git log -L` proven), and on eliminating C42 and 33k one at a time when they SUM. On the robust reading (§1's V1E-vs-V1L SPACING, immune to graph-edge error) the model separates the revisions **0.30 octave more** than the author's sim; V1E matches §1 to 0.03 oct, V1L misses by 0.26. Both C42 (~−7.9 dB) and 33k (~−7 dB) contribute at 10 kHz. **CONTRADICTS the verified schematic ⇒ a schematic-vs-SPICE conflict the FINAL matrix can't break — DECISION REQUIRED.** **Error 2** (~17 dB more, capture-only): same DIRECTION (too dark) as error 1 and as §1, so it is real, but its magnitude can't be apportioned. **12–18k in scope at 3 dB (user); 18.2k band median 11.0 dB.** |
+| **H** | V1L wet-path top-octave deficit | V1L | worst-capture 10–16k **−25.3 → −19.0 dB** after the fix | **Error 1 RESOLVED 2026-07-18** via a §1-match override (R48/R49 33k→22k, user decision): −40 dB point 9.16→10.08 kHz, V1E/V1L spacing discrepancy halved (0.30→0.16 oct), worst-capture top band −25.3→−19.0, median trust-rms 5.63→4.81, no regression; the L-001 §1 target was restored and the gate now has teeth (fails 33k). **Error 2 (~19 dB) is the DOMINANT, still-OPEN piece** — capture-only, NOT explained by PRESENCE / S-K / compression / the S-K corner; C42 left at schematic 4.7n (overlaps error 2). **May be unresolvable given the FINAL matrix; best-effort = stay schematic-faithful.** **12–18k in scope at 3 dB (user); 18.2k band median 11.0 dB.** |
 | **J** | **V1L 285 Hz blend-tracking notch** | V1L | shape at 285 Hz: **+1.5 / −2.5 / −23.8 dB** at BL 1.00 / 0.65 / 0.30 | **NEW 2026-07-17.** Narrow (−23.8 @285, −4.7 @202, −3.4 @403), deep, and **monotonic in BLEND** — invisible at full wet, deep as dry takes over = dry/wet **PHASE** cancellation. A scalar cannot do this (and `kDryGain` must never return — ISS-008). See below. |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | ⚠ **Status UNSAFE** — its "closed at OS=8x" evidence was level-confounded; see below |
@@ -672,7 +672,29 @@ silently relax verified schematic values to chase §1.**
 V1L model is too DARK up top. Two independent references (author's SPICE spacing + the NAM capture)
 point the same way, so V1L's model being too dark at the top is real, not an artefact of either.
 
-### Error 1 — ~10 dB cab-sim rolloff — ~~CLOSED 2026-07-17~~ **REOPENED (see above)**
+### Error 1 — cab-sim rolloff — RESOLVED 2026-07-18 via a §1-match override (R48/R49 33k→22k)
+
+**User decision (2026-07-18): match the author's SPICE. Applied R48/R49 = 22k** (V1LateStages.h L5a),
+the §1-match override documented above and in the code. Measured outcome:
+  * V1L −40 dB point **9.16 → 10.08 kHz** (OS=8x) / 9.15 → 10.68 kHz (base rate) — within §1's
+    ±⅓-octave tolerance of ~11 kHz. V1E/V1L spacing discrepancy **0.30 → 0.16 octave** (halved).
+  * Worst capture (D0.65 BL1.00) top band 10–16 kHz: **−25.3 → −19.0 dB** on the 60-band SHAPE
+    metric (~6 dB recovered; the raw curve gains ~8 dB at 10 kHz but brightening the top octave
+    lifts the shape-median, clawing ~2 dB back — L-005). V1L median trust-rms **5.63 → 4.81 dB**.
+    **No regression** on the other two V1L captures (D0.45 BL0.65 unchanged at +5.9; D0.40 BL0.30
+    −3.1, within noise).
+  * `git log -L`-proven L-001 fixed: the §1 reference cell restored to the transcribed ~11 kHz
+    (was silently edited to 9.2 kHz). The V1LateIntegrationTest §1 gate now SEARCHES for the −40 dB
+    crossing and asserts 10–12 kHz — **measured to FAIL the 33k build (9.15 kHz)**, so it has teeth
+    (L-003): reverting the override trips the gate.
+
+**⚠ This does NOT close Gap H — Error 2 (~19 dB) is the dominant, still-open piece.** 22k was the
+right call (matches §1's own spacing, improves the capture in the right direction, no regression) but
+it only recovers ~6 dB of the ~25 dB top-octave deficit. C42 was deliberately left at schematic 4.7n
+(its residual overlaps Error 2). The old H1/H2/H3 hypothesis table below is superseded by this outcome
+and the cross-revision spacing analysis above.
+
+### ~~Error 1 — ~10 dB cab-sim rolloff — CLOSED 2026-07-17~~ (superseded; see above)
 The plugin's V1L cab-sim rolls off vs the author's SPICE (measured −40 dB at **9.16 kHz** vs SPICE
 reading "~11 kHz"). Three hypotheses were tested:
 
