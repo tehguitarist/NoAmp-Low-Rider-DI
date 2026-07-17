@@ -40,14 +40,26 @@ public:
     static constexpr double kGbw = 0.72e6;
 
 private:
+    // Bilinear discretisation of the loop-gain escape law H(s) = s/(s + wCl), i.e. f/(f + f_cl).
+    //
+    // ⚠ CORRECTED 2026-07-17. The original had TWO errors that survived because the only gate
+    // (V1EarlyTHDSweepTest G1) checked the THD *ratio* and never the *magnitude*:
+    //   (1) b0 used `wa` where the bilinear of s/(s+wCl) needs `2/Ts`  -> the whole response was
+    //       scaled by wa/(2/Ts) = tan(wCl*Ts/2), which is ~1/340 when f_cl sits well inside the
+    //       band (49 dB of spurious suppression at G_cl=101 / f_cl=7.1 kHz).
+    //   (2) a1's sign was flipped, placing the pole at z ~ -1 (NYQUIST) instead of z ~ +1 (DC).
+    // The DC zero (b1 = -b0) was right, which is why the SLOPE was +6 dB/oct and the ratio gate
+    // passed while the correction was ~340x too small to do anything audible.
+    // Verified vs the analytic f/(f+f_cl): within 0.0 dB at f_cl=7.1 kHz (was -49.4 dB).
     void recomputeCoeffs(double g_cl) noexcept
     {
         const double wCl = 2.0 * kPi * kGbw / g_cl;
-        const double wa = (2.0 / Ts) * std::tan(wCl * Ts * 0.5);
-        const double denom = wa + 2.0 / Ts;
-        b0 = wa / denom;
+        const double twoOverTs = 2.0 / Ts;
+        const double wa = twoOverTs * std::tan(wCl * Ts * 0.5);
+        const double denom = wa + twoOverTs;
+        b0 = twoOverTs / denom;
         b1 = -b0;
-        a1 = (wa - 2.0 / Ts) / denom;
+        a1 = (twoOverTs - wa) / denom;
     }
 
     static constexpr double kPi = 3.14159265358979323846;

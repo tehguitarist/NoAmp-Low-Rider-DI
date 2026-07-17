@@ -38,7 +38,9 @@
 |---|---|---|---|---|
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | Open — bilinear warp |
-| **D** | V2 zener drive tracking | V2 | D0.90 THD imbalance; knee params still placeholder | **Next** — see plan |
+| **D** | V2 zener drive tracking | V2 | D0.90 THD slope | Premise CORRECTED 2026-07-17 (knee already fit + refuted). Symptom metric is CONFOUNDED — see below |
+| **A′** | T-001 GBW correction is a no-op | V1E | 0.12% THD vs pedal 9.79% | **REOPENED 2026-07-17** — 4 compounding faults, see below |
+| **G** | THD-vs-f is not a usable metric on this pedal | all | twin-T notches the fundamental | **NEW 2026-07-17** — blocks A/A′/D framing |
 | **E** | BASS 250–430 Hz hump (ex-P2) | V2 | ~3 dB at BASS≠0.65 | Open — uncontaminated post-ISS-008 |
 | **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — impedance loading |
 | ~~A~~ | THD-vs-frequency slope | V1E | **CLOSED** by T-001 GBW correction (2026-07-17) |
@@ -125,6 +127,56 @@ GBW question first** — it may be the same root cause, and solving it once beat
 
 ---
 
+## G: THD-vs-FREQUENCY IS NOT A USABLE METRIC ON THIS PEDAL (NEW, 2026-07-17)
+
+**This invalidates the framing of A, A′ and D. Read it before proposing any THD-slope work.**
+
+CLAUDE.md's standing trap says "V1E THD anchors are 100/200 Hz ONLY — 400 Hz sits on the ~430 Hz
+bridged-T and 800 Hz on the twin-T; both notch the FUNDAMENTAL and inflate THD." That trap is
+**broader than recorded**: it does not just make 400/800 Hz unusable, it makes the **entire
+THD-vs-frequency slope** unusable, on **all three revisions**.
+
+**Mechanism.** The twin-T (~800 Hz, present on V1E/V1L/V2 — V2 only dropped the *bridged-T*) sits in
+the signal path *before* the drive stage but its notch appears in the **output**. THD =
+harmonics/fundamental. The harmonics are generated **downstream** of the notch, in the drive stage, so
+they pass unattenuated while the fundamental is cut — THD inflates near the notch for reasons that
+have nothing to do with any nonlinearity.
+
+**Measured shape (`gbw_slope_probe.py --shape --os 8`), pedal THD%:**
+
+```
+              60     100     150     250     600    1000    1500    2500    4000
+V1E D1.00  16.78    9.79   12.89   30.31   69.08   64.69   37.40    7.08    1.38
+V2  D0.90  14.55   11.53   14.26   24.78   33.42   28.83   13.19    1.39    0.34
+```
+
+Not a slope — a **bump centred on the notch**, peaking 33–69% at 600–1000 Hz, collapsing to ~1% by
+4 kHz (the cab-sim LPF eating the harmonics). Consequences:
+
+- **250–1500 Hz is notch artefact**, not physics. A "slope" fit anywhere in it measures the notch.
+- **Above ~2 kHz the recovery LPF eats the harmonics** — THD collapses for a third unrelated reason.
+- **The only clean band is ~60–200 Hz** — 1.7 octaves, and it is **non-monotonic** (V1E: 16.78 @60 →
+  9.79 @100 → 12.89 @150). Per L-002, non-monotonicity across a sweep means the metric is unsound.
+- A delta metric does **not** rescue it: the plugin has the same notch **~11 dB too deep** (Gap B), so
+  a notch-depth mismatch produces a slope difference indistinguishable from a real mechanism.
+
+**What this means for A/A′/D.** Gap A's premise was "V1E THD-vs-frequency slope"; Gap D's symptom is
+"plugin THD falls with frequency where the pedal's rises". Both are measured where the notch
+dominates. **Neither gap is established as real.** T-001 built a correction for a slope that may be an
+artefact, using a mechanism that cannot apply (A′ fault 4), gated against theory (fault 2), with a
+broken filter (fault 1), bypassed by the next line (fault 3).
+
+**Before any further THD-slope work, get a metric immune to fundamental attenuation.** Options, none
+yet tried: (a) measure **absolute harmonic levels** (H2/H3 in dBV) rather than THD-as-a-ratio — the
+harmonics are downstream of the notch and are the physically meaningful quantity; (b) normalise THD by
+the *measured* fundamental transfer at each frequency, deconvolving the notch out of the denominator;
+(c) drive with **two-tone IMD** placed to keep both tones and the products off the notch;
+(d) restrict to 60–200 Hz and accept that no slope can be fit in 1.7 noisy octaves.
+
+`harmonic_report.py` already reports per-harmonic H2..H7 and is the natural starting point for (a).
+
+---
+
 ## C: V2 12.5k/16k HF (ex-P1 residual)
 
 P1's main fix landed (C15=8.2n, C17=1.8n): 8k/10k now within ±1.5 dB (was −3.4). Residual 12.5k/16k
@@ -138,12 +190,87 @@ Note `utils/Prewarp.h` exists and is unused.
 
 ---
 
-## D: V2 zener drive tracking
+## D: V2 zener drive tracking — ROOT CAUSE FOUND (2026-07-17): GBW, not the knee
 
 At D0.90 the plugin over-produces 100 Hz THD (21.8% vs 11.5%) and under-produces 400 Hz (16.9% vs
-37.4%). The zener knee/softness does not track drive level correctly; needs drive-dependence or a
-per-drive parameter. `v2Params()` is still a placeholder == `v1LateParams()` — V2's Cj/knee were never
-fit independently. Shares its shape with **B**.
+37.4%) — i.e. the plugin's THD **falls** with frequency where the pedal's **rises**.
+
+**⚠ THIS SECTION'S OLD PREMISE WAS FALSE — it is the exact drift this file's header warns about.**
+It read: *"`v2Params()` is still a placeholder == `v1LateParams()` — V2's Cj/knee were never fit
+independently."* Every clause is wrong. `ZenerDriveModule.h::v2Params()` has an **independently fit
+Cj = 10 pF** (vs V1L's 220 pF; `cj_scan.py`, 2026-07-15), an **independently fit m = 0.015** (vs V1L's
+0.0, fit against two captures), and the **2026-07-17 `vzt_sweep.py` refuted the knee outright**
+(Vzt=0.20 already optimal; softer only inflates low-drive THD without fixing 400 Hz). A session that
+follows the old text re-does dead work.
+
+**A GBW hypothesis was raised and then RETRACTED in the same session (2026-07-17).** It is recorded
+here so it is not re-raised as if new. The idea: a nonlinearity inside a loop of gain `T` has its
+distortion suppressed by `1/(1+T)`; with `T(f) = GBW/(f·N)` the escaping distortion grows `∝ f`, so
+`d(log THD)/d(log f) = +1`, which an ideal op-amp cannot produce. `analysis/gbw_slope_probe.py`
+measured `delta = slope(pedal) − slope(plugin)` over 100–400 Hz and found V2 D0.90 = **+1.19 / +1.04
+/ +0.98** across three input levels — an apparently textbook confirmation of the predicted +1.0.
+
+**Why it was retracted: the metric is confounded by the twin-T — see Gap G.** The 100–400 Hz fit band
+sits on the skirt of the ~800 Hz twin-T, which attenuates the **fundamental** while the harmonics
+(generated downstream, in the drive stage) pass unattenuated — inflating THD with frequency for
+reasons that have nothing to do with GBW. The pedal's 100→250 Hz rise (10.69 → 22.21%, 2.08×) is
+fully consistent with ~6 dB of notch skirt. And Gap B independently records that the plugin's notch is
+**~11 dB too deep** — a notch-depth mismatch produces exactly this delta. The measurement cannot
+separate the two hypotheses, so it confirms neither. **Do not cite the +1.0 as evidence.**
+
+To revive the GBW hypothesis you need a THD metric that is immune to fundamental attenuation
+(see Gap G's suggestions), not a better fit over the same band.
+
+**Ruled out (do NOT re-try):** zener knee `Vzt` (vzt_sweep 2026-07-17, 0.20 optimal), `Cj`
+(cj_scan 2026-07-15 + re-verified 2026-07-17, 10 pF best), asymmetry `m` (fit 0.015).
+
+---
+
+## A′: T-001's GBW correction is a NO-OP — Gap A REOPENED (2026-07-17)
+
+**CLAUDE.md's "Gap A VERIFIED CLOSED" is false.** Four faults compounded; each one alone would have
+been caught by any of the others. This is the single most important entry in this file.
+
+**Fault 1 — the filter did not implement its own documented transfer function.** `GbwCorrection.h`
+claims `H(s) = s/(s+wCl)`. Its coefficients were `b0 = wa/D` (should be `(2/Ts)/D`) and
+`a1 = (wa−2/Ts)/D` (sign flipped), putting the pole at `z ≈ −1` (**Nyquist**) instead of near DC and
+scaling the whole response by `tan(wCl·Ts/2)`. Measured against the analytic `f/(f+f_cl)`:
+
+| `G_cl` | `f_cl` | as-written | ideal | error |
+|---|---|---|---|---|
+| 101 (D=1.00) | 7.1 kHz | −86.4 dB @100 Hz | −37.1 dB | **−49.4 dB** |
+| 12 | 60 kHz | −67.2 dB | −55.6 dB | −11.6 dB |
+| 7.2 (D=0.50) | 100 kHz | −61.2 dB | −60.0 dB | −1.2 dB |
+
+The DC zero (`b1 = −b0`) was correct, so the **slope** was a right-looking +6 dB/oct while the
+**magnitude** was ~340× too small. FIXED 2026-07-17 (now within 0.0 dB of analytic).
+
+**Fault 2 — the gate could not see it.** `V1EarlyTHDSweepTest` G1 checks only the **ratio**
+`THD(200)/THD(100) ∈ [1.5,2.5]`, never the magnitude. It passes on **THD@100 = 0.12%** where the
+pedal reads **9.79%** at that setting — ~80× low, invisible to a ratio test. It also tests **one**
+drive (1.00), with the **saturator off**, against a **theoretical** target (*"~2×/octave from finite
+GBW"*) — it never touches a capture. A gate against theory cannot detect a model that does nothing.
+
+**Fault 3 — the correction is bypassed by the very next line.** In `processCoreDrive`, at D=1.00 with
+0.3 V in: `linear` = 30.3 V, `resid` = −26.1 V, but the (broken) filter shrinks it to ~−0.001 V, so
+the function returns ~**30.3 V — essentially unclipped**. `processCoreSample` then clamps that to
+±5.2 and runs `railClip` over it anyway. **The hard clip does all the audible work, exactly as it did
+before T-001.** The `±5.2` clamp and its "prevent divergence" comment are the model fighting itself.
+
+**Fault 4 — the mechanism cannot apply to the rail, even with a perfect filter.** `linear + residEff`
+with `residEff → 0` at LF asserts "output = linear = 30 V, unclipped" — a 30 V swing from an 8.4 V
+supply. **Feedback cannot correct rail saturation**: the rail is the output stage's hard physical
+limit, outside the loop's authority. Finite-GBW feedback suppresses distortion from mechanisms
+*inside* the loop the output stage can actually correct (crossover, open-loop nonlinearity). T-001
+applied a real mechanism to the wrong nonlinearity. With the filter FIXED, D=1.00/100 Hz pulls 30.3 V
+to only 29.9 V — the clamp+railClip still do everything. **Fixing the maths does not rescue T-001.**
+
+**Status:** the coefficient fix is committed (it is correct on its own terms). The rail-GBW structure
+is still in place and still inert. Whether Gap A exists *at all* is now open — see Gap G: its premise
+("V1E THD-vs-frequency slope") was measured in the band the twin-T dominates.
+
+**Kill criterion for any successor:** gate on THD **magnitude vs a capture**, at **≥3 drive settings**,
+with the saturator **on**. If the gate cannot fail when the correction is deleted, it is not a gate.
 
 ---
 

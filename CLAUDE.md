@@ -123,7 +123,10 @@ without images.
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
 > **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`**.
-> **Gap A (THD slope) VERIFIED CLOSED.**
+> **⚠ Gap A is NOT closed — "VERIFIED CLOSED" was FALSE (reopened 2026-07-17). T-001's GBW
+> correction is an inert no-op, and the THD-vs-frequency metric that motivated it is itself
+> confounded by the twin-T notch. Read `docs/phase10-gap-audit.md` Gaps A′ and G before ANY
+> THD-slope work — four independent faults compounded there and they are all documented.**
 > **Key measurement findings (2026-07-17):**
 > 1. **V2 Vzt sweep** — Vzt=0.20 already optimal. Swept 0.20-0.60 at OS=8x on V2 D0.50 BL1.00.
 >    Softer knee increases low-drive THD without fixing the 400Hz deficit. Vzt=0.30 matches 400Hz
@@ -210,24 +213,35 @@ without images.
 > - **PRESENCE contributes ~0 dB at LF** (C31 blocks DC; §3's +16.7 dB is *at 4.8 kHz*), so the recovery
 >   saturator sees ~1 V, not ~2.9 V — knee must be sized to the ACTUAL signal.
 >
-> ### T-001 — Fix V1E THD-vs-frequency slope (gap A) — DONE (2026-07-17)
+> ### T-001 — "Fix V1E THD slope (gap A)" — ⚠ REOPENED 2026-07-17: IT NEVER WORKED
 
-**Root cause**: finite op-amp GBW (TLC2264 ≈ 0.72 MHz). **Implemented Option A** (linearized
-feedback-suppression) in `src/dsp/GbwCorrection.h` — a 1st-order IIR high-shelf applied to the
-nonlinear residual of the rail clip, with corner `f_cl = GBW/G_cl`. Class tracks the DRIVE knob
-via `V1EarlyDriveStage::getClosedLoopGain()`. Signal chain in `processCoreSample()`: DRIVE →
-GBW residual shelf → rail clip (ADAA) → recovery → saturator.
+**T-001 is an inert no-op.** Full forensics in `docs/phase10-gap-audit.md` Gap A′; the short version,
+because this is the most instructive failure in the project so far — **four faults, each of which any
+one of the others would have caught**:
 
-**Gate result** (`V1EarlyTHDSweepTest` G1): `THD(200)/THD(100) = 2.01` at D=1.00 — within the
-[1.5, 2.5] target, matching the 2.0×/octave prediction. The GBW value is `kGbw = 0.72e6` (TLC2264
-datasheet typical). `kDriveEndR=8k` unchanged (deferred — the shelf-corner fit at HF may narrow
-the P6 shape residual, tune after re-running ab_report.py with the new Gbw correction).
-`RecoverySaturator` unchanged (deferred — the saturator handles crossover distortion, a separate
-mechanism from GBW). 24/24 ctest green.
+1. **The filter didn't implement its own formula.** `GbwCorrection.h` claims `H(s)=s/(s+wCl)` but had
+   `b0=wa/D` (needs `(2/Ts)/D`) and a flipped `a1` sign → pole at **Nyquist**, not DC → **−49 dB** at
+   G_cl=101. The DC zero was right, so the *slope* looked correct while the *magnitude* was ~340× low.
+   **FIXED 2026-07-17** (now 0.0 dB vs analytic).
+2. **The gate can't fail.** `V1EarlyTHDSweepTest` G1 tests only the **ratio** — it passed at
+   THD@100 = **0.12%** before the fix and **0.71%** after (pedal: **9.79%**). A 6× magnitude swing,
+   identical verdict. One drive (1.00), saturator OFF, target from **theory** — never a capture.
+3. **The next line discards it.** `processCoreDrive` returns ~**30.3 V unclipped** at D=1.00;
+   `processCoreSample` then clamps to ±5.2 and `railClip`s it. The hard clip does all audible work,
+   exactly as pre-T-001. The ±5.2 clamp is the model fighting itself.
+4. **The mechanism cannot apply to the rail.** `linear + residEff` with `residEff→0` at LF asserts a
+   30 V swing from an 8.4 V supply. **Feedback cannot correct rail saturation** — it is the output
+   stage's hard limit, outside the loop's authority. Fixing the maths does NOT rescue this.
 
-> The kill criteria from the plan are all met: the THD slope is 2.01×/octave, GBW is at the
-> datasheet value, LF tracking is stable (the correction suppresses residuals below f_cl, adding
-> no LF THD), and recovery saturator is untouched.
+**And the premise may be an artefact too — see Gap G.** THD-vs-frequency is **unusable on this pedal**:
+the twin-T (~800 Hz, ALL revs) cuts the **fundamental** while harmonics generated downstream pass
+unattenuated, so THD inflates near the notch. Pedal THD is a *bump on the notch* (V1E D1.00: 9.79% @100
+→ **69%** @600 → 1.4% @4k), not a slope. Only ~60–200 Hz is clean, and it's non-monotonic (L-002).
+A pedal−plugin delta does NOT rescue it (the plugin's notch is ~11 dB too deep — Gap B).
+
+**Standing rule this earns:** *a gate that only checks a RATIO cannot detect a model that does
+nothing.* Gate on **magnitude vs a capture**, at **≥3 drive settings**, saturator **on** — and verify
+the gate FAILS when you delete the feature it guards.
 
 ### Open items (phase10-gap-audit.md — REFRESHED 2026-07-16)
 > - **V1E THD onset** — plugin now uniformly too clean at every drive (0.7–5.2% vs pedal 4.5–9.8%): the
@@ -335,6 +349,16 @@ mechanism from GBW). 24/24 ctest green.
   have loosened the gate to accommodate it. One `git log -L` command found this in ISS-008 (kDryGain
   forced +24.66 dB; the gate was widened from ±12 dB to +5..+40 dB to hide it). Sibling of the
   standing rule "a capture-fit must never silently erase a schematic-verification gate."
+- **L-003: A gate that checks only a RATIO cannot detect a model that does nothing.** T-001's gate
+  passed identically at 0.12% and 0.71% THD (pedal: 9.79%) because it only compared THD(200)/THD(100).
+  Gate on **magnitude against a capture**, across **≥3 knob settings**, with neighbouring stages ON —
+  and prove the gate FAILS when the feature it guards is deleted. Sibling of L-001: a gate written
+  against a THEORETICAL prediction rather than a measurement will certify a no-op. See Gap A′.
+- **L-004: Before modelling a mechanism, check the metric that motivated it isn't an artefact.**
+  T-001 modelled finite GBW to fix a "THD-vs-frequency slope" that is very likely just the twin-T
+  notching the FUNDAMENTAL (harmonics are generated downstream and pass unattenuated, so THD inflates
+  near any in-path notch). Four faults compounded on top of a premise nobody had validated. Ask "could
+  this measurement be produced by something other than the mechanism I'm about to build?" FIRST.
 - **L-002: Verify a derived metric before building on it — check monotonicity across a knob sweep.**
   A migrating reference point or a low-SNR anchor bin will manufacture an effect that does not exist.
   Prefer FIXED reference frequencies over peak-referenced ones, and never anchor on the
