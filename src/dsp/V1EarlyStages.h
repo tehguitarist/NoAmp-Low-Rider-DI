@@ -130,20 +130,16 @@ public:
     // starts from rest rather than carrying a stale wave value.
     void reset() noexcept { C28.reset(); }
 
-    // Capture-fitted resistance REMAINING in the VR1 leg at the pot's electrical maximum (Phase 10,
-    // 2026-07-16). The schematic law reaches a literal 0 ohm at d=1.0 -> gain 1+330k/3.3k = +40.1 dB,
-    // which matches the author's SPICE sim (FR §4) exactly — but NOT the real unit: fitted across all
-    // three V1E captures (analysis/v1e_drive_endr_fit.py) the captures want ~8k, giving +29.6 dB max.
-    //
-    // This is an EMPIRICAL effective value, not a claimed pot spec: 8k is ~8% of a 100k pot, far above
-    // a real pot's end/wiper resistance (<1%), so it is very likely absorbing additional un-modelled
-    // gain limiting at high closed-loop gain (the TLC2264 is a LOW-GBW part — at gain 101 its
-    // closed-loop bandwidth is only ~7 kHz, so the ideal-op-amp model over-delivers). It is fit here
-    // because it is what the captures require; the physical decomposition is still open.
-    // See CLAUDE.md "P6" — this DELIBERATELY deviates from the schematic/SPICE §4 max-gain target.
-    //
-    // Set to 0.0 to recover the exact schematic/SPICE law; tests/V1EarlyDriveTest gates that path
-    // (WDF vs analytic + the +40.1 dB §4 transcription cross-check) at 0, and the fitted default here.
+    // Capture-fitted residual resistance in the VR1 pot leg at electrical max (2026-07-16, refitted
+    // 2026-07-17). The schematic law reaches Rvr1 = (1-d)*100k → 0 Ω at d=1.0 → +40.1 dB max, which
+    // matches the author's SPICE sim (FR §4) — but NOT the real unit. Tested whether T-001 GBW
+    // correction (src/dsp/GbwCorrection.h) allowed returning to the ideal law: Rend=0.5 gave better
+    // THD at D1.00 (7.9% vs 4.5% at 8k for 100Hz) but worsened FR shape (rms 16.03 vs 9.50 dB) and
+    // knob-tracking (all-positive errors, up to +9.6 dB vs mixed ± <11 dB). The 8kΩ empirical value
+    // compensates for un-modelled gain limiting at high closed-loop gain beyond GBW — likely the
+    // TLC2264's large-signal output impedance or the recovery-saturator interaction.
+    // Keep 8k as the working value. See analysis/v1e_drive_endr_fit.py --os 8 --rends 0,...
+    // tests/V1EarlyDriveTest gates both the ideal 0-law (+40.08 dB) and this default.
     static constexpr double kDriveEndR = 8.0e3;
 
     void setDriveEndResistance(double ohms) noexcept

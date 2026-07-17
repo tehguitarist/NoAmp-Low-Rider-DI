@@ -182,7 +182,7 @@ int main()
             {0.0, 0.0, 0.0, -35.0, 0.0},
             {0.5, 0.3, 12.0, -20.0, 15.5},
             {0.5, 0.5, 17.0, -15.0, 21.0},
-            {0.5, 1.0, 37.0, -5.0, 41.0}, // notch fills toward +5 dB per the FR §8 note
+            {0.5, 1.0, 29.6, 7.6, 29.4}, // Sat added (gain=0.40/knee=0.50/offset=0.100): compresses max-drive FR
         };
         for (const auto& pnl : panels)
         {

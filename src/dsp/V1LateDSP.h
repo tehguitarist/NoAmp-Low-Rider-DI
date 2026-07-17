@@ -46,6 +46,10 @@ public:
         presence.prepare(baseFs);
         driveRegion.setDriveParams(ZenerDriveModule::v1LateParams());
         driveRegion.prepare(baseFs, maxBlock);
+        // Recovery saturator fit (Phase 10, 2026-07-17). Added late — V1L had none.
+        // sat_refine.py --rev V1L --os 4: gain=0.400 knee=0.500 offset=0.100 => RMS 11.1 (disabled was 102.1).
+        driveRegion.setRecoverySaturation(0.40, 0.50);
+        driveRegion.setSaturationOffset(0.100);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         output.prepare(baseFs);

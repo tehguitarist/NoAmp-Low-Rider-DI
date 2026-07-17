@@ -122,19 +122,34 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`** (the old
-> phase10-* branches were folded in and deleted; only the `resilient-concrete` kilo worktree remains).
-> **P6 SOLVED + V1E THD-onset fit landed + a pre-existing DC bug fixed. ISS-008 SOLVED (kDryGain
-> deleted; also fixed ISS-006 and unmasked ISS-003).**
-> **ISS-009 CLOSED: C10 is EXONERATED. ISS-013 filed then CLOSED as INVALID.
-> T-002 DONE (kOutputMakeup anchored to dry-path unity). ISS-012 RESOLVED by T-002.
-> T-001 DONE (GBW correction for V1E THD-vs-frequency slope — see GbwCorrection.h and
-> V1EarlyTHDSweepTest's G1 gate).**
-> **NEXT: Re-run `ab_report.py --os 8` and re-read ISS-010's linear-headroom table before
-> touching any clip/THD gap (ISS-001/002/004).** Then consider: ISS-010's finding — the residual is
-> LINEAR-dominated, 10–23 dB of null headroom at every capture — is what re-ordered this queue
-> ahead of `docs/phase10-gap-audit.md`'s "gap A next", and ISS-008 confirmed it (a linear
-> structural bug was worth 5–7 dB of null on its own).
+> **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`**.
+> **Gap A (THD slope) VERIFIED CLOSED.**
+> **Key measurement findings (2026-07-17):**
+> 1. **V2 Vzt sweep** — Vzt=0.20 already optimal. Swept 0.20-0.60 at OS=8x on V2 D0.50 BL1.00.
+>    Softer knee increases low-drive THD without fixing the 400Hz deficit. Vzt=0.30 matches 400Hz
+>    better but blows up 100/200Hz. Gap D is NOT in the knee parameters.
+> 2. **V2 Cj re-verification** — Cj=10 pF still best (RMS 3.507 dB vs 3.492 at 4.7 pF).
+> 3. **V1E end-R re-check** — Tested Rend=0.5Ω with T-001 GBW active. THD improved (100Hz: 4.5→7.9%,
+>    200Hz: 8.8→16.5%) but FR regressed (D1.00 rms 9.50→16.03 dB) and knob-tracking all-positive
+>    (+9.6 dB max). Reverted to 8kΩ — it compensates for effects beyond GBW (likely large-signal
+>    output impedance or recovery-saturator interaction).
+> 4. **V1L recovery saturator (gap F) — FITTED (2026-07-17).** V1L had NO recovery saturator
+>    (gain=0). sat_refine.py --rev V1L found gain=0.400/knee=0.500/offset=0.100 → RMS 11.1 dB
+>    vs 102.1 disabled (9× improvement). Applied to V1LateDSP.h prepare(). THD improved at all
+>    anchors (100Hz 9.8→14.7% vs pedal 12.1%; 800Hz 0.1→2.9% vs 50.2%). FR RMS improved
+>    8.31→7.98 dB. Blend residual shrank slightly (LF +5.9→+5.3, cab-sim +9.4→+8.7).
+> 5. **V2 saturator re-verification** — sat_refine.py --rev V2: current (0.04, 0.150, 0.080)
+>    already at best (RMS 7.6). No change. V2's zener dominates THD; saturator is negligible.
+> 6. **V1E saturator post-GBW** — (0.40, 0.25, 0.020) still optimal at D0.50. No change.
+> 7. **Gap C (V2 bilinear warp) — CLOSED at OS=8x.** All V2 12k FR@ anchors positive (+6 to +22 dB).
+>    The 12.5k/16k deficit from the old gap audit was an OS=1x artifact.
+> **ISS-010: linear headroom still 10-21 dB.** The V1L saturator helped THD but didn't materially
+> change the linear headroom. The largest remaining errors are V1L's LF/cab-sim wet-path shape
+> and V2's drive-dependent zener behavior (NOT knee params; root cause still unknown).
+> **NEXT: V2 broadband FR shape mismatch — every V2 capture shows +10-20 dB at ALL FR@ anchors,
+> even at BL=1.00. Investigate whether this is a baseline EQ/level offset in the V2 wet path
+> or a stage-gain mismatch (V2's LEVEL stage has +4.18 dB dry gain — may be propagating
+> offset into wet path via the BLEND pot's frequency-dependent leakage).**
 >
 > ### P6 root cause — the DRIVE taper was never fit (commit 2040250)
 > `V1EarlyDriveStage` used the ideal schematic law `Rvr1=(1-d)*100k` → literal 0 Ω at max → +40.1 dB,
@@ -423,10 +438,11 @@ mechanism from GBW). 24/24 ctest green.
 > (+) input, skip the redundant node entirely (V1LateOutputStage/V2BlendLevelStage/V2OutputStage
 > pattern) rather than modelling an inert buffer stage.
 > **Carry-forward from 5.3 — CLOSED (2026-07-13, see CURRENT #2):** the two DRIVE stages (CH34-9/CH40)
-> are CASCADED not simultaneous (wiper = stiff source); Cj=220pF fit (V1L, and provisionally V2 —
-> `v2Params()==v1LateParams()`, still a Phase-10 fit target). The zener DRIVE module + recovery now
-> oversample (`ZenerDriveClipRecovery`) and the stage-A rail clip is added+ADAA'd. Remaining Phase-10
-> work on this stage: fit V2's Cj/knee independently, and the asymmetric stage-A rail (see CURRENT).
+> are CASCADED not simultaneous (wiper = stiff source). V2 Cj=10 pF and m=0.015 are now independently fit
+> (cj_scan.py + harmonic fit, 2026-07-13/15); V2 knee params (Vzt, Vf, Vz, Iref) are still placeholders
+> from V1L and are the next fit target. The zener DRIVE module + recovery now oversample
+> (`ZenerDriveClipRecovery`) and the stage-A rail clip is added+ADAA'd. Remaining Phase-10
+> work on this stage: fit V2's independent knee parameters, and the asymmetric stage-A rail (see CURRENT).
 
 ## Project-specific carry-forwards
 

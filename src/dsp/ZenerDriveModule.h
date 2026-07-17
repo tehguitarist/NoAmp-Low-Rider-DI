@@ -155,6 +155,12 @@ public:
     // error above 10 pF confirms the BZB984-C3V3 has significantly less junction capacitance than the
     // DZ23C3V3 (V1L's 220 pF) — plausible for a smaller-die device operating near reverse breakdown.
     // V1L keeps Cj=220 pF (its own DZ23C3V3 fit).
+    //
+    // Vzt SWEEP — 2026-07-17, vzt_sweep.py --os 8: swept 0.20 through 0.60 on V2 D0.50 BL1.00.
+    // Vzt=0.20 already optimal. A softer knee increases all low-drive THD (at -18 dBFS, THD jumps
+    // from 0.42% at Vzt=0.20 to 3.85% at Vzt=0.35) without fixing the 400Hz deficit at -12 dBFS
+    // (THD climbs from 0.89% at Vzt=0.20 to 6.46% at Vzt=0.35 vs pedal 4.74%). Gap D's root cause
+    // is NOT the zener knee — it is elsewhere in the V2 signal chain.
     static ZenerDriveParams v2Params()
     {
         return {/*R12*/ 10.0e3,   /*R14*/ 22.0e3, /*Rpot*/ 100.0e3, /*R15*/ 10.0e3, /*R903*/ 220.0e3,

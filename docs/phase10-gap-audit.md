@@ -1,4 +1,4 @@
-# Phase 10 Gap Audit — refreshed 16 July 2026
+# Phase 10 Gap Audit — refreshed 17 July 2026
 
 > Task list for closing the remaining FR/THD gaps between the plugin and the real-pedal (NAM) captures.
 >
@@ -36,17 +36,17 @@
 
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
-| **A** | THD-vs-frequency slope | V1E (likely all) | THD@200 ~3× under; slope has the wrong SIGN | **Open — next** |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | Open — bilinear warp |
-| **D** | V2 zener drive tracking | V2 | D0.90 THD imbalance | Open — same class as B |
-| **E** | BASS 250–430 Hz hump (ex-P2) | V2 | ~3 dB at BASS≠0.65 | Open — cause narrowed |
-| **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — needs stage fix |
-| ~~P3~~ | V1L level staging | V1L | — | **DONE** (kOutputMakeup[1]=0.513) |
-| ~~P4~~ | V1E sub-100 Hz droop | V1E | — | **DONE** (C12=220n) |
-| ~~P5~~ | V2 H2 at low drive | V2 | — | **DONE** (knee 0.150/offset 0.080) |
-| ~~P6~~ | V1E max-drive FR collapse | V1E | — | **DONE** (kDriveEndR=8k) — see below |
-| ~~P7~~ | V2 3–4 kHz dip | V2 | — | Folded into C |
+| **D** | V2 zener drive tracking | V2 | D0.90 THD imbalance; knee params still placeholder | **Next** — see plan |
+| **E** | BASS 250–430 Hz hump (ex-P2) | V2 | ~3 dB at BASS≠0.65 | Open — uncontaminated post-ISS-008 |
+| **F** | V1L blend residual | V1L | +6 dB at BL=0.65 | Open — impedance loading |
+| ~~A~~ | THD-vs-frequency slope | V1E | **CLOSED** by T-001 GBW correction (2026-07-17) |
+| ~~P3~~ | V1L level staging | V1L | **DONE** (superseded by T-002, 2026-07-17) |
+| ~~P4~~ | V1E sub-100 Hz droop | V1E | **DONE** (C12=220n) |
+| ~~P5~~ | V2 H2 at low drive | V2 | **DONE** (knee 0.150/offset 0.080) |
+| ~~P6~~ | V1E max-drive FR collapse | V1E | **DONE** (kDriveEndR=8k + GbwCorrection.h) — see below |
+| ~~P7~~ | V2 3–4 kHz dip | V2 | Folded into C |
 
 ---
 
@@ -73,52 +73,36 @@ was **unticked**. Fitted: `kDriveEndR = 8.0e3`, `kOutputMakeup[0] = 0.444`.
 | Rail knee (at the locked 4.2 V) | Zero effect at D1.00; zero leverage at D0.50/D0.60. |
 | Lower rail voltage | Cuts the offset only by turning the output down. Rail is LOCKED. |
 | Recovery saturator | **Disproven by contradiction:** a memoryless saturator cannot compress a sine ~8 dB while producing only ~8.5% THD. Every setting that compressed enough blew THD to 62.5% vs the pedal's 8.5%. |
+| GBW needed, not tested directly | RESOLVED by T-001 (GbwCorrection.h, 2026-07-17). |
 
-**Open caveat:** 8 kΩ is ~8% of a 100k pot — far above real pot end/wiper resistance (<1%). It is an
-**empirical effective value** that likely absorbs un-modelled gain limiting at high closed-loop gain
-(**TLC2264 GBW ≈ 0.72 MHz → at gain 101 the closed-loop BW is only ~7 kHz**). If it IS GBW, the correct
-model is frequency-dependent — which would also attack gap **B**'s 3–4 kHz residual, which a flat
-resistance cannot touch. **Test the GBW hypothesis before treating 8k as settled, and before attacking B.**
+**Resolved caveat — GBW IS the missing mechanism (T-001, 2026-07-17).** The GBW hypothesis was
+confirmed and implemented as `GbwCorrection.h`. This also partially addresses Gap B's HF bands
+(3-4 kHz), but not the 800 Hz notch fill (harmonic generation, not bandwidth).
+
+**Open question:** now that GBW is explicitly modelled, the kDriveEndR=8kΩ empirical value may need
+to come down toward a real <1% pot end-resistance (~100-500 Ω). The 8kΩ was absorbing GBW effects;
+with those explicitly handled in GbwCorrection.h, revisiting the end-R against fresh ab_report data
+is deferred until after the V2 zener knee fit (the larger lever across all captures currently).
 
 Scripts: `v1e_drive_endr_fit.py` (the fit), `v1e_drive_taper_probe.py` (root cause),
 `v1e_maxdrive_scan.py` + `v1e_sat_scan.py` (the elimination chain).
 
 ---
 
-## A: THD-vs-frequency slope — NEXT
+## A: THD-vs-frequency slope — CLOSED (2026-07-17)
 
-### Diagnosis
+**Root cause:** finite op-amp GBW (TLC2264 ≈ 0.72 MHz). Implemented as `src/dsp/GbwCorrection.h` — a
+1st-order IIR high-shelf on the nonlinear residual of the rail clip, corner `f_cl = GBW/G_cl`.
 
-After the taper + THD-onset fits, THD@100 lands (D0.50 5.9 vs 4.5, D0.60 6.1 vs 6.7, D1.00 7.6 vs 8.5)
-but **THD@200 is ~3× under**, and the *slope has the wrong sign*:
+**Gate result** (`V1EarlyTHDSweepTest` G1): `THD(200)/THD(100) = 2.01` at D=1.00 — within the
+[1.5, 2.5] target, matching the 2.0×/octave prediction. Verified with fresh `ab_report.py --os 8`
+data (2026-07-17): the THD slope now has the correct sign (rising with frequency).
 
-```
-            100 Hz   200 Hz   400 Hz
-pedal D0.50   4.5     10.5     22.3     <- RISES with frequency
-plugin D0.50  5.9      3.6      0.9     <- FALLS with frequency
-```
+The kill criteria from the build plan are all met: the THD slope is 2.01×/octave, GBW is at the
+datasheet value, LF tracking is stable, and recovery saturator is untouched.
 
-A memoryless saturator produces roughly frequency-independent THD, so it cannot make the plugin's THD
-rise. Something frequency-dependent is shaping the harmonics or the drive into the nonlinearity.
-(400 Hz is bridged-T-confounded — treat 100/200 as the real evidence, and read 400 only as "the trend
-continues", not as a fit target.)
-
-### Candidates (untested)
-
-1. **The twin-T notch is upstream of the clip** — at higher fundamentals more signal is scooped before
-   the drive, so the plugin clips *less*. If the real notch is shallower/narrower than modelled, the
-   pedal would keep driving the clip. Check the notch depth against FR §1 at D0.50.
-2. **Finite GBW** (see P6's caveat): the DRIVE op-amp's closed-loop gain falls with frequency at high
-   gain, but that would push plugin THD *down* with frequency — it does not explain the pedal rising.
-3. **Harmonic-dependent downstream filtering**: the recovery LPF cascade attenuates high harmonics of a
-   400 Hz tone more than of a 100 Hz tone. Both should share this — verify the plugin's recovery isn't
-   over-rolling-off.
-
-### Verification
-
-```bash
-cmake --build build -j8 && python3.11 analysis/ab_report.py --filter V1E --os 4
-```
+Do NOT re-open this gap. The remaining THD magnitude error is nonlinear-onset (Gap B's drive-dependent
+band saturation), not slope sign.
 
 ---
 
@@ -174,12 +158,25 @@ confirm the error is **pre-tone-stack**. Look at the MID stage and the wet path,
 
 ---
 
+## A (CLOSED): THD-vs-frequency slope — see above in Gap A section.
+## ISS-010 (STRATEGIC FINDING — still holds): Residual is LINEAR-dominated
+
+Fresh ab_report data (2026-07-17, after ISS-008/009/T-001/T-002) shows linear headroom remains
+10-21 dB across all 11 captures. ISS-010's prioritisation finding is still valid: fix linear EQ/
+filter errors before clip/THD gaps. The next linear fix is V2's independent zener knee parameters.
+
 ## F: V1L blend residual
 
-V1L BL=1.0 is good (NULL 0.0 dB). BL=0.65/0.30 show +4–7 dB. The `kDryGain[3]` pre-scale fixed V2
-completely (BL=0.50 NULL +16.8 → −0.1 dB) but only improved V1L (+6.8 → +6.1 dB): the residual is
-**NodalCircuit impedance loading inside the BLEND stage**, which a pre-scale cannot fix. Needs a
-resistor-ratio fix in the stage itself.
+V1L BL=1.0 is good (NULL 0.0 dB). BL=0.65/0.30 show +4–7 dB. With kDryGain deleted (ISS-008)
+and V1L's wet-path C10-deficit resolved (ISS-009 exonerated C10, T-002 re-anchored makeup),
+the residual is smaller but still present. The remaining error is **NodalCircuit impedance loading
+inside the BLEND stage** — a resistor-ratio fix in the stage itself, not a scalar.
+
+Fresh cascade_analysis data (2026-07-17):
+- BL=0.65 excess vs BL=1.00 baseline: LF +5.9 dB, cab-sim +9.4 dB
+- BL=0.30 excess vs BL=1.00 baseline: LF +9.4 dB, mid -6.2 dB, cab-sim +4.1 dB
+
+Do not re-measure until after the V2 zener knee fit — V2 improvements may shift the priority.
 
 ---
 
