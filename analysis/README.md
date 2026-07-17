@@ -48,6 +48,14 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `gap_audit.py` | grades that JSON against the acceptance thresholds (HUGE >3 dB / target >1.5 dB / good ≤1 dB) so gaps can be checked for coverage without reading the raw JSON. `--mode summary\|detail\|thd`, `--rev`, `--huge`, `--target`. Summary reports **mean and spread** per band: large spread ⇒ setting-dependent (taper/drive-tracking); consistent mean + small spread ⇒ fixed shape error (component value). |
 | `analyze.py` | pedal-agnostic library (load/align, `transfer`, `harmonic_thd_curve` — returns per-order `Hn` for the even/odd-harmonic view, `null_depth`, `linear_removed_null`, `frac_align`, the FR grid). Don't duplicate its primitives. |
 
+### Metric-integrity tools (run these BEFORE trusting a number — 2026-07-17)
+| Script | Purpose | Key CLI |
+|--------|---------|---------|
+| `farina_validate.py` | **Validates `harmonic_thd_curve` against the discrete tones**, as its docstring always demanded and nobody did. Uses a **bracket test** immune to the level mismatch: the tones are −14 dBFS and the sweeps −18/−12, so a sound reading must satisfy `THD(−18) <= THD_tone(−14) <= THD(−12)`. `--probe` dumps per-order magnitudes across the ceiling region — that is what found the spurious edge spike at `SWEEP_F1/N`. | `--rev`, `--probe`, `--limit`, `--os` |
+| `farina_regression_check.py` | Asserts the order-limit fix is **bit-identical below 2714 Hz** on every capture, i.e. no existing fit (`kDriveEndR`, saturator, `kOutputMakeup`, Vzt, Cj) moves. Re-run if the order limit ever changes. | — |
+| `capture_outlier_scan.py` | Flags a capture that disagrees with all the others as **SUSPICIOUS, never wrong** (the ISS-011 tripwire). Separates *capture-intrinsic* physics violations (can convict — plugin never involved) from *plugin-vs-capture* disagreement (finds a GAP, cannot convict). **Read its header before changing it**: a naive version would flag `V1L D0.40 BL0.30`, the one capture that reveals Gap J. | — |
+| `report_audit.py` | Grades `comprehensive_data.json` against the FR/THD acceptance targets; reports THD coverage, THD-vs-LEVEL, and the harmonic-magnitude deltas the executive summary omits. | — |
+
 ### Diagnostic scripts (Phase 10 calibration)
 | Script | Purpose | Key CLI |
 |--------|---------|---------|

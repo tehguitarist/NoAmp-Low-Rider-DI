@@ -17,8 +17,15 @@ import noamp_captures as NC
 import gen_test_signal as G
 
 # -- Extended constants ----------------------------------------------------
-FARINA_CEILING_HZ = 3000.0      # order-7 ceiling: 48k/(2*7)=3429 -> use 3000 for margin
+# Farina is valid while at least H2 stays inside the reference sweep's band (SWEEP_F1*0.95/2).
+# The old 3000 Hz value was set to dodge a spurious edge spike at SWEEP_F1/N; that artefact is now
+# removed at source by analyze.harmonic_thd_curve's order limiting, so the honest ceiling is higher.
+FARINA_CEILING_HZ = A.thd_max_measurable_hz(max_order=2)   # ~9500 Hz
+# 800 Hz sits in the twin-T notch and 400 Hz on V1's bridged-T — BOTH notch the FUNDAMENTAL, which
+# inflates THD and any per-order ratio taken against it (gap-audit "Standing traps", Gap G). They
+# are kept for continuity but MUST be read as confounded; 100/200 are the trustworthy anchors.
 THD_ANCHORS = (100, 200, 400, 800, 1500, 3000)  # extended for harmonics detail
+CONFOUNDED_ANCHORS = (400, 800)                 # notch-confounded — do not fit against these
 BANDS_PER_OCTAVE = 6             # 1/6 oct (=60 bands total)
 TONE_FREQS = (82.41, 110.0, 220.0, 440.0, 1000.0, 2000.0, 4000.0, 8000.0)
 DRIVEN_SWEEPS = ("sweep_drv_-18", "sweep_drv_-12", "sweep_drv_-6")
@@ -91,9 +98,15 @@ with open(json_out, 'w') as f:
             "bands": bands,
             "farina_ceiling_hz": FARINA_CEILING_HZ,
             "thd_anchors": list(THD_ANCHORS),
+            "confounded_anchors": list(CONFOUNDED_ANCHORS),
             "driven_sweeps": list(DRIVEN_SWEEPS),
             "tone_freqs": list(TONE_FREQS),
-            "thd_band_sources": [s for _, s in band_source_map]
+            "thd_band_sources": [s for _, s in band_source_map],
+            # orders actually measurable per band — a THD built from 1 order is not comparable in
+            # ABSOLUTE terms to one built from 6 (see comprehensive_report.band_order_counts)
+            "thd_band_orders": CR.band_order_counts(bands),
+            "order_limit_margin": A.ORDER_LIMIT_MARGIN,
+            "sweep_f1_hz": G.SWEEP_F1
         },
         "captures": ok,
         "summary": summary

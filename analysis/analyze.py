@@ -127,11 +127,38 @@ def thd(x, f0):
     return 100 * harm / (fund + 1e-20), fund
 
 
-def harmonic_thd_curve(capture_sweep, ref_sweep, max_order=7):
+ORDER_LIMIT_MARGIN = 0.95   # keep order N only while N*f <= SWEEP_F1*this (edge spike sits AT f1/N)
+
+
+def harmonic_thd_curve(capture_sweep, ref_sweep, max_order=7, order_limit=True):
     """Continuous THD(f) via Farina exponential-sweep harmonic separation. Deconvolve the captured
     driven sweep against the clean reference sweep; the N-th harmonic IR is time-advanced by
     dt_N = T*ln(N)/ln(f1/f0), so gate each, FFT, and map to the fundamental axis. Returns
-    (freqs, thd_pct, {order: |H|}). VALIDATE against discrete-tone thd() before trusting it."""
+    (freqs, thd_pct, {order: |H|}).
+
+    ORDER LIMITING (`order_limit=True`, the default — added 2026-07-17 after this curve was finally
+    validated against thd(), as this docstring had demanded all along; it FAILED).
+
+    The deconvolution divides by the reference sweep's spectrum, which carries NO energy above
+    SWEEP_F1 (20 kHz). So order N is only measurable while N*f <= SWEEP_F1: past that, the
+    regularised division (|X|^2 + eps) blows up and order N produces a large SPURIOUS EDGE SPIKE
+    at exactly f = SWEEP_F1/N, then collapses to ~0. Measured on V1E D0.50 (analysis/
+    farina_validate.py --probe), H7 re fundamental:
+        2800 Hz -53.0 dB | 2857 Hz -35.0 | 2874 Hz -16.8 | 2900 Hz -10.7 | 3000 Hz -76.9
+    i.e. a 36 dB spike centred on 20000/7 = 2857 Hz, which drove THD 4.7% -> 29.7% and was
+    reported as a real "plugin THD 14.0% vs pedal 2.4% @2874 Hz" finding on nearly every V1E
+    capture. The same artefact sits at 20000/6=3333, 20000/5=4000 (this one broke the 4 kHz
+    discrete-tone bracket test), 20000/4=5000, 20000/3=6667, 20000/2=10000.
+
+    The fix masks order N above SWEEP_F1*ORDER_LIMIT_MARGIN/N. Consequences worth knowing:
+      * Nothing below 19000/7 = 2714 Hz changes AT ALL (every order is still in band there), so
+        every THD fit ever made on this project — all at the 100/200 Hz anchors — is untouched.
+      * Coverage EXTENDS above the old 3 kHz ceiling instead of stopping: at 6 kHz H2+H3 remain
+        valid; at 9.5 kHz H2 alone. Above ~9.5 kHz this sweep can measure NO harmonic, and above
+        12 kHz THD does not exist at 48 kHz at all (H2 would land past Nyquist). "THD at 18 kHz"
+        is not a measurable quantity here — it is not a tooling gap.
+      * `Hn` is returned masked too, so per-order magnitudes agree with the THD built from them.
+    Pass order_limit=False only to reproduce a pre-2026-07-17 number."""
     n = min(len(capture_sweep), len(ref_sweep))
     y = capture_sweep[:n].astype(np.float64); x = ref_sweep[:n].astype(np.float64)
     nfft = 1 << int(np.ceil(np.log2(2 * n)))
@@ -159,10 +186,20 @@ def harmonic_thd_curve(capture_sweep, ref_sweep, max_order=7):
     for N in range(2, max_order + 1):
         frN, mag = gated_spectrum(N)
         Hn[N] = np.interp(fr, frN / N, mag, left=0.0, right=0.0)   # remap harmonic->fundamental axis
+        if order_limit:
+            # Order N is unmeasurable once its harmonic leaves the reference sweep's band.
+            Hn[N] = np.where(N * fr <= G.SWEEP_F1 * ORDER_LIMIT_MARGIN, Hn[N], 0.0)
     with np.errstate(divide="ignore", invalid="ignore"):
         harm = np.sqrt(sum(Hn[N] ** 2 for N in range(2, max_order + 1)))
         thd_pct = 100.0 * harm / (H1 + 1e-20)
     return fr, thd_pct, Hn
+
+
+def thd_max_measurable_hz(max_order=2):
+    """Highest fundamental at which THD is measurable from this sweep, using orders up to
+    `max_order`. THD needs at least H2, so the ceiling is SWEEP_F1*margin/2 ~= 9.5 kHz — and no
+    test signal can beat FS/4 = 12 kHz at 48 kHz, because H2 lands past Nyquist above that."""
+    return min(G.SWEEP_F1 * ORDER_LIMIT_MARGIN / max_order, FS / (2.0 * max_order))
 
 
 # --- Sub-sample-aligned null test -------------------------------------------------------------

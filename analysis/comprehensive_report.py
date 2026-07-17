@@ -17,10 +17,26 @@ DEFAULT_BIN = "build/OfflineRender_artefacts/Release/OfflineRender"
 OUTPUT_JSON = "analysis/reports/comprehensive_data.json"
 DRIVEN_SWEEPS = ("sweep_drv_-18", "sweep_drv_-12", "sweep_drv_-6")
 ALL_SWEEP_LEVELS = ("sweep_clean",) + DRIVEN_SWEEPS
-FARINA_CEILING_HZ = 1300.0
+# Farina is valid while at least H2 is inside the reference sweep's band: SWEEP_F1*margin/2.
+# See analyze.harmonic_thd_curve's ORDER LIMITING note — the old fixed 1300/3000 Hz ceilings were
+# guarding against an artefact (a spurious edge spike at SWEEP_F1/N) that is now removed at source,
+# so coverage extends to ~9.5 kHz instead of stopping at 3 kHz. Above that no test signal at 48 kHz
+# can measure THD (H2 would exceed Nyquist past 12 kHz) — that is physics, not a tooling gap.
+FARINA_CEILING_HZ = A.thd_max_measurable_hz(max_order=2)
 THD_ANCHORS = (100, 200, 400)
 HARMONIC_ORDERS = tuple(range(2, 8))
 TONE_FREQS = (82.41, 110.0, 220.0, 440.0, 1000.0, 2000.0, 4000.0, 8000.0)
+
+
+def band_order_counts(bands):
+    """How many harmonic orders are actually measurable at each band (see analyze's order limiting).
+
+    The count FALLS with frequency (H7 dies at 2714 Hz, H2 last at 9500 Hz), so an absolute THD(f)
+    curve has step discontinuities where an order drops out — 6 orders at 2.5 kHz vs 1 at 8 kHz is
+    not the same quantity. A plugin-vs-pedal DELTA is still fair (both sides lose the same orders);
+    an absolute THD read across that boundary is not. Report the count alongside the number.
+    """
+    return [len([n for n in HARMONIC_ORDERS if n * b <= G.SWEEP_F1 * A.ORDER_LIMIT_MARGIN]) for b in bands]
 
 
 def build_band_source_map(bands):

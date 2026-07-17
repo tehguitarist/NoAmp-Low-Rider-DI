@@ -32,6 +32,15 @@
   `analysis/fr_offset_decompose.py` proves the makeup moves shape by 0.0000 dB). `fr_check` now
   reports **SHAPE** (median offset removed) plus `offset` separately. See CLAUDE.md **L-005**.
   Re-derive with `ab_report.py` (shape) or `analysis/v1l_shape_localise.py` (per-band).
+- **THD above 9.5 kHz DOES NOT EXIST on this rig — it is not a tooling gap.** Farina can only see
+  order N while `N*f <= SWEEP_F1` (20 kHz), so THD needs at least H2 ⇒ the ceiling is 9.5 kHz. Even a
+  perfect test signal cannot beat **12 kHz at 48 kHz** (H2 would land past Nyquist). Reaching
+  9.5–12 kHz would need a NEW test signal sweeping to 24 kHz — i.e. **re-capturing the pedal**.
+  Do not accept a task framed as "THD to 18 kHz"; the quantity is undefined there.
+- **The measurable ORDER COUNT falls with frequency** (H7 dies at 2714 Hz, H2 last at 9500 Hz), so an
+  absolute THD(f) curve steps DOWN each time an order drops out. A plugin-vs-pedal **delta** is fair
+  (both sides lose the same orders); an **absolute** read across that boundary is not. The per-band
+  count is in the JSON (`thd_band_orders`) — cite it.
 - **Capture SNR is NEVER the limitation.** These are NAM MODEL outputs, so the inter-segment
   "silence" is a net emitting ~zero (−146..−160 dBFS): every band of every capture measures
   **84–129 dB SNR** (`analysis/capture_band_snr.py`). A quiet band is not a noisy band — do not
@@ -55,7 +64,9 @@ ranking was distorted by level offsets and pointed at V2.
 
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
-| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **Error 1 CLOSED** (S-K: 33k schematic-faithful). **Error 2 OPEN** — ~17 dB remains: both PRESENCE (§3-confirmed) and S-K cascade individually correct; deficit appears only in combination, flips sign with PRESENCE/BLEND. NOT a NAM artefact (band SNR +105.5 dB, NAM ESR <0.001). Suspects: op-amp non-idealities, BLEND-stage HF loading, level-dependent S-K behaviour. |
+| **I** | **THD-vs-LEVEL slope wrong** | V1E + V2 | V1E 101 Hz: pedal 0.4→4.5→7.0% vs plugin **3.1→5.3→5.3**; V2: pedal 0.4→2.8→7.6 vs plugin **0.4→4.9→14.5** | **NEW 2026-07-17.** The clip-onset metric that **survives Gap G** — read at a clean 101 Hz anchor, varying LEVEL not frequency. V1E's plugin is level-FLAT (8× too hot at −18 dBFS, too clean at −6) = a static nonlinearity; V2's slope is ~2× too steep. This is the gate L-003 demands and it never existed. |
+| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **Error 1 CLOSED** (S-K: 33k schematic-faithful). **Error 2 OPEN** — ~17 dB remains: both PRESENCE (§3-confirmed) and S-K cascade individually correct; deficit appears only in combination, flips sign with PRESENCE/BLEND. NOT a NAM artefact (band SNR +105.5 dB, NAM ESR <0.001). Suspects: op-amp non-idealities, BLEND-stage HF loading, level-dependent S-K behaviour. **12–18k is now an explicit target (3 dB) per the user, so the 18.2k band (median 11.0 dB) must be arbitrated as part of this.** |
+| **J** | **V1L 285 Hz blend-tracking notch** | V1L | shape at 285 Hz: **+1.5 / −2.5 / −23.8 dB** at BL 1.00 / 0.65 / 0.30 | **NEW 2026-07-17.** Narrow (−23.8 @285, −4.7 @202, −3.4 @403), deep, and **monotonic in BLEND** — invisible at full wet, deep as dry takes over = dry/wet **PHASE** cancellation. A scalar cannot do this (and `kDryGain` must never return — ISS-008). See below. |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | ⚠ **Status UNSAFE** — its "closed at OS=8x" evidence was level-confounded; see below |
 | **D** | V2 zener drive tracking | V2 | D0.90 THD slope | Premise CORRECTED 2026-07-17 (knee already fit + refuted). Symptom metric is CONFOUNDED — see below |
@@ -204,6 +215,142 @@ the *measured* fundamental transfer at each frequency, deconvolving the notch ou
 (d) restrict to 60–200 Hz and accept that no slope can be fit in 1.7 noisy octaves.
 
 `harmonic_report.py` already reports per-harmonic H2..H7 and is the natural starting point for (a).
+
+**UPDATE 2026-07-17 — a fifth option exists and is already proven: (e) vary LEVEL, not frequency.**
+Gap G is a statement about THD-vs-**frequency**. THD-vs-**level** at a fixed clean anchor (101 Hz, in
+the 60–200 Hz clean band) is immune: the notch attenuates the fundamental identically at every level,
+so it cancels out of the pedal-vs-plugin comparison. That metric is live, it is unconfounded, and it
+already shows two large faults — **see Gap I**. Prefer it over (a)–(d).
+
+**Also note Gap M:** the THD estimator itself was independently broken above 2.7 kHz (a spurious edge
+spike at SWEEP_F1/N). G and M are *separate* faults on the same metric. Fixing M does **not** rescue
+THD-vs-frequency — the notch confound is untouched by it. Anyone re-reading old THD-vs-f numbers is
+looking at both faults at once.
+
+---
+
+## M: THE FARINA THD CURVE HAD A SYSTEMATIC ARTEFACT — FIXED AT SOURCE (2026-07-17)
+
+**Independent of Gap G. G says the notch confounds THD-vs-frequency; M says the ESTIMATOR was also
+broken above 2.7 kHz. Two separate faults on the same metric — G survives this fix.**
+
+**Symptom.** `findings.txt` reported, on nearly every V1E capture, `2874 Hz pedal=2.4% plugin=14.0%
+ratio=5.8x` — and `plugin=48.1%` at D1.00. It was listed as a significant deviation and was pure
+artefact.
+
+**Mechanism (measured, `analysis/farina_validate.py --probe`).** The deconvolution divides by the
+reference sweep's spectrum, which carries **no energy above SWEEP_F1 = 20 kHz**. So order N is only
+measurable while `N*f <= SWEEP_F1`; past that the regularised division (`|X|^2 + eps`) blows up and
+order N produces a large **spurious edge spike at exactly `f = 20000/N`**, then collapses to ~0.
+Plugin H7 re fundamental, V1E D0.50:
+
+```
+   2800 Hz   2857 Hz   2874 Hz   2900 Hz   3000 Hz
+    -53.0     -35.0     -16.8     -10.7     -76.9     dB   -> THD 4.71 / 5.05 / 15.13 / 29.65 / 4.75 %
+```
+
+A 36 dB spike centred on **20000/7 = 2857 Hz**. Siblings sit at 20000/6=3333, **20000/5=4000**,
+20000/4=5000, 20000/3=6667, 20000/2=10000. The 4 kHz one is why the discrete-tone bracket test failed
+there.
+
+**Fix.** `analyze.harmonic_thd_curve(..., order_limit=True)` (default) masks order N above
+`SWEEP_F1 * ORDER_LIMIT_MARGIN / N`. `Hn` is masked too, so per-order magnitudes agree with the THD
+built from them.
+
+**Validated two ways — both required, neither sufficient alone:**
+1. **Correctness** — at 4 kHz the plugin's order-limited Farina reads **4.44–5.07%** against an
+   independently-measured discrete tone at **5.24%** (pre-fix: 8.29–13.91%). At D1.00: **5.14–5.15%**
+   vs **5.44%**. The pedal brackets correctly too. `analysis/farina_validate.py`.
+2. **Safety** — **bit-identical (0.00e+00)** below 2714 Hz on all 11 captures
+   (`analysis/farina_regression_check.py`). Every fit this project has made is anchored at 100/200 Hz,
+   so `kDriveEndR`, the saturator params, `kOutputMakeup`, Vzt and Cj are **provably untouched**.
+   No refitting. Re-run this check if the order limit is ever changed.
+
+**Coverage moved 3000 → 9500 Hz** (bands with no THD data: 14 → 6, and the remaining 6 are 10.2–18.2
+kHz where THD is physically undefined — see Standing traps).
+
+**Why it hid for so long.** `harmonic_thd_curve`'s own docstring said *"VALIDATE against discrete-tone
+thd() before trusting it"* — for the whole project, nobody did. The captures carry tones at 82/110/
+220/440/1000/2000/4000/8000 Hz precisely so this check is possible. **The bracket test is the trick
+that makes it work despite the level mismatch:** the tones are at −14 dBFS and the sweeps at −18/−12,
+so no single sweep is comparable — but −14 lies BETWEEN −18 and −12, so a sound reading must satisfy
+`THD(−18) <= THD_tone(−14) <= THD(−12)`. A tone outside its own bracket convicts the curve with no
+assumption about the exact level. (Caveat: the bracket assumes monotonicity in level, which fails at
+high drive where THD inverts — V1E D1.00 @110 Hz misses by 0.16 pp. Marginal; not a curve fault.)
+
+---
+
+## I: THD-vs-LEVEL slope is wrong (NEW 2026-07-17) — the metric that survives Gap G
+
+**Gap G kills THD-vs-FREQUENCY. It does not touch THD-vs-LEVEL at a fixed clean anchor** — the notch
+attenuates the fundamental identically at every level, so it cancels out of the comparison. 101 Hz is
+inside the only clean band (60–200 Hz). This is the first clip-onset metric here that is not
+confounded, and it is exactly what L-003 demands ("magnitude vs a capture, ≥3 settings").
+
+**Data** (`analysis/report_audit.py`, THD% at 101 Hz, pedal / plugin, OS=8x):
+
+```
+                        -18 dBFS        -12 dBFS         -6 dBFS
+V1E D0.50            0.4 /  3.1      4.5 /  5.3      7.0 /  5.3
+V1E D0.60            2.2 /  3.6      6.7 /  5.6      7.2 /  5.0
+V1E D1.00           10.4 /  4.7      9.8 /  4.4      8.4 /  7.0
+V1L D0.65            8.0 /  8.5     12.1 / 14.6     12.9 / 18.4
+V2  D0.50            0.4 /  0.4      2.8 /  4.9      7.6 / 14.5
+V2  D0.90           10.7 / 16.5     11.5 / 21.3     11.9 / 23.3
+V2  D0.25            0.2 /  0.6      0.3 /  0.5      0.7 /  3.8
+```
+
+**Two distinct, opposite faults:**
+- **V1E — the plugin is level-FLAT.** 3.1→5.3→5.3% across 12 dB where the pedal goes 0.4→4.5→7.0%
+  (17×). It is **8× too hot at −18 dBFS** and too clean at −6. That is the signature of a **static**
+  nonlinearity: `RecoverySaturator`'s tanh/linear blend distorts at *every* level, including tiny
+  ones. It was fitted at a single level, so it bought the mid-level anchor and broke both ends.
+- **V2 — the slope is ~2× too steep.** Correct at −18, 1.75× at −12, 1.9× at −6. And at D0.90 the
+  **pedal is nearly level-independent** (10.7→11.9, the zener clamping hard) while the plugin climbs
+  16.5→23.3. The plugin's zener is not clamping.
+
+**Corroboration, independent of THD:** CLAUDE.md already records that cascade §B's LF column swings
+**9.10 dB (V1E)** / 3.92 (V2) between drives while the plugin's own LF is drive-independent (≤2.24 dB)
+— i.e. the PEDAL compresses and the plugin does not. Same fault seen in the FR instead of the
+harmonics. **Fit clip onset against BOTH.**
+
+**Do NOT re-run:** the rail knee has zero leverage here (proven — at the locked ±4.2 V rail, D0.50
+never approaches it). This is the saturator's level law, not the rail.
+
+**Gate to build (L-003):** magnitude vs capture, ≥3 drives × 3 levels, saturator ON, and prove the
+gate FAILS when the saturator is deleted.
+
+---
+
+## J: V1L 285 Hz blend-tracking notch (NEW 2026-07-17) — a PHASE fault, not a level one
+
+**FR shape (plugin − pedal, median offset removed) around 285 Hz:**
+
+```
+                        202     226     254     285     320     359     403
+V1L D0.65 BL1.00       +0.0    +0.5    +1.1    +1.5    +1.9    +2.4    +2.7
+V1L D0.45 BL0.65       -0.5    -1.1    -1.8    -2.5    -3.0    -3.0    -2.5
+V1L D0.40 BL0.30       -4.7    -8.3   -15.5  -23.8   -11.0    -6.2    -3.4
+```
+
+**Narrow, deep, and monotonic in BLEND** — invisible at full wet, −23.8 dB as dry takes over. This is
+the ISS-008 signature ("invisible at BL=1.00, growing as BL falls ⇒ a dry-leg-only fault") but the
+feature is **frequency-selective and narrow**, so it is **not** a scalar: the plugin's wet leg arrives
+~180° out at 285 Hz and cancels against dry. A near-perfect null needs matched magnitude AND opposite
+phase, so this is a wet-path group-delay/phase error, most likely in a stage whose phase the WDF/MNA
+discretisation shifts.
+
+**⚠ Read this before dismissing it as the voided note.** CLAUDE.md voids an old *"dry+wet
+phase-CANCEL at BL0.50"* claim. That one died because it traced to the **quarantined corrupt V2 `_2`
+capture** (ISS-011). **This is different evidence**: V1L, three non-quarantined captures, monotonic in
+the knob. Do not let the voided note suppress it.
+
+**Why only V1L shows it — a MATRIX limit, not a revision property.** V1L is the only revision with
+blend swept (1.00/0.65/0.30). **V1E has no BL<1.00 capture at all** and V2's are all ≥0.90, where any
+phase fault is invisible by construction. Assume this affects all three until a capture says
+otherwise. **Confounder:** BASS also moves across those three V1L captures (0.4/0.6/0.4), and Gap E
+lives at 250–430 Hz — a matched-pair capture (BLEND only) would isolate it cleanly (`dsp.md`
+"Isolate a coupled control with a MATCHED-PAIR capture").
 
 ---
 
@@ -474,6 +621,13 @@ BASS=0.65 (the primary calibration capture) is clean at RMS 1.02 dB; BASS=0.50/0
 **Ruled out:** C27 100n→82n — **zero effect** (the old audit recommended exactly this; it had already
 been tested). The hump correlates with the **MID shift throw (430 Hz)**, not BASS Q, and C27/C29 tests
 confirm the error is **pre-tone-stack**. Look at the MID stage and the wet path, not the BASS rail.
+
+**⚠ RESCOPE 2026-07-17 — this gap is filed as "V2, ~3 dB" and that understates it.** The largest
+250–430 Hz error in the whole matrix is **V1L D0.40 BL0.30 at −23.8 dB @285 Hz**, not V2's ~3 dB.
+Across all 11 captures the 285 Hz band reads median |Δ| 2.46 dB but **max 23.78 dB**. Before treating
+E as a V2 MID-stage problem, separate it from **Gap J** — J's blend-monotonic notch sits in exactly
+this band on V1L, and the three V1L captures move BASS (0.4/0.6/0.4) *and* BLEND together, so E and J
+are currently confounded with each other. A BLEND-only matched pair resolves both at once.
 
 ---
 

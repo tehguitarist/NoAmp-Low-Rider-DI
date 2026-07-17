@@ -200,7 +200,50 @@ without images.
 > - **⚠ Any FR@/FR-rms number in this file or `phase10-gap-audit.md` predating 2026-07-17 is
 >   LEVEL-CONFOUNDED** — re-derive on the SHAPE metric before building on it (Gap C above is one).
 >
-> **NEXT: Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
+> ### 2026-07-17 (later session): METRIC FIXES + TWO NEW GAPS — read `phase10-gap-audit.md` M / I / J
+>
+> **ACCEPTANCE TARGETS SET BY THE USER:** FR within **1.5 dB** (60 Hz–12 kHz) / **3 dB** at the
+> extremes, with **12–18 kHz explicitly IN SCOPE**; THD across the spectrum; and **harmonic
+> MAGNITUDES** correct, not just placement. State vs that bar (`analysis/report_audit.py`): FR shape
+> rms over 40 Hz–18 kHz = **V1E 1.79 | V2 3.55 | V1L 5.63 dB** (V1E D0.60 = 1.60 — already at
+> target). Nearly all the miss is the top octave: median |Δ| over all 11 captures is 4.4 dB @12.9k,
+> 7.0 @14.5k, 6.4 @16.3k, **11.0 @18.2k**.
+>
+> - **Gap M — the THD ESTIMATOR was broken above 2.7 kHz; FIXED at source (L-006).** A spurious
+>   Farina edge spike at `SWEEP_F1/N` fabricated "plugin 14.0% vs pedal 2.4% @2874 Hz" (48.1% at
+>   D1.00) on nearly every V1E capture. **Any THD-vs-f number above ~2.7 kHz predating this is
+>   suspect.** Validated against the discrete tones (4 kHz: **4.44–5.07%** vs tone **5.24%**; was
+>   8.29–13.91%) and proven **bit-identical below 2714 Hz on all 11 captures** ⇒ `kDriveEndR`,
+>   saturator params, `kOutputMakeup`, Vzt, Cj all untouched. **No refitting.**
+> - **THD coverage is now 20 Hz–9.5 kHz** (was 3 kHz; bands with no data 14→6). **"THD to 18 kHz" is
+>   not achievable and never was:** Farina needs `N*f <= SWEEP_F1` so H2 dies at 9.5 kHz, and above
+>   **12 kHz THD does not exist at 48 kHz** (H2 passes Nyquist). 9.5–12 kHz would need a test signal
+>   sweeping to 24 kHz ⇒ **re-capturing the pedal**. Don't accept the 18 kHz framing for THD.
+> - **Gap I (NEW) — THD-vs-LEVEL is wrong, and it SURVIVES Gap G.** G kills THD-vs-*frequency*;
+>   varying LEVEL at a clean 101 Hz anchor is immune (the notch cuts the fundamental equally at every
+>   level). V1E's plugin is level-FLAT — **3.1→5.3→5.3%** at −18/−12/−6 dBFS where the pedal goes
+>   **0.4→4.5→7.0%** (8× too hot at −18) = a *static* nonlinearity, i.e. a saturator fitted at one
+>   level. V2's slope is ~**2× too steep** (14.5 vs 7.6 at −6); at D0.90 the pedal is level-flat
+>   (zener clamping) while the plugin climbs. **This is the gate L-003 demanded, and it never existed.**
+> - **Gap J (NEW) — V1L 285 Hz notch, monotonic in BLEND** (+1.5 / −2.5 / **−23.8 dB** at BL
+>   1.00/0.65/0.30). Narrow + deep + dry-dependent ⇒ dry/wet **PHASE** cancellation, not a scalar.
+>   **NOT the voided "phase-cancel" note** (that died with the quarantined V2 `_2` file; this is V1L,
+>   three good captures, monotonic in the knob). Confounded with Gap E — a BLEND-only pair settles both.
+> - **Harmonic MAGNITUDES are badly off and NOTHING reports them:** median |plugin−pedal| over H2..H7
+>   = **V1E 15.3 | V1L 14.6 | V2 7.7 dB** (exclude the 800 Hz anchor and V1's 400 Hz — notch-
+>   confounded per Gap G). The executive summary has no harmonic section at all.
+> - **Capture-matrix limits (`analysis/capture_outlier_scan.py`, L-007):** **V1E has NO blend<1.00
+>   capture**; V2's are all ≥0.90 — so a Gap-J-class phase fault is invisible on two of three
+>   revisions *by matrix design*. Only **two** blend-matched pairs exist at all (V1L BL0.30-vs-0.65,
+>   V2 BL0.90-vs-1.00); both PASS the intrinsic check. V1E cannot self-police.
+>
+> **NEXT (order): (1) M-3/M-4 + regenerate reports** — harmonic section into the executive summary,
+> flag the N-004 (20–36 Hz) and notch-confounded (400/800 Hz) bands, then re-run
+> `run_detailed_report.py` so the 2874 Hz phantoms clear out of `findings.txt`. **(2) Gap I** — the
+> biggest coherent nonlinear finding and immune to Gap G. **(3) Gap H error 2** (below), now with
+> 12–18k in scope, which also requires arbitrating the 18.2k band.
+>
+> **Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
 > Both the S-K (error 1: 33k, schematic-faithful) and PRESENCE (§3: +27.5 dB, analytic-confirmed)
 > are individually correct. The ~17 dB deficit appears only in combination — it flips sign across
 > captures tracking PRESENCE/BLEND, and is V1L-specific (V2 with the same presence cell reads
@@ -486,6 +529,35 @@ the gate FAILS when you delete the feature it guards.
   fit, git log -L the gate" would NOT have caught this. The check that does: **ask what the metric
   reads when the model is perfect but the level is arbitrary.** Sibling of L-004 (which asks whether
   the *phenomenon* is an artefact); this asks whether the *comparison* is.
+- **L-006: Validate an ESTIMATOR against an independent measurement before believing any number it
+  produces — and when it carries its own "validate me" note, that note is a defect report.**
+  `analyze.harmonic_thd_curve`'s docstring said *"VALIDATE against discrete-tone thd() before trusting
+  it"* for the entire project and nobody ever did. It was wrong: the Farina deconvolution divides by
+  the reference sweep's spectrum, which has **no energy above SWEEP_F1=20 kHz**, so each order blows
+  up into a **spurious edge spike at exactly f = 20000/N** (H7 measured −53 dB @2800 → **−16.8 @2874**
+  → −77 @3000). That fabricated "plugin THD 14.0% vs pedal 2.4% @2874 Hz" on nearly every V1E capture
+  — reported as a real finding for as long as the report existed. **The trick that made validation
+  possible despite a level mismatch: a BRACKET test.** The tones are −14 dBFS, the sweeps −18/−12, so
+  no single sweep compares — but −14 lies *between*, so a sound reading must satisfy `THD(−18) <=
+  THD_tone(−14) <= THD(−12)`. That needs no assumption about the exact level. **Two tells were
+  visible without any of this:** the spike was one band wide with sane neighbours on both sides, and
+  it disagreed with the per-order rss from *its own decomposition*. **A number bracketed by two
+  consistent numbers is the artefact, not the discovery.** Fixed via order limiting; proven
+  bit-identical below 2714 Hz on all 11 captures (`analysis/farina_regression_check.py`), so no fit
+  moved. Sibling of L-005: L-005 asks whether the *comparison* is sound, L-006 whether the
+  *estimator* is.
+- **L-007: "Disagrees with everything else" is a QUESTION, not a verdict — and the tool that asks it
+  must compare at matched settings.** ISS-011's corrupt capture damaged five good ones, so a tripwire
+  is worth having (`analysis/capture_outlier_scan.py`). But the same signature has two opposite
+  causes: a corrupt file, **or the only capture at settings that expose a real bug** — `V1L D0.40
+  BL0.30` is the largest FR outlier in the matrix *and* it is the sole evidence for Gap J. Only a
+  **capture-intrinsic** proof (physics, plugin never involved — ISS-011 had two) can convict; plugin-
+  vs-capture disagreement finds a GAP, never a bad capture. **The first draft of that tool accused two
+  perfectly good captures** by comparing HF across files whose DRIVE differed — ISS-009's
+  matched-settings trap, re-learned inside the very tool built to prevent this class. Scope the
+  confounder set by *authority in the band under test* (at 8–16 kHz: presence/treble/drive matter;
+  bass/mid/shift switches do not). **Result: the matrix has only two blend-matched pairs and both
+  pass — V1E has none at all, so it cannot self-police.**
 - **L-004: Before modelling a mechanism, check the metric that motivated it isn't an artefact.**
   T-001 modelled finite GBW to fix a "THD-vs-frequency slope" that is very likely just the twin-T
   notching the FUNDAMENTAL (harmonics are generated downstream and pass unattenuated, so THD inflates
