@@ -99,16 +99,22 @@ was **unticked**. Fitted: `kDriveEndR = 8.0e3`, `kOutputMakeup[0] = 0.444`.
 | Rail knee (at the locked 4.2 V) | Zero effect at D1.00; zero leverage at D0.50/D0.60. |
 | Lower rail voltage | Cuts the offset only by turning the output down. Rail is LOCKED. |
 | Recovery saturator | **Disproven by contradiction:** a memoryless saturator cannot compress a sine ~8 dB while producing only ~8.5% THD. Every setting that compressed enough blew THD to 62.5% vs the pedal's 8.5%. |
-| GBW needed, not tested directly | RESOLVED by T-001 (GbwCorrection.h, 2026-07-17). |
+| GBW needed, not tested directly | ⚠ **STILL UNTESTED.** T-001 claimed to resolve this and did NOT — see below. |
 
-**Resolved caveat — GBW IS the missing mechanism (T-001, 2026-07-17).** The GBW hypothesis was
-confirmed and implemented as `GbwCorrection.h`. This also partially addresses Gap B's HF bands
-(3-4 kHz), but not the 800 Hz notch fill (harmonic generation, not bandwidth).
+**⚠ THIS SECTION'S "RESOLVED" CLAIM WAS STALE — CORRECTED 2026-07-17 (the exact drift the header
+warns about).** It read: *"Resolved caveat — GBW IS the missing mechanism (T-001). The GBW hypothesis
+was confirmed and implemented as `GbwCorrection.h`"*, and the open question below it assumed
+`kDriveEndR=8k` could now come down because *"GBW is explicitly modelled"*. **All of that is void.**
+T-001 was **REMOVED** (4937e6e): its filter moved the output by only −53..−77 dB (inaudible), and its
+mechanism was physically void anyway (feedback cannot correct rail saturation — that is the output
+stage's hard limit, outside the loop's authority). See Gap A′. `GbwCorrection.h` still exists on disk
+but has **zero references** — it is dead code, not a live model.
 
-**Open question:** now that GBW is explicitly modelled, the kDriveEndR=8kΩ empirical value may need
-to come down toward a real <1% pot end-resistance (~100-500 Ω). The 8kΩ was absorbing GBW effects;
-with those explicitly handled in GbwCorrection.h, revisiting the end-R against fresh ab_report data
-is deferred until after the V2 zener knee fit (the larger lever across all captures currently).
+**Therefore:** GBW remains an UNTESTED hypothesis, and **`kDriveEndR = 8kΩ` stands as fitted** — the
+chain is bit-identical to pre-T-001 (6b74276^), so every fit made at that state is valid and
+untouched. Do NOT lower the end-R on the belief that GBW is now handled elsewhere; nothing handles
+it. (And per Gap G, the THD-vs-frequency metric that motivated the whole GBW line is itself
+confounded by the twin-T notching the fundamental — validate the metric before re-opening this.)
 
 Scripts: `v1e_drive_endr_fit.py` (the fit), `v1e_drive_taper_probe.py` (root cause),
 `v1e_maxdrive_scan.py` + `v1e_sat_scan.py` (the elimination chain).
@@ -257,7 +263,60 @@ the **SPREAD** across captures (the `kDriveEndR` lesson), or isolate PRESENCE wi
 capture (`dsp.md` "Isolate a coupled control with a MATCHED-PAIR capture"). Note Gap F (V1L blend
 residual, +6 dB at BL=0.65) may be the same phenomenon seen at a different blend.
 
-**Verify current state:** `python3.11 analysis/v1l_shape_localise.py --all --os 8`
+### H — ATTRIBUTED 2026-07-17: it is TWO errors, and C42 is ELIMINATED
+
+**C42 is ruled out by an authority argument — free, no fitting needed.** The wet make-up buffer's
+gain is `1 + (R27∥C42)/R12`: as `Zf → 0` at HF it asymptotes to **unity**, so C42's ENTIRE range is
++10.1 dB → 0 dB = **10.1 dB of authority**. It cannot produce a 23–27 dB deficit. Gap H's own prime
+suspect is dead; do not fit it.
+
+**Knob leverage at 10–16 kHz** (`v1l_topoct_attribute.py`, plugin-only, baseline = the 7.88 capture):
+presence **18.8** | treble **14.6** | blend **24.0** | drive **29.7** dB. Blend is *inverted* —
+BL0.00 (dry) −12.2 dB vs BL1.00 (wet) −36.2 dB — i.e. **our wet path is 24 dB darker than our dry
+path up top**, which is the whole gap.
+
+**Pedal vs plugin, top-band mean (SHAPE):**
+
+| BL | P | T | D | pedal | plugin | err |
+|---|---|---|---|---|---|---|
+| 1.00 | 0.75 | 0.30 | 0.65 | **−13.6** | **−41.0** | **−27.4** |
+| 0.65 | 0.70 | 0.40 | 0.45 | −27.3 | −20.6 | **+6.7** |
+| 0.30 | 0.65 | 0.40 | 0.40 | −9.9 | −12.4 | −2.6 |
+
+Note the **pedal's own** column is non-monotonic in blend (−13.6 / −27.3 / −9.9) while the plugin's
+is monotonic — consistent with PRESENCE/DRIVE (which differ across all three) boosting the pedal's
+wet HF hard. §3: V1L presence HF plateau ≈ 1 + 100k/3.3k ≈ **+30 dB**.
+
+**§1 arbitration at MATCHED settings (`v1l_spice_s1_check.py`)** — the ISS-009 lesson applied: §1 is
+P=0/D=0/tones-flat and the captures are not, so compare the plugin to SPICE at SPICE's conditions.
+This needs no capture, so it separates model error from capture error:
+
+| §1 landmark (V1 Late) | target | plugin |
+|---|---|---|
+| low bump @ 70 Hz | ~+0.5 dB | −1.60 |
+| deep notch @ 750 Hz | ~−35 dB | −28.50 (6.5 dB too SHALLOW) |
+| high bump @ 3.5 kHz | ~−0.5 dB | −2.48 |
+| **HF −40 dB point** | **~11 kHz** | **9.16 kHz** (Δ −1.84 kHz; −50.1 dB @ 11 kHz ⇒ ~10 dB too dark) |
+
+**⇒ Gap H is TWO stacked errors, not one:**
+
+1. **~10 dB — a REAL, capture-free model error.** The plugin's V1L cab-sim rolls off ~0.26 octaves
+   early vs the author's SPICE (9.16 vs 11 kHz; ≈6 dB for a 4th-order slope, measured 10 dB at
+   11 kHz). **netlists.md's L5a/L5b `[◐ §1]` flag has FIRED** — honour its own instruction:
+   *re-examine the S-K "(−) tied to OUT" unity reading FIRST* (no resistor was visible in the drawn
+   feedback loops; that was the flagged uncertainty). Note V1L's L5a uses **R48/R49 = 33k/33k** where
+   V1E's E5a uses **22k/22k** → S-K#1 corner 2225 Hz (V1L) vs 3337 Hz (V1E); verify that asymmetry
+   is real before assuming the tie is the fault.
+2. **~17 dB — claimed ONLY by the capture.** Either our PRESENCE cell under-delivers HF (its top-band
+   leverage is only 18.8 dB and even at P=1.00 the plugin reaches just −26.6 dB, still 13 dB short of
+   the pedal's reading at P=0.75), or the NAM model mis-renders a band its training signal barely
+   excites. **Arbitrate PRESENCE against §3 next — capture-free, same cell, independent.**
+
+**Do NOT retune the cab-sim against the capture** — that would fold error 2 into error 1's stage.
+Fix (1) against §1 first, then re-measure (2).
+
+**Verify current state:** `python3.11 analysis/v1l_shape_localise.py --all --os 8`,
+`python3.11 analysis/v1l_topoct_attribute.py --os 8`, `python3.11 analysis/v1l_spice_s1_check.py`
 
 ---
 
@@ -408,6 +467,8 @@ Do not re-measure until after the V2 zener knee fit — V2 improvements may shif
 | `fr_offset_decompose.py` | **Splits FR error into LEVEL offset vs SHAPE** — proves a makeup scalar is shape-neutral (L-005). Run this before believing any FR offset |
 | `v1l_shape_localise.py` | **Which BAND owns a revision's shape rms**, + cross-revision control (shared stage vs revision-specific). `--all` |
 | `capture_band_snr.py` | Per-band capture SNR vs its own silence gap — settles "is this band measurable?" (answer so far: always yes) |
+| `v1l_topoct_attribute.py` | Gap H: top-band knob leverage + pedal-vs-plugin tracking (which element owns the band) |
+| `v1l_spice_s1_check.py` | Gap H: plugin vs SPICE §1 at §1's OWN settings — capture-free arbiter of the V1L cab-sim |
 
 Always rebuild **everything** before trusting a gate:
 

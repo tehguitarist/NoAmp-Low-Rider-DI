@@ -193,14 +193,29 @@ without images.
 > **−25.3 dB**, worst **−31.4 @ 12.5 kHz** — the plugin is far too DARK up top. BL=1.00 is FULL WET
 > ⇒ the fault is in V1L's WET path, not the blend. Cross-revision control confirms it is
 > V1L-SPECIFIC (mean 10–16k shape: V1E −0.0 | V2 −1.8 | **V1L −7.0**), so it is one of V1L's OWN
-> stages — prime suspects are the only wet-path HF elements V1E/V2 don't share: **L5d's C42 4.7n ∥
-> R27 22k** (the +10.1 dB make-up buffer's rolloff to unity, V1L-only per netlists.md/reuse map) and
-> the L5a/L5b S-K cab-sim LPF values. **C10/R14 are EXONERATED — do NOT re-raise C10** (ISS-009).
-> - **⚠ The band is NOT drive-independent across captures** — top-band shape swings −25.3 (BL1.00,
->   P0.74) → **+6.2** (BL0.65, P0.70) → −1.9 (BL0.30, P0.65). Sign FLIPS. PRESENCE (which peaks
->   ~4.8 kHz and migrates, §3) differs across all three, so do NOT fit C42 against the 7.88 capture
->   alone — a single-capture fit will absorb a PRESENCE error into a fixed cap. Use a matched-pair or
->   fit the SPREAD (the kDriveEndR lesson: fit the spread, let a scalar absorb the common offset).
+> stages — of the wet-path HF elements V1E/V2 don't share, **C42 is now ELIMINATED** (see below) and
+> **the L5a/L5b S-K cab-sim** is the live suspect. **C10/R14 are EXONERATED — do NOT re-raise C10**
+> (ISS-009).
+>
+> - **ATTRIBUTED — it is TWO stacked errors, and C42 is ELIMINATED (full detail: gap audit §H).**
+>   **(1) ~10 dB is a REAL, capture-free model error:** at §1's OWN settings (P=0/D=0/tones-flat —
+>   the ISS-009 matched-settings lesson) the plugin's HF −40 dB point is **9.16 kHz vs §1's ~11 kHz**
+>   (−50.1 dB @ 11 kHz ⇒ ~10 dB too dark; ≈0.26 octaves early). **netlists.md's L5a/L5b `[◐ §1]` flag
+>   has FIRED** — honour its instruction: re-examine the S-K **"(−) tied to OUT" unity reading FIRST**.
+>   (V1L's L5a is R48/R49 **33k/33k** vs V1E's **22k/22k** → S-K#1 corner 2225 vs 3337 Hz; verify that
+>   asymmetry is real first.) **(2) ~17 dB more is claimed ONLY by the capture** — either our PRESENCE
+>   cell under-delivers HF (top-band leverage only 18.8 dB; even at P=1.00 the plugin reaches −26.6,
+>   still 13 dB short of the pedal at P=0.75) or the NAM model mis-renders a barely-excited band.
+>   **Arbitrate PRESENCE against §3 next — capture-free, same cell.** Fix (1) vs §1 BEFORE (2), and
+>   **do NOT retune the cab-sim against the capture** (that folds error 2 into error 1's stage).
+> - **C42 is DEAD as a suspect — do not fit it.** The wet buffer's gain is `1+(R27∥C42)/R12`, which
+>   asymptotes to **unity** as `Zf→0`, so C42's ENTIRE authority is +10.1→0 dB = **10.1 dB**. It
+>   cannot produce a 23–27 dB deficit. (An authority argument beats a sweep: free, and conclusive.)
+> - **⚠ The band is knob-dependent, and the error SIGN FLIPS across captures** — top-band shape
+>   −25.3 (BL1.00, P0.74) → **+6.2** (BL0.65, P0.70) → −1.9 (BL0.30, P0.65). A fixed cap cannot flip
+>   sign. The **pedal's own** top band is likewise non-monotonic in blend (−13.6/−27.3/−9.9) while the
+>   plugin's is monotonic. Never fit a fixed cap against one capture here — fit the SPREAD (kDriveEndR
+>   lesson) or isolate PRESENCE with a matched-pair capture.
 > - **A hypothesis I tested and REFUTED — do not re-run it:** "the 10–16k band on a full-wet V1L
 >   capture is below the NAM model's noise floor, so −31 dB is noise" (§1 says V1L's wet path is
 >   ~−40 dB by 11–12 kHz, so this was plausible, and it is the ISS-011 pattern). **FALSE.**

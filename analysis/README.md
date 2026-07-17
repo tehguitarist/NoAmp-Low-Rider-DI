@@ -69,6 +69,8 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `fr_offset_decompose.py` | Splits FR error into LEVEL offset vs SHAPE; proves a makeup scalar is shape-neutral (L-005) | `--filter`, `--os` |
 | `v1l_shape_localise.py` | Localises FR-shape error into bands + cross-revision control (which stage owns it) | `--all`, `--os` |
 | `capture_band_snr.py` | Per-band SNR of each capture vs its own silence gap — can a band arbitrate an error at all? | `--filter`, `--min-snr` |
+| `v1l_topoct_attribute.py` | Gap H: top-band knob leverage + pedal-vs-plugin tracking | `--os` |
+| `v1l_spice_s1_check.py` | Gap H: V1L wet path vs SPICE §1 at matched settings (capture-free) | `--os` |
 
 **ALWAYS write new analysis commands as scripts in `analysis/`** — never as inline Python in a
 tool call. Inline commands block the terminal on long-running harmonic/THD scans and the output
