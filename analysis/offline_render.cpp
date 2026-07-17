@@ -26,10 +26,15 @@
 //     --rail-knee <volts>   parabolic knee width on the stage-A rail clip (0 = hard clamp, default).
 //                           ~0.3-0.5 V typical for real op-amp output stage.
 //                           Applied to ALL revisions (V1E, V1L, V2) when set.
-//     --sat-gain <gain>     recovery-opamp small-signal saturation depth (0 = none, production default).
-//     --sat-knee <volts>    recovery saturation knee (~1-3 V; lower = softer = more harmonics).
+//     --sat-gain <gain>     recovery-opamp saturation: tanh/linear BLEND (NOT a depth in dB).
+//                           OMIT = keep the revision's built-in default (V1E 0.40/0.25, V1L
+//                           0.40/0.50, V2 0.04/0.15). Pass 0 to genuinely DISABLE it.
+//                           NB: pass --sat-gain and --sat-knee TOGETHER; either alone is ignored.
+//     --sat-knee <volts>    recovery saturation knee. Size it to the ACTUAL node signal (~0.5-2 V),
+//                           not the rails: knee << signal => the tanh RAILS and degenerates to a
+//                           linear scaler + a level-INDEPENDENT kink (see Gap I).
 //     --sat-offset <volts>  DC offset injected before tanh (0 = symmetric, H2 at floor; >0 produces H2).
-//                           Applied to ALL revisions after the recovery stage.
+//                           Applied to ALL revisions after the recovery stage. OMIT = built-in default.
 //     --rail-vneg <volts>   negative stage-A rail voltage (default -4.2)
 //     --rail-vpos <volts>   positive stage-A rail voltage (default +4.2)
 //                           Applied to ALL revisions (V1E, V1L, V2) when set.
@@ -57,12 +62,17 @@
 
 namespace
 {
+// LAST occurrence wins. It used to return the FIRST, which made a trailing override a SILENT no-op:
+// noamp_captures.render_args() already emits --drive/--presence/..., so appending "--drive 0.9" to
+// probe a taper produced a render at the capture's own drive and looked like "the knob has no
+// effect". Last-wins is also the conventional CLI expectation. Fixed 2026-07-17.
 double argVal(int argc, char** argv, const char* key, double def)
 {
+    double v = def;
     for (int i = 1; i < argc - 1; ++i)
         if (std::strcmp(argv[i], key) == 0)
-            return std::atof(argv[i + 1]);
-    return def;
+            v = std::atof(argv[i + 1]);
+    return v;
 }
 
 std::string argStr(int argc, char** argv, const char* key, const char* def)
@@ -104,9 +114,15 @@ int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor,
         dsp.setRailKnee(railKnee);
     if (railVNeg != -4.2 || railVPos != 4.2)
         dsp.setRailVoltages(railVNeg, railVPos);
-    if (satGain > 0.0 && satKnee > 0.0)
+    // NB: the guard is "was the flag SPECIFIED", not "is the value non-zero". It used to read
+    // `if (satGain > 0.0 && satKnee > 0.0)`, which made `--sat-gain 0` a SILENT NO-OP: the setter
+    // was skipped, so the DSP kept its prepare()-time default (V1E: 0.40/0.25) and the render came
+    // back bit-identical to the default. That is unfalsifiable — you cannot measure a feature's
+    // contribution if the flag that removes it does nothing (L-003). `--sat-offset 0` had the same
+    // bug via `!= 0.0`. A sentinel (< 0 = not specified) lets 0 mean ZERO. Fixed 2026-07-17.
+    if (satGain >= 0.0 && satKnee >= 0.0)
         dsp.setRecoverySaturation(satGain, satKnee);
-    if (satOffset != 0.0)
+    if (satOffset >= 0.0)
         dsp.setSaturationOffset(satOffset);
     applyParams(dsp);
     dsp.reset();
@@ -158,9 +174,12 @@ int main(int argc, char** argv)
     const double railKnee  = argVal(argc, argv, "--rail-knee", 0.0);
     const double railVNeg  = argVal(argc, argv, "--rail-vneg", -4.2);
     const double railVPos  = argVal(argc, argv, "--rail-vpos", 4.2);
-    const double satGain   = argVal(argc, argv, "--sat-gain", 0.0);
-    const double satKnee   = argVal(argc, argv, "--sat-knee", 0.0);
-    const double satOffset = argVal(argc, argv, "--sat-offset", 0.0);
+    // -1 = "flag not specified, keep the DSP's own prepare()-time default". 0 means ZERO — see the
+    // no-op guard note in runRender(). Do not change these back to a 0.0 default: it makes the
+    // saturator impossible to switch off from the CLI, silently.
+    const double satGain   = argVal(argc, argv, "--sat-gain", -1.0);
+    const double satKnee   = argVal(argc, argv, "--sat-knee", -1.0);
+    const double satOffset = argVal(argc, argv, "--sat-offset", -1.0);
     // Use 0.0 as sentinel for "use per-revision default from kOutputMakeup[rev]". The caller can
     // override with --out-makeup <gain>; if not provided, each rev branch picks its own array element.
     const double outMakeupOverride = argVal(argc, argv, "--out-makeup", 0.0);
