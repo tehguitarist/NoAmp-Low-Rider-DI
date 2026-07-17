@@ -65,7 +65,7 @@ ranking was distorted by level offsets and pointed at V2.
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
 | **I** | **THD-vs-LEVEL slope wrong** | V1E + V2 | V1E 101 Hz: pedal 0.4→4.5→7.0% vs plugin **3.1→5.3→5.3**; V2: pedal 0.4→2.8→7.6 vs plugin **0.4→4.9→14.5** | **NEW 2026-07-17.** The clip-onset metric that **survives Gap G** — read at a clean 101 Hz anchor, varying LEVEL not frequency. V1E's plugin is level-FLAT (8× too hot at −18 dBFS, too clean at −6) = a static nonlinearity; V2's slope is ~2× too steep. **ROOT CAUSE FOUND 2026-07-17 — a COMPENSATOR STACK (kInputRef → kDriveEndR → saturator), see section I. FIX DEFERRED by decision: kInputRef stays 1.3, the saturator stays as-is.** Blocked on a 13 dB V1E-vs-V2 disagreement about `kInputRef`. **Read section I in full before touching anything here — every candidate fix is entangled with the others.** |
-| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **Error 1 CLOSED** (S-K: 33k schematic-faithful). **Error 2 OPEN** — ~17 dB remains: both PRESENCE (§3-confirmed) and S-K cascade individually correct; deficit appears only in combination, flips sign with PRESENCE/BLEND. NOT a NAM artefact (band SNR +105.5 dB, NAM ESR <0.001). Suspects: op-amp non-idealities, BLEND-stage HF loading, level-dependent S-K behaviour. **12–18k is now an explicit target (3 dB) per the user, so the 18.2k band (median 11.0 dB) must be arbitrated as part of this.** |
+| **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **Error 1 CLOSED** (S-K: 33k schematic-faithful). **Error 2 OPEN** — ~17 dB remains: both PRESENCE (§3-confirmed) and S-K cascade individually correct; deficit appears only in combination, flips sign with PRESENCE/BLEND. NOT a NAM artefact (band SNR +105.5 dB, NAM ESR <0.001). **NARROWED 2026-07-17: the gap is LEVEL-INDEPENDENT (−23.8 dB on the CLEAN sweep) ⇒ a LINEAR error, NOT compression — so H is NOT blocked on Gap I.** And the PRESENCE cell cannot close it (ceiling +27.3 dB at P=1.00; the capture is at P=0.75 = +10.1 dB). **⇒ It is a CAPTURE-vs-SPICE conflict (~11.7 dB @12.5 kHz), not plugin-vs-schematic** — the plugin faithfully follows BOTH §1 and the schematic. This is an ARBITRATION, not a fit. "Op-amp non-idealities (TL072)" is deleted — wrong part (V1L's S-K is TLC2264) and wrong shape (level-dependent mechanism, level-independent gap). **12–18k is now an explicit target (3 dB) per the user, so the 18.2k band (median 11.0 dB) must be arbitrated too.** |
 | **J** | **V1L 285 Hz blend-tracking notch** | V1L | shape at 285 Hz: **+1.5 / −2.5 / −23.8 dB** at BL 1.00 / 0.65 / 0.30 | **NEW 2026-07-17.** Narrow (−23.8 @285, −4.7 @202, −3.4 @403), deep, and **monotonic in BLEND** — invisible at full wet, deep as dry takes over = dry/wet **PHASE** cancellation. A scalar cannot do this (and `kDryGain` must never return — ISS-008). See below. |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
 | **C** | V2 12.5k/16k HF (ex-P1 residual) | V2 | −5.9 / −19.1 dB | ⚠ **Status UNSAFE** — its "closed at OS=8x" evidence was level-confounded; see below |
@@ -581,14 +581,81 @@ HF or a NAM model artefact. **The NAM artefact hypothesis has been REJECTED** (2
 - The deficit is V1L-specific: V2 (same presence cell, different recovery) reads only −1.8 dB top-band.
 - The error flips sign with PRESENCE/BLEND, ruling out a single fixed-value component error.
 
-**Working hypothesis — stage interaction, not stage error:**
-The two individually-correct stages interact in the full chain differently than the ideal model predicts:
+### Error 2 — NARROWED 2026-07-17: it is CAPTURE-vs-SPICE, and it is LINEAR
 
-1. **Op-amp non-idealities in the S-K cascade.** The real circuit uses TL072 op-amps with finite GBW,
-   output impedance, and capacitive loading. At the capture's high-PRESENCE settings (P≥0.65), the
-   S-K input is pre-boosted by +15–20 dB. This higher signal level may shift the S-K's effective
-   transfer function through op-amp nonlinearity (slew-rate limiting, output impedance modulation)
-   that the ideal linear NodalCircuit cannot reproduce.
+**Two results, both cheap, both from existing data. They kill the leading hypotheses and reframe the
+gap. Read these before proposing anything.**
+
+**(a) The deficit is LEVEL-INDEPENDENT ⇒ it is a LINEAR error, NOT compression. Gap H is NOT blocked
+on Gap I's deferred gain staging.** (`analysis/v1l_topoct_level_check.py` — free, re-reads the JSON's
+four sweep levels.) A linear path's shape is identical at every level, so if the pedal compressed and
+the plugin did not, the gap would GROW with level. Top-band shape (own median removed), worst capture
+`V1L D0.65 BL1.00`:
+
+```
+   level        pedal top   plugin top     gap
+   clean(-30)      -18.2       -42.0     -23.8
+   -18             -21.3       -43.1     -21.7
+   -12             -20.3       -44.7     -24.4
+   -6              -18.1       -45.6     -27.5
+```
+
+The gap is **−23.8 dB on the near-linear clean sweep** and never collapses. Compression is ruled out
+as the primary cause. (Two of the three V1L captures behave differently — `D0.45 BL0.65` reads
+**+6..+9** (plugin too BRIGHT) and `D0.40 BL0.30` sits at **−1 dB**, level-independent — so whatever
+this is, it tracks the knobs hard and is nearly absent at low blend/drive/presence.)
+
+**(b) The PRESENCE cell cannot close it — an authority argument, no fitting.** Closed form from
+netlists.md L3 (`Zf = P·100k ∥ C32`, `Zg = (1−P)·100k + R24 + Z_C31`, gain `= 1 + Zf/Zg`):
+
+```
+   freq      P=0.0   P=0.65   P=0.70   P=0.75   P=1.00
+   10 kHz      0.0      8.1      9.2     10.5     27.6
+   12.5 kHz    0.0      7.8      8.9     10.1     27.3
+   16 kHz      0.0      7.4      8.3      9.5     26.6
+```
+
+At the capture's **P=0.75** the cell contributes **+10.1 dB** at 12.5 kHz, and its **absolute
+ceiling** (P=1.00) is **+27.3 dB**. So subtract it from the capture and ask what the capture claims
+the wet path does *without* presence:
+
+```
+   capture pedal top band, CLEAN sweep, P=0.75   -18.2 dB
+   minus the presence cell's own +10.1 dB        ---------
+   => capture implies the wet path is            -28.3 dB @ 12.5 kHz
+   SPICE S1 says V1L's wet path at 11-12 kHz is  -40.0 dB
+   => CAPTURE and SPICE disagree by               11.7 dB
+```
+
+**⇒ THE CONFLICT IS CAPTURE vs SPICE — NOT plugin vs schematic.** The plugin follows SPICE (−40 dB
+point at 9.16 kHz, inside §1's own ±⅓-octave tolerance) AND follows the schematic (R48/R49=33k, read
+independently by netlists.md and circuit.md, no value flag). Two references disagree by ~12 dB and
+the plugin faithfully implements one of them. **This is an arbitration, not a fitting problem** —
+which is exactly why "do NOT retune the cab-sim or presence against the capture" stands. Ways to
+arbitrate, none yet run:
+  * A **matched-pair capture** isolating PRESENCE alone (dsp.md) — differences cancel everything else
+    and measure the cell directly against §3.
+  * Re-read the §1 graph for V1L's top octave specifically (it is a *reading* of the author's sim; the
+    −40 dB point is near the graph's edge, the least-supported part of any plotted curve — N-004's
+    lesson applied to the SPICE reference instead of to a capture).
+  * Check whether the author's SPICE modelled the op-amps ideally: an ideal 4th-order cab-sim rolls
+    off forever, but a REAL S-K's stopband FLOORS OUT (finite op-amp output impedance + the C14
+    positive-feedback path feeding through). That would make the real pedal brighter than its own
+    SPICE up top — the right sign — but the TLC2264 still has ~35 dB of loop gain at 12.5 kHz, so
+    quantify it before believing it.
+
+**⚠ The old hypothesis "the real circuit uses TL072 op-amps with finite GBW" is FACTUALLY WRONG and
+is deleted.** circuit.md is explicit: *"TL072 only appears in the XLR driver, which we're not
+modelling."* V1L's S-K cascade is **IC2C/IC2D = TLC2264** — CMOS rail-to-rail, **GBW ≈ 0.72 MHz**,
+nothing like a TL072 (bipolar, 3 MHz, 13 V/µs). Any op-amp-non-ideality argument here must use the
+TLC226x's numbers.
+
+**Superseded hypotheses (kept for the record, now unsupported):**
+
+1. ~~**Op-amp non-idealities in the S-K cascade.** The real circuit uses TL072 op-amps with finite
+   GBW...~~ — wrong part (see above), and (a) rules out the level-dependent framing it rested on
+   ("the S-K input is pre-boosted... this higher signal level may shift the transfer function").
+   A level-dependent mechanism cannot produce a level-independent gap.
 
 2. **BLEND-stage HF loading.** V1L's BLEND stage (L6) couples wet signal through C12(47n) into a
    100k-loaded pot. The wiper loading by R4(100k) into the virtual ground may create a frequency-

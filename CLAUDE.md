@@ -267,8 +267,29 @@ without images.
 >   `kInputRef`, and fit the DRIVE taper SHAPE — the error flips sign across the knob, dsp.md's
 >   tell-tale that no single coefficient can fix).
 >
-> **NEXT: Gap H error 2** (below) — now with **12–18 kHz in scope at 3 dB**, which also requires
-> arbitrating the 18.2k band (median 11.0 dB, the worst in the matrix). Then Gap J / Gap C.
+> ### Gap H error 2 — NARROWED 2026-07-17: it is CAPTURE-vs-SPICE, and it is LINEAR
+>
+> - **The gap is LEVEL-INDEPENDENT ⇒ a LINEAR error, not compression** (`v1l_topoct_level_check.py`,
+>   free — re-reads the JSON's 4 sweep levels). Worst capture's top-band gap: **−23.8 dB on the
+>   near-linear CLEAN sweep**, −21.7/−24.4/−27.5 driven. **So Gap H is NOT blocked on Gap I's
+>   deferred gain staging** — it can proceed independently.
+> - **PRESENCE cannot close it (authority argument, no fitting).** Closed form from netlists.md L3:
+>   at the capture's **P=0.75** the cell gives **+10.1 dB** @12.5 kHz; its absolute **ceiling** at
+>   P=1.00 is **+27.3 dB**. Subtracting it, **the capture implies V1L's wet path is −28.3 dB @12.5
+>   kHz while SPICE §1 says −40 dB — an 11.7 dB disagreement.**
+> - **⇒ THE CONFLICT IS CAPTURE vs SPICE, NOT plugin vs schematic.** The plugin follows §1 (−40 dB at
+>   9.16 kHz, inside its own ±⅓-octave tolerance) AND the schematic (R48/R49=33k, read independently
+>   twice). Two references disagree by ~12 dB; the plugin implements one faithfully. **This is an
+>   ARBITRATION, not a fit** — which is why "do NOT retune the cab-sim/presence against the capture"
+>   stands. Arbitration options are listed in the gap audit (matched-pair PRESENCE capture; re-read
+>   §1's top octave, which sits at the graph's least-supported edge — N-004 applied to SPICE; or
+>   quantify real-S-K stopband floor-out, but the TLC2264 still has ~35 dB loop gain at 12.5 kHz).
+> - **⚠ "The real circuit uses TL072 op-amps" was FACTUALLY WRONG and is deleted.** circuit.md:
+>   *"TL072 only appears in the XLR driver, which we're not modelling."* V1L's S-K is **TLC2264**
+>   (CMOS, GBW **0.72 MHz**) — not a TL072 (bipolar, 3 MHz). Use the right part's numbers.
+>
+> **NEXT: arbitrate Gap H error 2** (a PRESENCE matched-pair capture is the cleanest instrument), then
+> Gap J / Gap C.
 > **Capture requests outstanding:** a **BLEND-only matched pair** on V1L (separates Gap J from Gap E
 > in one shot — they are currently confounded), and **any V1E capture at blend<1.00** (V1E has none,
 > so a Gap-J-class phase fault is invisible there by matrix design).
