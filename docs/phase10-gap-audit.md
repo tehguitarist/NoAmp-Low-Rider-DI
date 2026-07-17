@@ -64,7 +64,7 @@ ranking was distorted by level offsets and pointed at V2.
 
 | Priority | Gap | Revision | Metric | Status |
 |---|---|---|---|---|
-| **I** | **THD-vs-LEVEL slope wrong** | V1E + V2 | V1E 101 Hz: pedal 0.4→4.5→7.0% vs plugin **3.1→5.3→5.3**; V2: pedal 0.4→2.8→7.6 vs plugin **0.4→4.9→14.5** | **NEW 2026-07-17.** The clip-onset metric that **survives Gap G** — read at a clean 101 Hz anchor, varying LEVEL not frequency. V1E's plugin is level-FLAT (8× too hot at −18 dBFS, too clean at −6) = a static nonlinearity; V2's slope is ~2× too steep. This is the gate L-003 demands and it never existed. |
+| **I** | **THD-vs-LEVEL slope wrong** | V1E + V2 | V1E 101 Hz: pedal 0.4→4.5→7.0% vs plugin **3.1→5.3→5.3**; V2: pedal 0.4→2.8→7.6 vs plugin **0.4→4.9→14.5** | **NEW 2026-07-17.** The clip-onset metric that **survives Gap G** — read at a clean 101 Hz anchor, varying LEVEL not frequency. V1E's plugin is level-FLAT (8× too hot at −18 dBFS, too clean at −6) = a static nonlinearity; V2's slope is ~2× too steep. **ROOT CAUSE FOUND 2026-07-17 — a COMPENSATOR STACK (kInputRef → kDriveEndR → saturator), see section I. FIX DEFERRED by decision: kInputRef stays 1.3, the saturator stays as-is.** Blocked on a 13 dB V1E-vs-V2 disagreement about `kInputRef`. **Read section I in full before touching anything here — every candidate fix is entangled with the others.** |
 | **H** | V1L wet-path top-octave deficit | V1L | 10–16k **−25.3 dB** mean (75% of its shape rms) | **Error 1 CLOSED** (S-K: 33k schematic-faithful). **Error 2 OPEN** — ~17 dB remains: both PRESENCE (§3-confirmed) and S-K cascade individually correct; deficit appears only in combination, flips sign with PRESENCE/BLEND. NOT a NAM artefact (band SNR +105.5 dB, NAM ESR <0.001). Suspects: op-amp non-idealities, BLEND-stage HF loading, level-dependent S-K behaviour. **12–18k is now an explicit target (3 dB) per the user, so the 18.2k band (median 11.0 dB) must be arbitrated as part of this.** |
 | **J** | **V1L 285 Hz blend-tracking notch** | V1L | shape at 285 Hz: **+1.5 / −2.5 / −23.8 dB** at BL 1.00 / 0.65 / 0.30 | **NEW 2026-07-17.** Narrow (−23.8 @285, −4.7 @202, −3.4 @403), deep, and **monotonic in BLEND** — invisible at full wet, deep as dry takes over = dry/wet **PHASE** cancellation. A scalar cannot do this (and `kDryGain` must never return — ISS-008). See below. |
 | **B** | Drive-dependent band saturation | V1E + V2 | 800 Hz notch fill, 3–4 kHz +7.7 dB | Open — shared root w/ D. **Re-confirmed on SHAPE**: V1E D1.00 reads 800 Hz −14.6 / 3–4k +7.6..+8.2 |
@@ -339,8 +339,84 @@ harmonics. **Fit clip onset against BOTH.**
 **Do NOT re-run:** the rail knee has zero leverage here (proven — at the locked ±4.2 V rail, D0.50
 never approaches it). This is the saturator's level law, not the rail.
 
-**Gate to build (L-003):** magnitude vs capture, ≥3 drives × 3 levels, saturator ON, and prove the
-gate FAILS when the saturator is deleted.
+---
+
+### I — ROOT CAUSE FOUND 2026-07-17. It is a COMPENSATOR STACK, and the fix is DEFERRED by decision.
+
+**Status: diagnosed, NOT fixed. `kInputRef` stays 1.3 and the V1E saturator stays as-is (user
+decision, 2026-07-17) — the V1E/V2 disagreement below is deferred. Do not "fix" Gap I piecemeal;
+every candidate fix is entangled with the others. Read this whole section first.**
+
+**0. The harness was lying — three `OfflineRender` flags were silent no-ops (fixed, 95f2264).**
+`--sat-gain 0` could not disable the saturator: the guard `if (satGain > 0.0 && satKnee > 0.0)`
+SKIPPED the setter, leaving the DSP's prepare()-time default (V1E 0.40/0.25) in place, so a
+"saturator deleted" render came back **bit-identical to the default**. **Every V1E saturator-off
+experiment ever run was measuring the saturator at full strength.** `--sat-offset 0` had the same
+bug; `argVal` returned the FIRST match so any trailing override (e.g. `--drive`) was ignored, because
+`render_args()` already emits those flags. Verify a flag CHANGES THE OUTPUT before trusting a null
+result (L-003's sibling: you cannot prove a feature does nothing with a switch that does nothing).
+
+**1. With the saturator GENUINELY deleted, V1E D0.50 makes 0.00% THD at all three levels.** The chain
+has no other distortion source there. The saturator does **100%** of V1E's low/mid-drive distortion,
+and the pedal's 0.42 → 4.49 → 7.03% onset has **no counterpart in the model at all**.
+
+**2. A tanh CANNOT produce that onset — and this is not a one-candidate dismissal.** 36-point scan,
+gain 0.05→1.0 (1.0 IS a pure tanh) × knee 0.25→8.0 V (railed → essentially linear): best slope err
+**3.54 dB** (gain 0.7/knee 1.0) and it costs **15 dB** of absolute error. The physics: the pedal rises
+**+20.6 dB** in THD for a +6 dB level step, then only +3.9 dB. A tanh is **analytic at zero**, so its
+small-signal THD grows as x² — **+12 dB per +6 dB, and never faster**. The pedal has a THRESHOLD; a
+tanh has none. (The current 0.40/0.25 is also **7× hotter than the saturator's own design goal** —
+its header set out to model ~0.4% at −18 dBFS and it delivers 3.08%. `sat_refine.py` scored at
+anchors (100, 200, **400**) — 400 Hz is V1E's bridged-T, i.e. a third of the score came from a
+notch-confounded anchor the standing traps forbid.)
+
+**3. The model's whole V1E DRIVE range is ~one knob-turn short.** THD@100 Hz, −18/−12/−6:
+```
+  pedal @ D=0.50 (noon)   0.42 / 4.49 / 7.03
+  model @ D=1.00 (MAX)    0.00 / 5.20 / 8.27     <- the model's MAXIMUM ~= the pedal's NOON
+  pedal @ D=1.00          10.42 / 9.79 / 8.46    <- beyond anything the model reaches at inRef 1.3
+```
+
+**4. THE STACK — four compensating errors, each hiding the one beneath it.** CLAUDE.md already
+documented the mechanism; nobody connected it to the fix:
+> *"FR is read on the −30 dBFS CLEAN sweep — at D1.00 that puts 0.041×101 = 4.15 V into the 4.2 V
+> rail, so the plugin barely clips and passes the full +40 dB while the pedal already compresses."*
+
+So **P6's "+8 dB FR excess at D1.00" was the PEDAL COMPRESSING**, not the plugin having too much
+gain — and `kDriveEndR = 8k` "fixed" it by deleting **10.5 dB of real, schematic-verified gain**:
+1. `kInputRef` 3.27 → **0.87** (3812fcd, *"recalibrate to monarch-of-tone's real-capture value"* — a
+   **different pedal's** constant) → later 1.3. The plugin now under-clips.
+2. → the D1.00 clean-sweep FR reads +8 dB "too loud" (really: the pedal compresses, the plugin
+   doesn't) → **`kDriveEndR=8k`** invented to cut 10.5 dB of genuine gain.
+3. → even less clipping → **`RecoverySaturator` 0.40/0.25** added to fake distortion back in.
+4. → a static tanh cannot track level → **Gap I**.
+
+**5. The blocker — V1E and V2 disagree about `kInputRef` by ~13 dB.** Saturator OFF, scored on the
+THD-vs-level slope: **V1E wants ≈5–6.5** (D1.00: slope 1.55 / abs 1.76 dB at 6.5, still improving);
+**V2 wants 1.3** and gets monotonically WORSE above it (abs 10.08 → 14.74 → 19.21 → 21.45). It is a
+single global constant and it is *physically* revision-independent (same input buffer on all three).
+Candidate resolutions, none tested:
+  * **The captures.** They are NAM model output **normalized per batch** (ISS-011), so each
+    revision's model may have its own effective input level — a CAPTURE property, not a circuit one.
+    The memory note "V1E+V2 staged / V1L variable" points this way. Would make `kInputRef[rev]`
+    correct for matching, unphysical for the pedal. **Cheapest arbiter: the capture levels
+    themselves, if the user knows what each revision's NAM model was captured at.**
+  * **Unwind the stack.** Remove `kDriveEndR` (restore the schematic's +40.1 dB) AND raise
+    `kInputRef` together — a higher inRef makes the plugin compress on the −30 dBFS clean sweep just
+    as the pedal does, which is what `kDriveEndR` was fitted to fake. The V1E/V2 gap may shrink.
+    Note this only closes D1.00: `kDriveEndR` is worth 10.5 dB at D=1.00 but **0.5 dB at D=0.50**,
+    and D0.50 needs ~13 dB, so a **taper SHAPE** fit is likely needed too (dsp.md: "you can match ONE
+    knob position but the error flips sign at another" — the tell-tale, and exactly what we see:
+    too much gain at max, far too little at noon. A single coefficient at the max end cannot bend
+    the middle).
+
+**⚠ `kInputRef = 1.3`'s own comment claims a "STRUCTURAL waveshape gap ... no single kInputRef nails
+the whole onset curve". That is the THIRD structural verdict in this project; CLAUDE.md records the
+first two as WRONG. Treat it as a symptom of the stack, not a property of the circuit.**
+
+**Gate to build (L-003), once the staging is settled:** magnitude vs capture, ≥3 drives × 3 levels,
+saturator ON — and prove the gate FAILS when the saturator is deleted. `analysis/thd_level_probe.py`
+is the measurement; the slope metric is the part no free scalar can move.
 
 ---
 

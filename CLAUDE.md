@@ -240,11 +240,38 @@ without images.
 >   revisions *by matrix design*. Only **two** blend-matched pairs exist at all (V1L BL0.30-vs-0.65,
 >   V2 BL0.90-vs-1.00); both PASS the intrinsic check. V1E cannot self-police.
 >
-> **NEXT (order): (1) M-3/M-4 + regenerate reports** — harmonic section into the executive summary,
-> flag the N-004 (20–36 Hz) and notch-confounded (400/800 Hz) bands, then re-run
-> `run_detailed_report.py` so the 2874 Hz phantoms clear out of `findings.txt`. **(2) Gap I** — the
-> biggest coherent nonlinear finding and immune to Gap G. **(3) Gap H error 2** (below), now with
-> 12–18k in scope, which also requires arbitrating the 18.2k band.
+> ### Gap I — ROOT CAUSE FOUND, FIX DEFERRED BY DECISION (2026-07-17)
+>
+> **DECIDED: `kInputRef` stays 1.3; the V1E saturator stays as-is. The V1E-vs-V2 disagreement is
+> deferred.** Do NOT fix Gap I piecemeal — read `phase10-gap-audit.md` section I first; every
+> candidate fix is entangled. Summary of what was established:
+> - **Three `OfflineRender` flags were SILENT NO-OPS** (fixed, 95f2264). `--sat-gain 0` could not
+>   disable the saturator ⇒ **every V1E saturator-off experiment ever run measured it at full
+>   strength**. See **L-009**.
+> - With the saturator **genuinely** off, V1E D0.50 makes **0.00% THD at all three levels** — the
+>   chain has no other distortion source; the saturator does 100% of the work.
+> - **A tanh structurally cannot make the pedal's onset** (36-point scan; best slope err 3.54 dB at
+>   15 dB abs cost). The pedal rises **+20.6 dB per +6 dB** of level; a tanh is analytic at 0 so its
+>   small-signal THD grows as x² = **+12 dB per +6 dB and never faster**. The pedal has a THRESHOLD.
+> - **The model's V1E drive range is ~one knob-turn short:** model @ **D=1.00** (0.00/5.20/8.27)
+>   ≈ pedal @ **D=0.50** (0.42/4.49/7.03); the pedal's own D1.00 (10.4/9.8/8.5) is unreachable.
+> - **It is a 4-deep COMPENSATOR STACK** — `kInputRef` 3.27→0.87 (*a different pedal's constant*) ⇒
+>   under-clipping ⇒ P6's "+8 dB FR excess" (really **the pedal compressing**, per this file's own
+>   measurement trap) ⇒ `kDriveEndR`=8k deleting **10.5 dB of real gain** ⇒ saturator 0.40/0.25 to
+>   fake it back ⇒ Gap I. See **L-008**.
+> - **BLOCKER:** saturator OFF, V1E wants `kInputRef` **≈5–6.5**, V2 wants **1.3** (and worsens
+>   above it) — **13 dB apart on a global constant**. Likeliest resolution: these are NAM models
+>   **normalized per batch**, so each revision's effective input level may differ (a CAPTURE
+>   property, not a circuit one). **Cheapest arbiter: what input level was each revision's NAM model
+>   captured at?** If unknown, the alternative is unwinding the stack (drop `kDriveEndR`, raise
+>   `kInputRef`, and fit the DRIVE taper SHAPE — the error flips sign across the knob, dsp.md's
+>   tell-tale that no single coefficient can fix).
+>
+> **NEXT: Gap H error 2** (below) — now with **12–18 kHz in scope at 3 dB**, which also requires
+> arbitrating the 18.2k band (median 11.0 dB, the worst in the matrix). Then Gap J / Gap C.
+> **Capture requests outstanding:** a **BLEND-only matched pair** on V1L (separates Gap J from Gap E
+> in one shot — they are currently confounded), and **any V1E capture at blend<1.00** (V1E has none,
+> so a Gap-J-class phase fault is invisible there by matrix design).
 >
 > **Gap H error 2 — top-octave interaction between PRESENCE and S-K cascade.**
 > Both the S-K (error 1: 33k, schematic-faithful) and PRESENCE (§3: +27.5 dB, analytic-confirmed)
@@ -532,6 +559,32 @@ the gate FAILS when you delete the feature it guards.
   fit, git log -L the gate" would NOT have caught this. The check that does: **ask what the metric
   reads when the model is perfect but the level is arbitrary.** Sibling of L-004 (which asks whether
   the *phenomenon* is an artefact); this asks whether the *comparison* is.
+- **L-008: An UNPHYSICAL fitted value is a receipt for an error UPSTREAM of it — go find that error
+  instead of shipping the fudge. And a fit that compensates for another fit builds a STACK, where
+  each layer hides the one beneath.** Gap I is four deep: `kInputRef` 3.27 → **0.87** (*"recalibrate
+  to monarch-of-tone's real-capture value"* — **a different pedal's constant**) ⇒ the plugin
+  under-clips ⇒ the D1.00 clean-sweep FR reads "+8 dB too loud" (really: **the pedal compresses and
+  the plugin doesn't** — CLAUDE.md's own measurement trap says so in as many words) ⇒ **`kDriveEndR`
+  = 8k** invented, deleting **10.5 dB of real, schematic-verified gain** ⇒ almost no clipping left ⇒
+  **`RecoverySaturator` 0.40/0.25** added to fake distortion back in ⇒ a static tanh cannot track
+  level ⇒ Gap I. **The receipt was written down and ignored:** the docs already flagged 8k as
+  *"~8% of a 100k pot — far above real end/wiper R (<1%) ... an EMPIRICAL effective value likely
+  absorbing un-modelled gain limiting"*. That sentence is the bug report. **When a fit only works at
+  a physically absurd value, the constant it is compensating for is the thing to question** — here,
+  `git log -L` on `kInputRef` found the seed in one command (sibling of L-001). Corollary: a
+  parameter fitted against a metric that is itself contaminated by a *nonlinearity* (an FR read where
+  the pedal compresses) is fitting the wrong quantity entirely.
+- **L-009: You cannot prove a feature does nothing with a switch that does nothing — verify the
+  switch CHANGES THE OUTPUT before believing a null result.** `--sat-gain 0` could not disable the
+  saturator: the guard `if (satGain > 0.0 && satKnee > 0.0)` **skipped the setter**, leaving the
+  prepare()-time default (V1E 0.40/0.25) in place, so "saturator deleted" rendered **bit-identical**
+  to the default — for as long as the flag has existed. Every V1E saturator-off experiment was
+  measuring it at full strength. Two more the same day: `--sat-offset 0` (`!= 0.0`), and `argVal`
+  returning the FIRST match so any trailing `--drive` override was silently ignored (because
+  `render_args()` already emits it) — which reads as "the knob has no effect". **"0 means use the
+  default" and "0 means zero" cannot share an encoding; use a sentinel.** This is L-003's mirror:
+  L-003 says prove the gate fails without the feature — L-009 says make sure you can actually remove
+  it. A null result from an unverified switch is not evidence of anything.
 - **L-006: Validate an ESTIMATOR against an independent measurement before believing any number it
   produces — and when it carries its own "validate me" note, that note is a defect report.**
   `analyze.harmonic_thd_curve`'s docstring said *"VALIDATE against discrete-tone thd() before trusting

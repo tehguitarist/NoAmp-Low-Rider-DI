@@ -20,11 +20,28 @@ namespace nalr
 // 1.3 — Phase-10 fit (2026-07-13) from the V2 captures' clip ONSET (the user's chosen anchor rev; V2
 // staging is trustworthy). Fit via analysis/inref_scan.py, matching plugin THD-vs-input-level to the
 // pedal across the non-max-drive V2 captures with a LINEAR THD metric (the log metric over-weights the
-// captures' near-clean noise floor and biases high — it wanted 1.9). WORKING VALUE, not final: the
-// plugin's clip WAVESHAPE is still off (too-abrupt onset, too-soft saturation ceiling ~24% vs the
-// pedal's ~37% at max drive — a STRUCTURAL waveshape gap, not a kInputRef one), so no single kInputRef
-// nails the whole onset curve; 1.3 is the best compromise pending the waveshape investigation. (Prior:
-// 0.87, carried from monarch-of-tone's circuitVoltsPerFS — a different pedal's anchor.)
+// captures' near-clean noise floor and biases high — it wanted 1.9). (Prior: 0.87, carried from
+// monarch-of-tone's circuitVoltsPerFS — a DIFFERENT PEDAL's anchor. Before that: 3.27.)
+//
+// ⚠ RETAINED BY DECISION (2026-07-17), NOT VINDICATED — and V1E disagrees with it by ~13 dB.
+// Measured on the THD-vs-LEVEL slope at the clean 100/200 Hz anchors with the saturator genuinely
+// OFF (analysis/thd_level_probe.py --inref-scan; note --sat-gain 0 was a SILENT NO-OP until
+// 95f2264, so every earlier saturator-off result is void):
+//     V1E wants >= 5-6.5   (D1.00: slope err 1.55 dB / abs 1.76 dB at 6.5, still improving)
+//     V2  wants 1.3        (abs err WORSENS above it: 10.08 -> 14.74 -> 19.21 -> 21.45)
+// One global constant cannot satisfy both. Likeliest cause: the captures are NAM models normalized
+// PER BATCH, so each revision's effective input level may differ — a property of the CAPTURE, not of
+// the circuit (the input buffer is the same cell on all three revisions). The cheapest arbiter is
+// external: what input level was each revision's NAM model captured at?
+//
+// ⚠ THE OLD COMMENT HERE CLAIMED A "STRUCTURAL waveshape gap ... so no single kInputRef nails the
+// whole onset curve". DELETED as unsupported — that is the THIRD structural verdict in this project
+// and CLAUDE.md records the first two as WRONG. It is a symptom of a COMPENSATOR STACK (L-008), not
+// a property of the circuit: this value under-clips V1E, which is what P6's "+8 dB FR excess at
+// D1.00" really measured (the PEDAL compressing on the -30 dBFS clean sweep, not the plugin being
+// too loud) — which produced kDriveEndR=8k, deleting 10.5 dB of real gain, which produced the
+// RecoverySaturator to fake the distortion back. Full forensics: phase10-gap-audit.md section I.
+// Do NOT re-fit this constant alone; it is entangled with kDriveEndR and the V1E DRIVE taper shape.
 constexpr double kInputRef = 1.3;
 
 // Per-revision output makeup (calibration doc §2). kOutputMakeup[revision] where revision indices are:
