@@ -4,7 +4,7 @@ Modifies the key constants of comprehensive_report.py for better resolution,
 then runs the full report pipeline. Also runs ab_report.py and harmonic_report.py.
 Outputs everything to analysis/reports/detailed_dump_YYYYMMDD_HHMMSS.txt
 """
-import sys, os, json, subprocess, math
+import sys, os, json, subprocess, math, shutil
 from datetime import datetime
 from pathlib import Path
 
@@ -33,6 +33,7 @@ ALL_SWEEP_LEVELS = ("sweep_clean",) + DRIVEN_SWEEPS
 DEFAULT_BIN = "build/OfflineRender_artefacts/Release/OfflineRender"
 OUT_DIR = ROOT / "analysis" / "reports"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+CANONICAL_JSON = OUT_DIR / "comprehensive_data.json"
 
 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUT_FILE = OUT_DIR / f"detailed_dump_{ts}.txt"
@@ -97,6 +98,7 @@ with open(json_out, 'w') as f:
             "num_bands": len(bands),
             "bands": bands,
             "farina_ceiling_hz": FARINA_CEILING_HZ,
+            "harmonic_orders": list(CR.HARMONIC_ORDERS),
             "thd_anchors": list(THD_ANCHORS),
             "confounded_anchors": list(CONFOUNDED_ANCHORS),
             "driven_sweeps": list(DRIVEN_SWEEPS),
@@ -113,6 +115,12 @@ with open(json_out, 'w') as f:
     }, f, indent=2)
 
 print(f"\nWrote {json_out} ({os.path.getsize(json_out)} bytes)")
+
+# ALSO write the canonical path. extract_findings.py, report_audit.py and capture_outlier_scan.py
+# all read comprehensive_data.json; if this runner only ever wrote a timestamped dump, a "regenerate"
+# would silently leave every downstream consumer reading the STALE file. One source of truth.
+shutil.copyfile(json_out, CANONICAL_JSON)
+print(f"Wrote {CANONICAL_JSON} (canonical — read by extract_findings/report_audit/capture_outlier_scan)")
 
 # Now write the human-readable report
 with open(OUT_FILE, 'w') as f:

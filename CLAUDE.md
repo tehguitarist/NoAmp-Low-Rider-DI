@@ -229,9 +229,12 @@ without images.
 >   1.00/0.65/0.30). Narrow + deep + dry-dependent ⇒ dry/wet **PHASE** cancellation, not a scalar.
 >   **NOT the voided "phase-cancel" note** (that died with the quarantined V2 `_2` file; this is V1L,
 >   three good captures, monotonic in the knob). Confounded with Gap E — a BLEND-only pair settles both.
-> - **Harmonic MAGNITUDES are badly off and NOTHING reports them:** median |plugin−pedal| over H2..H7
->   = **V1E 15.3 | V1L 14.6 | V2 7.7 dB** (exclude the 800 Hz anchor and V1's 400 Hz — notch-
->   confounded per Gap G). The executive summary has no harmonic section at all.
+> - **Harmonic MAGNITUDES are badly off:** median |plugin−pedal| over H2..H7, **notch-confounded
+>   400/800 Hz anchors excluded** (Gap G) = **V1E 12.0 | V1L 9.2 | V2 5.7 dB**. Worst single reading:
+>   V1E D0.50 **H2 +21.8 dB @100 Hz** — the same fault Gap I sees, in the harmonics instead of the
+>   THD. THD is the *rss* of these, so **it can be right while every term in it is wrong** — this is
+>   the "harmonic volume, not just placement" check, and no report produced it before 2026-07-17.
+>   Now in `analysis/report_audit.py --write`, which **is** the executive-summary generator.
 > - **Capture-matrix limits (`analysis/capture_outlier_scan.py`, L-007):** **V1E has NO blend<1.00
 >   capture**; V2's are all ≥0.90 — so a Gap-J-class phase fault is invisible on two of three
 >   revisions *by matrix design*. Only **two** blend-matched pairs exist at all (V1L BL0.30-vs-0.65,

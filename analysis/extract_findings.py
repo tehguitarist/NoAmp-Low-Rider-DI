@@ -10,7 +10,14 @@ driven = j["meta"]["driven_sweeps"]
 print("="*90)
 print("DETAILED FINDINGS — Raw deviations (plugin minus pedal)")
 print(f"Captures: {j['meta']['num_captures']} | Bands: {j['meta']['num_bands']} (1/6-oct)")
-print(f"Farina ceiling: 3000 Hz | THD anchors: {thd_anchors}")
+_ceil = j["meta"].get("farina_ceiling_hz", 0.0)
+_f1 = j["meta"].get("sweep_f1_hz")
+print(f"Farina ceiling: {_ceil:.0f} Hz | THD anchors: {thd_anchors}")
+if _f1:
+    print(f"  order N is masked above SWEEP_F1*0.95/N (L-006): below {_f1*0.95/7:.0f} Hz all 7 orders")
+    print(f"  survive; by {_ceil:.0f} Hz only H2 remains. Above that THD is UNMEASURABLE here, and")
+    print(f"  above 12000 Hz it does not exist at 48 kHz at all (H2 passes Nyquist).")
+print("  THD anchors 400/800 Hz are NOTCH-CONFOUNDED (Gap G) — 100/200 Hz are the clean ones.")
 print("="*90)
 
 # --- SUMMARY BY REVISION ---
@@ -84,7 +91,7 @@ for seg in driven:
             if not th_shown:
                 print(f"\n{'='*90}")
                 print(f"THD — {seg}")
-                print(f"  (Farina ≤3000 Hz | discrete tones: 1000,2000,4000,8000 Hz)")
+                print(f"  (Farina ≤{_ceil:.0f} Hz, order-limited per L-006 | discrete tones above)")
                 print(f"  Thresholds: >50% relative ratio OR >0.5 pp absolute")
                 print(f"{'='*90}")
                 th_shown = True
@@ -134,13 +141,18 @@ for seg in driven:
             if label not in har:
                 continue
             h = har[label]
-            for j, ahz in enumerate(thd_anchors):
-                pld = h["plugin_db"][j]
-                pdd = h["pedal_db"][j]
+            # NB: do NOT name this loop variable `j` — that is the module-level JSON dict, and
+            # shadowing it made this script die on the SECOND driven sweep. The traceback went to
+            # stderr while findings.txt captured stdout, so the file silently lost 2 of its 3
+            # harmonic sections and looked complete. Fixed 2026-07-17.
+            for ai, ahz in enumerate(thd_anchors):
+                pld = h["plugin_db"][ai]
+                pdd = h["pedal_db"][ai]
                 delta = pld - pdd
+                conf = " (notch-confounded, Gap G)" if ahz in (400, 800) else ""
                 flag = " ⚠" if abs(delta) > 3 else ""
                 print(f"  {label}@{ahz}Hz  pedal={pdd:+6.1f}  plugin={pld:+6.1f}  "
-                      f"Δ={delta:+5.1f} dB{flag}")
+                      f"Δ={delta:+5.1f} dB{flag}{conf}")
 
 print(f"\n{'='*90}")
 print("END OF FINDINGS")
