@@ -345,16 +345,14 @@ target_link_libraries(V1EarlyNonlinearTest
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1EarlyNonlinearTest COMMAND V1EarlyNonlinearTest)
 
-# T-001 — V1E THD-vs-frequency baseline + GBW-corrected gate. JUCE console app (needs juce::dsp for
-# the oversampled DRIVE region; runs at 1x OS for baseline, 8x for the GBW-corrected gate).
-juce_add_console_app(V1EarlyTHDSweepTest PRODUCT_NAME "V1EarlyTHDSweepTest")
-target_sources(V1EarlyTHDSweepTest PRIVATE tests/V1EarlyTHDSweepTest.cpp)
-target_compile_definitions(V1EarlyTHDSweepTest
-    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
-target_link_libraries(V1EarlyTHDSweepTest
-    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
-    PUBLIC juce::juce_recommended_config_flags)
-add_test(NAME V1EarlyTHDSweepTest COMMAND V1EarlyTHDSweepTest)
+# V1EarlyTHDSweepTest (T-001's GBW gate) was DELETED 2026-07-17 along with the feature it gated.
+# Do not resurrect it as-is. It checked only the THD *ratio* THD(200)/THD(100), never the magnitude,
+# so it returned PASS at THD@100 = 0.12% and again at 0.71% where the pedal reads 9.79% — and once the
+# feature was removed it computed ratio = 4.51 from 0.00%/0.00% (noise/noise). One drive setting,
+# saturator off, target taken from theory rather than a capture. See docs/phase10-gap-audit.md Gap A'
+# and CLAUDE.md L-003. A replacement must gate THD MAGNITUDE against a capture at >=3 drive settings
+# with the saturator ON, and must be shown to FAIL when the feature it guards is deleted — and cannot
+# be written until the THD metric itself survives Gap G (the twin-T confound).
 
 # 3 — V1 Early full-chain integration: all-knobs × OS-factor stability sweep (finite, bounded, no
 # clicks, no self-oscillation) + dry-path passthrough. JUCE console app (OS region needs juce::dsp).

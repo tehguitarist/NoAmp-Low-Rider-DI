@@ -226,10 +226,25 @@ To revive the GBW hypothesis you need a THD metric that is immune to fundamental
 
 ---
 
-## A′: T-001's GBW correction is a NO-OP — Gap A REOPENED (2026-07-17)
+## A′: T-001's GBW correction did essentially nothing — Gap A REOPENED, then REMOVED (2026-07-17)
 
 **CLAUDE.md's "Gap A VERIFIED CLOSED" is false.** Four faults compounded; each one alone would have
 been caught by any of the others. This is the single most important entry in this file.
+
+**Measured effect of T-001 as shipped** (null of commit 6b74276 vs 6b74276^, V1E full chain, OS=8x):
+
+| Drive | null vs pre-T-001 | should have been |
+|---|---|---|
+| 0.25 | **−53.4 dB** (its LARGEST effect) | zero — nothing is clipping at D0.25 |
+| 0.50 | −63.0 dB | — |
+| 0.60 | −65.9 dB | — |
+| 1.00 | **−76.6 dB** (its SMALLEST effect) | its LARGEST — this is the setting it was built to fix |
+
+Not literally a no-op, but inaudible (−53..−77 dB) — and **anti-correlated with its own design
+intent**: biggest where it should have been zero, smallest where it was supposed to act. T-001 was
+**REMOVED** on 2026-07-17; the restored chain is **bit-identical** to pre-T-001 (peak diff 0.000e+00
+at D = 0.25/0.50/0.60/1.00), so `kDriveEndR=8k`, the saturator fit (0.40/0.25) and `kOutputMakeup` —
+all tuned at the pre-T-001 state — remain valid and need **no re-fit**.
 
 **Fault 1 — the filter did not implement its own documented transfer function.** `GbwCorrection.h`
 claims `H(s) = s/(s+wCl)`. Its coefficients were `b0 = wa/D` (should be `(2/Ts)/D`) and

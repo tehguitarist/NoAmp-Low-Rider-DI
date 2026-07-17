@@ -124,9 +124,11 @@ without images.
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
 > **CURRENT: Phase 10 — FR/THD gap reduction (2026-07-17).** All work is on **`main`**.
 > **⚠ Gap A is NOT closed — "VERIFIED CLOSED" was FALSE (reopened 2026-07-17). T-001's GBW
-> correction is an inert no-op, and the THD-vs-frequency metric that motivated it is itself
-> confounded by the twin-T notch. Read `docs/phase10-gap-audit.md` Gaps A′ and G before ANY
-> THD-slope work — four independent faults compounded there and they are all documented.**
+> correction moved the output by only −53..−77 dB (inaudible), LARGEST where nothing clips and
+> SMALLEST at the D=1.00 it was built to fix. It has been REMOVED; the chain is now bit-identical
+> to pre-T-001, so kDriveEndR=8k / saturator / makeup are unaffected. The THD-vs-frequency metric
+> that motivated it is ITSELF confounded by the twin-T notch. Read `docs/phase10-gap-audit.md`
+> Gaps A′ and G before ANY THD-slope work — four independent faults compounded there.**
 > **Key measurement findings (2026-07-17):**
 > 1. **V2 Vzt sweep** — Vzt=0.20 already optimal. Swept 0.20-0.60 at OS=8x on V2 D0.50 BL1.00.
 >    Softer knee increases low-drive THD without fixing the 400Hz deficit. Vzt=0.30 matches 400Hz
@@ -213,11 +215,14 @@ without images.
 > - **PRESENCE contributes ~0 dB at LF** (C31 blocks DC; §3's +16.7 dB is *at 4.8 kHz*), so the recovery
 >   saturator sees ~1 V, not ~2.9 V — knee must be sized to the ACTUAL signal.
 >
-> ### T-001 — "Fix V1E THD slope (gap A)" — ⚠ REOPENED 2026-07-17: IT NEVER WORKED
+> ### T-001 — "Fix V1E THD slope (gap A)" — ⚠ REMOVED 2026-07-17: IT NEVER WORKED
 
-**T-001 is an inert no-op.** Full forensics in `docs/phase10-gap-audit.md` Gap A′; the short version,
-because this is the most instructive failure in the project so far — **four faults, each of which any
-one of the others would have caught**:
+**T-001 never did anything audible** (−53..−77 dB, and biggest at the drive where nothing clips).
+**It is now removed** — the chain is bit-identical to pre-T-001 (6b74276^), so every fit made at that
+state (`kDriveEndR=8k`, saturator 0.40/0.25, `kOutputMakeup`) is untouched and valid.
+Full forensics in `docs/phase10-gap-audit.md` Gap A′; the short version, because this is the most
+instructive failure in the project so far — **four faults, each of which any other would have
+caught**:
 
 1. **The filter didn't implement its own formula.** `GbwCorrection.h` claims `H(s)=s/(s+wCl)` but had
    `b0=wa/D` (needs `(2/Ts)/D`) and a flipped `a1` sign → pole at **Nyquist**, not DC → **−49 dB** at
