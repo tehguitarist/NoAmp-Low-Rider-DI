@@ -42,34 +42,22 @@ public:
         input.prepare(baseFs);
         presence.prepare(baseFs);
         driveRegion.prepare(baseFs, maxBlock);
-        // V1E recovery saturation — THD-onset fit (2026-07-16, analysis/v1e_thd_onset_fit.py,
-        // fit across all three V1E captures; supersedes the 0.080/0.100 sat_refine candidate).
+        // V1E recovery saturation — DISABLED (gain 0 = rail-only) as of the STACK UNWIND (2026-07-18).
         //
-        // WHAT THIS MODELS: the TLC2264's CROSSOVER distortion — a kink near the zero crossing that is
-        // present at EVERY signal level. That is the only mechanism available: V1E's sole other
-        // nonlinearity is the rail clip, and at the LOCKED +/-4.2 V rail (circuit.md power section)
-        // the rail has ZERO leverage at low drive — after the kDriveEndR taper fit, D0.50/D0.60 only
-        // reach ~2.1 V and never approach the rail (measured: 0.8%/0.7% THD at EVERY rail knee from
-        // 0 to 2.0 V). Only an illegal rail drop to ~2.4 V made a knee bite, so the rail is NOT the
-        // low-drive THD lever. (An earlier note claiming the knee moves D0.50 THD 0.6% -> 36.8% was
-        // measured WITH that illegal rail drop — the knee alone at 4.2 V does nothing.)
+        // The tanh RecoverySaturator was an L-008 stack layer: kInputRef=1.3 under-clipped V1E, so this
+        // was added (0.40/0.25) to fake the missing distortion back. With kInputRef[V1E]=7.0 +
+        // kDriveEndR=0 the RAIL CLIP now does the real work, and the tanh only HURTS — it adds
+        // level-flat distortion that FLATTENS the THD-vs-level slope (gap-audit §I: rail-only beats
+        // sat-on at every kInputRef). Measured net at the ship config: rail-only mean FR SHAPE 1.37 vs
+        // sat-on 1.39; THD D0.50 slope 3.66 (analysis/v1e_pin_inref.py, v1e_unwind_fr.py).
         //
-        // WHY 0.080 LOOKED "STRUCTURALLY UNABLE": gain is a tanh/linear BLEND, so 0.080 was an 8%
-        // tanh against 92% linear — a near no-op at any knee. The model was fine; the parameter was
-        // degenerate. Knee must also be sized to the ACTUAL signal at this node (~0.1-1 V), not the
-        // rails — see RecoverySaturator.h.
-        //
-        // FIT: THD@100 rms err 4.11% -> 1.02% (D0.50 5.9 vs pedal 4.5, D0.60 6.1 vs 6.7,
-        // D1.00 7.6 vs 8.5); FR shape 2.80 -> 2.69 dB (no regression); offset spread unchanged at
-        // 0.96 dB, so it does not disturb the kDriveEndR/kOutputMakeup fit.
-        driveRegion.setRecoverySaturation(0.40, 0.25);
-        // Offset drives the even harmonics (a symmetric tanh makes only odd ones). Kept at the prior
-        // session's fitted 0.020: it is now DC-SAFE at any value (RecoverySaturator subtracts the
-        // zero-input DC), and the THD fit above is INSENSITIVE to it (rms err 1.02/1.02/1.01% at
-        // offset 0.020/0.010/0.004). OPEN: H2 was not re-measured this session and the knee moved
-        // 0.100 -> 0.250, so the offset/knee asymmetry ratio changed — re-fit offset against captured
-        // H2 before treating 0.020 as anything more than carried-over.
-        driveRegion.setSaturationOffset(0.020);
+        // RESIDUAL (documented best-effort, Gap I): rail-only makes ~0% THD at very low drive/level
+        // where the pedal makes ~0.42% (TLC2264 crossover). NO memoryless nonlinearity reproduces
+        // V1E's onset (24.5 dB THD swing at D0.50) — analysis/proto_v1e_nonlin.py — and the FINAL
+        // matrix has no level anchor to fit a cascade against, so the onset floor (~3.7 dB slope err)
+        // stands. Re-enable via setRecoverySaturation() only with a level anchor to fit against.
+        driveRegion.setRecoverySaturation(0.0, 0.25);  // gain 0 = disabled (V1EarlyDriveClipRecovery.h)
+        driveRegion.setSaturationOffset(0.0);          // no even-harmonic bias with the saturator off
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         output.prepare(baseFs);

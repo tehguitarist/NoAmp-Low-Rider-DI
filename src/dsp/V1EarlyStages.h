@@ -130,28 +130,20 @@ public:
     // starts from rest rather than carrying a stale wave value.
     void reset() noexcept { C28.reset(); }
 
-    // Capture-fitted residual resistance in the VR1 pot leg at electrical max (Phase 10, 2026-07-16).
-    // The schematic law reaches Rvr1 = (1-d)*100k → 0 Ω at d=1.0 → +40.1 dB max, which matches the
-    // author's SPICE sim (FR §4) exactly — but NOT the real unit: fitted across all three V1E captures
-    // (analysis/v1e_drive_endr_fit.py) the captures want ~8k, giving +29.6 dB max. Fit on the
-    // per-capture offset SPREAD (kOutputMakeup shifts all captures equally, so it cannot fix spread);
-    // clean interior minimum at 8k (spread 3.65 → 0.96 dB).
+    // Residual resistance in the VR1 pot leg at electrical max. NOW 0 = the exact schematic/SPICE law
+    // (Rvr1 = (1-d)*100k → 0 Ω at d=1.0 → +40.1 dB max, matching FR §4 exactly).
     //
-    // This is an EMPIRICAL effective value, not a claimed pot spec: 8k is ~8% of a 100k pot, far above
-    // a real pot's end/wiper resistance (<1%), so it is likely absorbing un-modelled gain limiting at
-    // high closed-loop gain. The physical decomposition is still OPEN.
-    //
-    // ⚠ A 2026-07-17 note here claimed the alternative (Rend=0.5, the ideal law) had been tested "with
-    // T-001 GBW correction active" and that 8k "compensates for gain limiting BEYOND GBW". That
-    // reasoning is VOID: T-001's correction was an inert no-op (docs/phase10-gap-audit.md Gap A'), so
-    // that experiment ran with no GBW modelled at all and cannot support any claim about what GBW does
-    // or does not explain. The empirical comparison it reported still stands on its own (Rend=0.5 gave
-    // better D1.00 THD but worse FR rms and all-positive knob-tracking), so 8k remains the working
-    // value — but the low-GBW hypothesis for WHY is untested, not ruled in or out.
-    //
-    // Set to 0.0 to recover the exact schematic/SPICE law; tests/V1EarlyDriveTest gates that path
-    // (WDF vs analytic + the +40.1 dB §4 transcription cross-check) at 0, and the fitted default here.
-    static constexpr double kDriveEndR = 8.0e3;
+    // ⚠ HISTORY — was 8.0e3 (a capture fit) until the STACK UNWIND (2026-07-18). The 8k "empirical
+    // effective resistance" deleted 10.5 dB of real, schematic-verified gain to make the −30 dBFS clean
+    // sweep stop reading "+8 dB too loud" at D1.00 — but that excess was the PEDAL compressing while the
+    // under-clipping plugin (kInputRef=1.3) did not, NOT surplus gain (L-008 receipt: 8k is ~8% of a
+    // 100k pot, far above any real pot's <1%). The real fix was to make the plugin compress: kInputRef
+    // [V1E]=7.0 (Calibration.h) restores the clip, so the gain-deletion compensator is no longer needed
+    // and the schematic law stands. PROVEN net-positive: V1E D1.00 FR SHAPE 5.71→1.68 dB, THD D1.00
+    // slope 5.55→1.25 (analysis/v1e_unwind_fr.py). tests/V1EarlyDriveTest gates this schematic path
+    // (WDF vs analytic + the +40.1 dB §4 transcription cross-check); setDriveEndResistance() can still
+    // override for experiments.
+    static constexpr double kDriveEndR = 0.0;
 
     void setDriveEndResistance(double ohms) noexcept
     {

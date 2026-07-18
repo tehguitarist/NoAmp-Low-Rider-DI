@@ -14,35 +14,35 @@
 
 namespace nalr
 {
-// Volts per DAW full-scale going INTO the circuit (calibration doc §1). Changing input load must NOT
-// move the unity point (it cancels in the linear path); it only sets where the rail/zener clip engages.
+// Volts per DAW full-scale going INTO the circuit (calibration doc §1), PER REVISION:
+//   [0]=V1 Early  [1]=V1 Late  [2]=V2.  kInputRef CANCELS in the linear path (outputGain =
+//   kOutputMakeup[rev]/kInputRef[rev]); it only sets where the rail/zener clip engages, i.e. it is
+//   fitted on clip-onset SHAPE (THD-vs-level), never on level.
 //
-// 1.3 — Phase-10 fit (2026-07-13) from the V2 captures' clip ONSET (the user's chosen anchor rev; V2
-// staging is trustworthy). Fit via analysis/inref_scan.py, matching plugin THD-vs-input-level to the
-// pedal across the non-max-drive V2 captures with a LINEAR THD metric (the log metric over-weights the
-// captures' near-clean noise floor and biases high — it wanted 1.9). (Prior: 0.87, carried from
-// monarch-of-tone's circuitVoltsPerFS — a DIFFERENT PEDAL's anchor. Before that: 3.27.)
+// V1L/V2 = 1.3 — Phase-10 fit (2026-07-13) from the V2 captures' clip ONSET (analysis/inref_scan.py,
+// LINEAR THD metric). V1L inherits it (variably staged, no independent clip-onset dispute).
 //
-// ⚠ RETAINED BY DECISION (2026-07-17), NOT VINDICATED — and V1E disagrees with it by ~13 dB.
-// Measured on the THD-vs-LEVEL slope at the clean 100/200 Hz anchors with the saturator genuinely
-// OFF (analysis/thd_level_probe.py --inref-scan; note --sat-gain 0 was a SILENT NO-OP until
-// 95f2264, so every earlier saturator-off result is void):
-//     V1E wants >= 5-6.5   (D1.00: slope err 1.55 dB / abs 1.76 dB at 6.5, still improving)
-//     V2  wants 1.3        (abs err WORSENS above it: 10.08 -> 14.74 -> 19.21 -> 21.45)
-// One global constant cannot satisfy both. Likeliest cause: the captures are NAM models normalized
-// PER BATCH, so each revision's effective input level may differ — a property of the CAPTURE, not of
-// the circuit (the input buffer is the same cell on all three revisions). The cheapest arbiter is
-// external: what input level was each revision's NAM model captured at?
+// V1E = 7.0 — THE STACK UNWIND (2026-07-18). V1E disagreed with the global 1.3 by ~13 dB: measured on
+// the THD-vs-level slope with the saturator genuinely off (analysis/thd_level_probe.py --inref-scan),
+// V1E wants ~5-7 while V2 worsens above 1.3. A single global constant cannot satisfy both — and it was
+// the seed of an L-008 COMPENSATOR STACK: 1.3 under-clips V1E, so the -30 dBFS clean sweep read "+8 dB
+// too loud" at D1.00 (really: the PEDAL compressing, the plugin not), which spawned kDriveEndR=8k
+// (deleting 10.5 dB of real gain) and the RecoverySaturator (faking distortion back).
 //
-// ⚠ THE OLD COMMENT HERE CLAIMED A "STRUCTURAL waveshape gap ... so no single kInputRef nails the
-// whole onset curve". DELETED as unsupported — that is the THIRD structural verdict in this project
-// and CLAUDE.md records the first two as WRONG. It is a symptom of a COMPENSATOR STACK (L-008), not
-// a property of the circuit: this value under-clips V1E, which is what P6's "+8 dB FR excess at
-// D1.00" really measured (the PEDAL compressing on the -30 dBFS clean sweep, not the plugin being
-// too loud) — which produced kDriveEndR=8k, deleting 10.5 dB of real gain, which produced the
-// RecoverySaturator to fake the distortion back. Full forensics: phase10-gap-audit.md section I.
-// Do NOT re-fit this constant alone; it is entangled with kDriveEndR and the V1E DRIVE taper shape.
-constexpr double kInputRef = 1.3;
+// PER-REVISION IS PHYSICALLY DEFENSIBLE, and this is a documented JUDGEMENT CALL (the FINAL matrix
+// cannot fully arbitrate it): the captures are NAM models normalized PER BATCH, so each revision's
+// effective input level differs — a property of the CAPTURE, not the circuit (same input buffer on all
+// three). The alternative not ruled out: the 13 dB is a V1E chain bug this masks. The cheapest arbiter
+// (each revision's NAM capture input level) is EXTERNAL and permanently unavailable (user, 2026-07-18).
+//
+// PROVEN on the captures we have (no external level needed): with V1E kInputRef=7 AND kDriveEndR->0
+// (V1EarlyStages.h) AND the recovery saturator OFF (V1EarlyDSP.h), the plugin now COMPRESSES on the
+// clean sweep like the pedal — V1E D1.00 FR SHAPE 5.71 -> 1.68 dB (analysis/v1e_unwind_fr.py), THD
+// D1.00 slope 5.55 -> 1.25, D0.50 slope 6.45 -> 3.66 (the residual ~3.7 is the onset SHAPE floor a
+// memoryless clip cannot beat — analysis/proto_v1e_nonlin.py; documented best-effort, Gap I). Value
+// pinned at 7.0 by analysis/v1e_pin_inref.py (6 -> D0.50 slope 11.7, 8 -> 5.2; 7 threads the needle).
+// Full forensics: phase10-gap-audit.md section I.
+constexpr double kInputRef[3] = { 7.0, 1.3, 1.3 };
 
 // Per-revision output makeup (calibration doc §2). kOutputMakeup[revision] where revision indices are:
 //   0 = V1 Early

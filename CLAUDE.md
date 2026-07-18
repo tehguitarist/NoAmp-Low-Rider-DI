@@ -248,7 +248,7 @@ without images.
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
-> | **I** | THD-vs-LEVEL slope wrong (V1E flat, V2 2× steep) | **DEFERRED by user** — a 4-deep compensator stack; blocked on a 13 dB V1E-vs-V2 `kInputRef` dispute that needs the NAM capture levels (external). `kInputRef` stays 1.3. |
+> | **I** | THD-vs-LEVEL slope wrong (V1E flat) | **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **Residual: H2 absent** (saturator carried it → asymmetric-rail restore QUEUED) + onset floor (best-effort). See gap-audit §I. |
 > | **D** | V2 zener drive tracking | **DEFERRED** — parked behind Gap I (almost certainly the same under-clamping zener). |
 > | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
 > | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
@@ -933,8 +933,8 @@ the gate FAILS when you delete the feature it guards.
   `src/dsp/Calibration.h`.** It is the single source of truth and this section was stale for a week
   (it claimed kInputRef=0.87 and kOutputMakeup=1.0 long after both had moved, which is exactly how
   L-008's stack got built on a number nobody re-checked). As of 2026-07-17 the actual values are
-  **kInputRef = 1.3** (fit on V2's clip onset ONLY — V1E disagrees by ~13 dB; see Gap I, DEFERRED)
-  and **kOutputMakeup[3] = { 1.084, 1.121, 0.618 }** (V1E/V1L/V2, T-002-anchored to dry-path unity at
+  **kInputRef[3] = { 7.0, 1.3, 1.3 }** (V1E/V1L/V2 — PER-REVISION as of the 2026-07-18 stack unwind;
+  V1E=7.0 + kDriveEndR=0 + saturator OFF, see Gap I) and **kOutputMakeup[3] = { 1.084, 1.121, 0.618 }** (V1E/V1L/V2, T-002-anchored to dry-path unity at
   blend=0 / level=0.5 — NOT capture-level-fitted). `kDryGain` is **DELETED** — never reintroduce it
   (ISS-008). (2) **LEVEL is modelled INSIDE the DSP** (the pedal's LEVEL pot, in V1EarlyBlendLevelStage),
   so there is NO separate `volumeGain` scalar in the processor — output gain = `kOutputMakeup ·

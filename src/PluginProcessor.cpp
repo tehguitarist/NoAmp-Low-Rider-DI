@@ -107,7 +107,7 @@ float NoAmpLowRiderDIAudioProcessor::outputGainFor(float outTrimDb, int revision
     // volts<->float conversion.
     // revision: 0 = V1 Early, 1 = V1 Late, 2 = V2
     const int idx = juce::jlimit(0, 2, revision);
-    return (float) (nalr::kOutputMakeup[idx] / nalr::kInputRef) * juce::Decibels::decibelsToGain(outTrimDb);
+    return (float) (nalr::kOutputMakeup[idx] / nalr::kInputRef[idx]) * juce::Decibels::decibelsToGain(outTrimDb);
 }
 
 void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
@@ -121,7 +121,7 @@ void NoAmpLowRiderDIAudioProcessor::prepareToPlay(double sampleRate, int samples
     revisionCrossfade.reset(sampleRate, kRevisionCrossfadeSeconds);
 
     inputGainSmoothed.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
-    outputGainSmoothed.setCurrentAndTargetValue(outputGainFor(pOutputTrim->load(), activeRevision));
+    outputGainSmoothed.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(pOutputTrim->load()));
     bypassMix.setCurrentAndTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
 
     // A fresh prepare (SR change, host reload) starts clean on whatever `revision` currently is —
@@ -226,7 +226,11 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     // Pre-compute the per-sample gain ramps ONCE per block so both channels see the identical ramp
     // (advancing a SmoothedValue per channel would ramp twice as fast in stereo and desync L/R).
     inputGainSmoothed.setTargetValue(juce::Decibels::decibelsToGain(pInputTrim->load()));
-    outputGainSmoothed.setTargetValue(outputGainFor(pOutputTrim->load(), activeRevision));
+    // outGainRamp now carries ONLY the output-trim gain; the per-revision kOutputMakeup/kInputRef is
+    // applied per-graph in the output blend (gActive/gFrom) so the revision crossfade — not this
+    // smoother — carries the revision transition (fixes a click when the two revisions' output scales
+    // differ, e.g. V1E's kInputRef=7 vs V1L/V2's 1.3).
+    outputGainSmoothed.setTargetValue(juce::Decibels::decibelsToGain(pOutputTrim->load()));
     bypassMix.setTargetValue(pBypass->load() > 0.5f ? 1.0f : 0.0f);
     for (int i = 0; i < numSamples; ++i)
     {
@@ -237,6 +241,12 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
     }
     if (crossfading && revisionCrossfade.isSmoothing() == false)
         crossfading = false; // fade reached 1.0 this block — fadingFromRevision no longer needed
+
+    // Per-revision output gain (kOutputMakeup[rev]/kInputRef[rev]) applied to EACH graph's output, so
+    // the crossfade carries the revision transition. kInputRef cancels per revision (input×kInputRef[rev]
+    // ... output×makeup[rev]/kInputRef[rev]); outputGainFor(0, rev) is exactly that factor (trim=0dB).
+    const double gActive = (double) outputGainFor(0.0f, activeRevision);
+    const double gFrom = crossfading ? (double) outputGainFor(0.0f, fadingFromRevision) : gActive;
 
     for (int ch = 0; ch < numChannels; ++ch)
     {
@@ -250,10 +260,17 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
             dryCopy[(size_t) i] = data[i];
             const float wet = data[i] * inTrimRamp[(size_t) i];
             peakIn = juce::jmax(peakIn, std::abs(wet));
-            voltsScratch[(size_t) i] = (double) wet * nalr::kInputRef;
+            voltsScratch[(size_t) i] = (double) wet * nalr::kInputRef[activeRevision];
         }
+        // Per-revision kInputRef: the fading-from graph must see ITS OWN volts scaling, not the active
+        // revision's (they differ by ~13 dB, e.g. V1E 7.0 vs V1L/V2 1.3). Rescale the copy by the ratio;
+        // the matching output-side correction is fromGainScale below (so kInputRef still cancels per rev).
         if (crossfading)
-            std::copy(voltsScratch.begin(), voltsScratch.begin() + numSamples, voltsScratchPrev.begin());
+        {
+            const double inScale = nalr::kInputRef[fadingFromRevision] / nalr::kInputRef[activeRevision];
+            for (int i = 0; i < numSamples; ++i)
+                voltsScratchPrev[(size_t) i] = voltsScratch[(size_t) i] * inScale;
+        }
 
         // The circuit, in real volts (input buffer -> notch/presence -> drive/clip/recovery -> blend/
         // level -> [V2: MID] -> tone -> output buffer). `activeRevision` selects which pre-allocated
@@ -264,13 +281,15 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         if (crossfading)
             runRevision(fadingFromRevision, ch, voltsScratchPrev.data(), numSamples);
 
-        // Back to DAW domain (kOutputMakeup/kInputRef folded into outGainRamp) + bypass crossfade.
+        // Back to DAW domain: per-revision makeup/kInputRef (gActive/gFrom) per graph, then the
+        // outTrim-only outGainRamp + bypass crossfade.
         for (int i = 0; i < numSamples; ++i)
         {
             const double wdfOut = crossfading
-                                      ? (voltsScratch[(size_t) i] * (double) revisionFadeRamp[(size_t) i] +
-                                         voltsScratchPrev[(size_t) i] * (1.0 - (double) revisionFadeRamp[(size_t) i]))
-                                      : voltsScratch[(size_t) i];
+                                      ? (voltsScratch[(size_t) i] * gActive * (double) revisionFadeRamp[(size_t) i] +
+                                         voltsScratchPrev[(size_t) i] * gFrom *
+                                             (1.0 - (double) revisionFadeRamp[(size_t) i]))
+                                      : voltsScratch[(size_t) i] * gActive;
             const float processed = (float) wdfOut * outGainRamp[(size_t) i];
             const float mix = bypassRamp[(size_t) i];
             data[i] = processed * (1.0f - mix) + dryCopy[(size_t) i] * mix;

@@ -14,7 +14,8 @@
 //     --os <1|2|4|8>           oversampling factor (default 8 — takes aliasing off the A/B table)
 //     --in-trim / --out-trim <dB>   processor trims (default 0)
 //     --in-ref <volts>         override Calibration.h's kInputRef for this render only (Phase-10
-//                               scan use — see analysis/inref_scan.py); default = nalr::kInputRef
+//                               scan use — see analysis/inref_scan.py); default = kInputRef[rev]
+//                               (V1E 7.0, V1L/V2 1.3)
 //     --out-makeup <gain>      override Calibration.h's kOutputMakeup for this render only;
 //                               default = nalr::kOutputMakeup
 //     --zener-iref/-vzt/-cj/-vz/-vf/-m <x>   V1L/V2 only: override the DRIVE zener params for this
@@ -158,6 +159,7 @@ int main(int argc, char** argv)
     const juce::File outFile(juce::File::getCurrentWorkingDirectory().getChildFile(argv[2]));
 
     const std::string rev = argStr(argc, argv, "--rev", "V1E");
+    const int revIdx = (rev == "V1L") ? 1 : (rev == "V2") ? 2 : 0;
     const double drive    = argVal(argc, argv, "--drive", 0.5);
     const double presence = argVal(argc, argv, "--presence", 0.5);
     const double blend    = argVal(argc, argv, "--blend", 0.5);
@@ -170,8 +172,11 @@ int main(int argc, char** argv)
     const int    osFactor = (int) argVal(argc, argv, "--os", 8);
     const double inTrimDb = argVal(argc, argv, "--in-trim", 0.0);
     const double outTrimDb = argVal(argc, argv, "--out-trim", 0.0);
-    const double inRef     = argVal(argc, argv, "--in-ref", nalr::kInputRef);
-    const double driveEndR = argVal(argc, argv, "--drive-end-r", 8.0e3);
+    const double inRef     = argVal(argc, argv, "--in-ref", nalr::kInputRef[revIdx]);
+    // -1 sentinel = "not specified, keep the DSP's own prepare()-time default" (same L-009-safe
+    // pattern as the saturator flags below). The V1E default is now 0 (kDriveEndR, V1EarlyStages.h),
+    // so a bare render mirrors the plugin; any explicit value (incl. 0 or 8000) is honoured.
+    const double driveEndR = argVal(argc, argv, "--drive-end-r", -1.0);
     const double railKnee  = argVal(argc, argv, "--rail-knee", 0.0);
     const double railVNeg  = argVal(argc, argv, "--rail-vneg", -4.2);
     const double railVPos  = argVal(argc, argv, "--rail-vpos", 4.2);
@@ -210,7 +215,7 @@ int main(int argc, char** argv)
         runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, railVNeg, railVPos, satGain, satKnee, satOffset,
                                     [&](auto& d) {
                                         d.setParams(drive, presence, blend, level, bass, treble);
-                                        if (std::abs(driveEndR - 8.0e3) > 0.1)
+                                        if (driveEndR >= 0.0)
                                             d.setDriveEndResistance(driveEndR);
                                     });
     }

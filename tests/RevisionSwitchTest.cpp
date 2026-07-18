@@ -60,18 +60,21 @@ int main()
     bool allFinite = true;
     bool noClicks = true;
     float prevSample = 0.0f;
-    // Generous, but expressed relative to the plugin's own DAW-domain output scale (max(kOutputMakeup) /
-    // kInputRef, architecture.md outputGainFor()) rather than a bare constant: now that makeup is
-    // per-revision, use the maximum across all three revisions (V1E at 0.393) so the threshold works
-    // for any revision this test cycles through.
-    const float kMaxMakeup = []()
+    // Generous, but expressed relative to the plugin's own DAW-domain output scale
+    // (kOutputMakeup[rev]/kInputRef[rev], architecture.md outputGainFor()) rather than a bare constant.
+    // Both makeup AND kInputRef are now per-revision, so take the MAX ratio across all three revisions
+    // this test cycles through (V1L dominates at ~0.86).
+    const float kMaxOutScale = []()
     {
         float m = 0.0f;
-        for (auto v : nalr::kOutputMakeup)
-            if ((float) v > m) m = (float) v;
+        for (int r = 0; r < 3; ++r)
+        {
+            const float s = (float) (nalr::kOutputMakeup[r] / nalr::kInputRef[r]);
+            if (s > m) m = s;
+        }
         return m;
     }();
-    const float kClickThreshold = 1.15f * kMaxMakeup / (float) nalr::kInputRef;
+    const float kClickThreshold = 1.15f * kMaxOutScale;
 
     int revisionIndex = 0;
     for (int block = 0; block < numBlocks; ++block)

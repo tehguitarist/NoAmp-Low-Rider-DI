@@ -89,10 +89,12 @@ int main()
     check(at8k < at2k - 3.0, "continues rolling off above (HF loss increases)");
 
     // The checks above pin the end-R to 0 so they gate the SCHEMATIC/SPICE law (§4) and thus the
-    // E3/E4 transcription, exactly as before. The shipping default deliberately deviates from it:
-    // kDriveEndR is capture-fitted (see V1EarlyStages.h). Gate that separately so neither the
-    // schematic cross-check nor the fitted value can silently drift.
-    std::printf("Capture-fitted end-R default (kDriveEndR = %.0f ohm):\n", nalr::V1EarlyDriveStage::kDriveEndR);
+    // E3/E4 transcription. As of the STACK UNWIND (2026-07-18) the shipping default kDriveEndR is ALSO
+    // 0 — the old 8k capture fit was an L-008 gain-deletion compensator, removed once kInputRef[V1E]=7
+    // made the plugin compress correctly (V1EarlyStages.h). So the default now EQUALS the schematic
+    // max; gate that it has not silently drifted back to a fitted value.
+    std::printf("Shipping end-R default (kDriveEndR = %.0f ohm, schematic law post-unwind):\n",
+                nalr::V1EarlyDriveStage::kDriveEndR);
     {
         nalr::V1EarlyDriveStage drv; // default endR
         drv.prepare(fs);
@@ -110,7 +112,7 @@ int main()
         std::printf("      max DRIVE @100Hz: %.2f dB (expect %.2f dB; schematic-ideal is %.2f dB)\n",
                     fittedMax, expect, gMax);
         check(std::abs(fittedMax - expect) < 0.3, "fitted max DRIVE matches 1 + R25/(R23 + kDriveEndR)");
-        check(fittedMax < gMax - 5.0, "fitted default is materially below the ideal-pot §4 max (P6 fit)");
+        check(std::abs(fittedMax - gMax) < 0.3, "shipping default = schematic §4 max (kDriveEndR=0, unwind)");
     }
 
     std::printf("WDF vs analytic:\n");

@@ -571,11 +571,34 @@ never approaches it). This is the saturator's level law, not the rail.
 
 ---
 
-### I — ROOT CAUSE FOUND 2026-07-17. It is a COMPENSATOR STACK, and the fix is DEFERRED by decision.
+### I — THE STACK UNWIND, IMPLEMENTED 2026-07-18 (level+taper part). Onset-shape + H2 residual remain.
 
-**Status: diagnosed, NOT fixed. `kInputRef` stays 1.3 and the V1E saturator stays as-is (user
-decision, 2026-07-17) — the V1E/V2 disagreement below is deferred. Do not "fix" Gap I piecemeal;
-every candidate fix is entangled with the others. Read this whole section first.**
+**Status: the level/taper half is FIXED and SHIPPED. `kInputRef` is now PER-REVISION (V1E 7.0,
+V1L/V2 1.3), `kDriveEndR=0` (schematic law), and the V1E recovery saturator is DISABLED (rail-only).
+This was chosen after the external level anchor was confirmed permanently unavailable (user,
+2026-07-18) and a Python prototype (proto_v1e_nonlin.py) showed no memoryless redesign fixes the
+onset — so the tractable, capture-based part was taken and the rest documented best-effort.**
+
+**RESULTS (report_audit.py on the fresh 2026-07-18 comprehensive_data.json, all 24 ctests green):**
+- **THD-vs-level onset — the core complaint — largely fixed.** V1E THD@101Hz now RISES with level and
+  matches magnitudes: D1.00 was 4.7/4.4/7.0 (level-flat, too clean) → **9.9/10.3/11.0** vs pedal
+  10.4/9.8/8.4; D0.50 was 3.1/5.3/5.3 → **1.5/6.9/9.9** vs pedal 0.4/4.5/7.0.
+- **FR held/improved:** V1E median rmsTRUST 1.79 → **1.71**; D1.00 clean sweep now compresses like the
+  pedal (v1e_unwind_fr.py: D1.00 FR SHAPE 5.71 → 1.68). Odd harmonics (H3) median 12.5 → 7.0.
+- **V1L/V2 unchanged** — byte-identical renders (their kInputRef default is still 1.3; the driveEndR
+  sentinel and V1E saturator only touch V1E).
+- **⚠ RESIDUAL 1 — EVEN HARMONICS (H2) now ABSENT.** Disabling the saturator removed its `offset`
+  (V1E's only H2 source); the symmetric rail clip makes only ODD harmonics. H2 went from +21.8 dB (too
+  hot) to −110 dB (absent), pushing the harmonic-magnitude median 12.0 → 48.8 (the whole regression is
+  H2). **FIX QUEUED:** a small ASYMMETRIC rail (railVNeg≠railVPos — already supported) generates H2
+  WITHOUT flattening the THD slope (unlike the tanh); V1E has no clip diodes, so its even harmonics are
+  physically the op-amp's asymmetric single-supply saturation. Next commit.
+- **RESIDUAL 2 — onset floor.** Rail-only makes ~0% THD at very low drive/level where the pedal makes
+  ~0.42% (crossover); no memoryless clip reproduces the 24.5 dB D0.50 swing (proto_v1e_nonlin.py).
+  Best-effort; the FINAL matrix has no level anchor to fit a cascade against.
+
+**Full unwind forensics + the original DEFERRAL reasoning are preserved below (the compensator stack
+that made this necessary). Do not restore the "kInputRef stays 1.3 / deferred" conclusion — SUPERSEDED.**
 
 **0. The harness was lying — three `OfflineRender` flags were silent no-ops (fixed, 95f2264).**
 `--sat-gain 0` could not disable the saturator: the guard `if (satGain > 0.0 && satKnee > 0.0)`
