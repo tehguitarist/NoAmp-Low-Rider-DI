@@ -127,7 +127,9 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="only the first N captures (scans are slow)")
     ap.add_argument("--inref-scan", action="store_true",
                     help="scan kInputRef with the saturator DELETED — does the CLIP ONSET explain the slope?")
-    ap.add_argument("--inrefs", default="0.87,1.2,1.6,2.0,2.6,3.3")
+    ap.add_argument("--inref-scan-sat", action="store_true",
+                    help="scan kInputRef with saturator ON (current defaults) — does the FULL chain match?")
+    ap.add_argument("--inrefs", default="1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0")
     ap.add_argument("--drive-map", default=None,
                     help="TAPER TEST: render at these drive values against each capture's own pedal "
                          "data (e.g. 0.5,0.7,0.8,0.9,0.95). If the pedal's D=0.50 behaves like the "
@@ -204,6 +206,23 @@ def main():
                 m = render_and_measure(a.bin, parsed, orig, ref, a.os,
                                        ["--sat-gain", "0", "--sat-knee", "0", "--sat-offset", "0",
                                         "--in-ref", str(v)])
+                if not m:
+                    continue
+                t = "/".join(f"{m[lv][100.0]:.2f}" for lv in LEVELS if lv in m)
+                print(f"    {v:>7.2f}{slope_err(m, pedal):>10.2f}{abs_err(m, pedal):>9.2f}   {t}")
+            print(f"    {'PEDAL':>7}{'0.00':>10}{'0.00':>9}   "
+                  + "/".join(f"{pedal[lv][100.0]:.2f}" for lv in LEVELS if lv in pedal))
+
+        if a.inref_scan_sat:
+            # Like --inref-scan but WITHOUT the saturator-delete flags — tests the CURRENT
+            # combined chain (rail + recovery tanh) at each input level. If the rail-only
+            # scan cannot match but this one does, the tanh is essential and CAN work if
+            # properly staged — Gap I is a staging issue, not a model-shape issue.
+            print("\n  kInputRef scan, saturator ON (current defaults) — can the FULL chain make the slope?")
+            print(f"    {'inRef':>7}{'slopeErr':>10}{'absErr':>9}   THD@100Hz -18/-12/-6")
+            for v in [float(x) for x in a.inrefs.split(",")]:
+                m = render_and_measure(a.bin, parsed, orig, ref, a.os,
+                                       ["--in-ref", str(v)])
                 if not m:
                     continue
                 t = "/".join(f"{m[lv][100.0]:.2f}" for lv in LEVELS if lv in m)

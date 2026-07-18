@@ -171,6 +171,7 @@ int main(int argc, char** argv)
     const double inTrimDb = argVal(argc, argv, "--in-trim", 0.0);
     const double outTrimDb = argVal(argc, argv, "--out-trim", 0.0);
     const double inRef     = argVal(argc, argv, "--in-ref", nalr::kInputRef);
+    const double driveEndR = argVal(argc, argv, "--drive-end-r", 8.0e3);
     const double railKnee  = argVal(argc, argv, "--rail-knee", 0.0);
     const double railVNeg  = argVal(argc, argv, "--rail-vneg", -4.2);
     const double railVPos  = argVal(argc, argv, "--rail-vpos", 4.2);
@@ -207,7 +208,11 @@ int main(int argc, char** argv)
     {
         const double outMakeup = outMakeupForRev(0);
         runRender<nalr::V1EarlyDSP>(fileBuf, n, fs, osFactor, block, inTrimDb, outTrimDb, inRef, outMakeup, railKnee, railVNeg, railVPos, satGain, satKnee, satOffset,
-                                    [&](auto& d) { d.setParams(drive, presence, blend, level, bass, treble); });
+                                    [&](auto& d) {
+                                        d.setParams(drive, presence, blend, level, bass, treble);
+                                        if (std::abs(driveEndR - 8.0e3) > 0.1)
+                                            d.setDriveEndResistance(driveEndR);
+                                    });
     }
     else if (rev == "V1L")
     {

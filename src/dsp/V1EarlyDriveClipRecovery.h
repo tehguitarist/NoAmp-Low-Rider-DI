@@ -58,6 +58,7 @@ public:
     void setOversamplingFactor(int factor) noexcept { pendingFactor = factor; }
 
     void setDrive(double drive01) noexcept { drive.setDrive(drive01); }
+    void setDriveEndResistance(double ohms) noexcept { drive.setDriveEndResistance(ohms); }
     void setRailVoltages(double vNeg, double vPos) noexcept { railClip.setRailVoltages(vNeg, vPos); }
     void setRailKnee(double kneeVolts) noexcept { railClip.setKneeVolts(kneeVolts); }
     void setADAA(bool on) noexcept { railClip.setADAA(on); }
