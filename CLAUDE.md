@@ -130,10 +130,16 @@ without images.
 > green, reports regenerated.** ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
 > that used to sit here was OVERTURNED — it rested on a §1 target that had been edited to the model's
 > value (L-001) and on splitting two summing causes. Do not restore it.
-> **Next actionable item (2026-07-18): Gap J+E** (V1L 285 Hz phase notch + V2 BASS hump — ONE confounded
-> item). Gap C is ✅ CLOSED (ToneWarpShelf). Gap H err2 is exhausted (last mechanism ruled out) → §1
-> graph-edge re-read or CLOSE best-effort.
-> Gap I and Gap D are DEFERRED (blocked on the external kInputRef question, not on effort).
+> **NEXT TASK (queued 2026-07-18): Gap D — V2 zener drive tracking** (then V1L). UNPARKED: Gap I's V1E
+> half is DONE (stack unwind) and the clean THD-vs-LEVEL @101 Hz metric is unconfounded. Target: V2
+> D0.90 pedal is level-FLAT (10.7/11.5/11.9) but the plugin CLIMBS (16.5/21.3/23.3) — the zener
+> under-clamps. **Re-check the Vzt/Cj/m rule-outs on the CLEAN metric** (they were rejected on the
+> Gap-G-confounded THD-vs-freq). V1L is now worst on harmonics (12.1 dB) — same family, but confounded
+> captures, so do V2 first. See gap-audit §D.
+> Then the linear pair: **Gap J+E** (V1L 285 Hz phase notch + V2 BASS hump — ONE confounded item).
+> Gap C is ✅ CLOSED (ToneWarpShelf). Gap H err2 is exhausted → §1 graph-edge re-read or CLOSE best-effort.
+> **Gap I is ✅ DONE for its level/taper half** (per-rev kInputRef + kDriveEndR=0 + rail-only + H2
+> asymmetric rail); only the onset-shape floor and drive-dependent H2 spread remain, both best-effort.
 > **Gap H error 2 OPEN** — the ~17 dB capture-only top-octave deficit. The ISOLATED PRESENCE
 > cell matches §3 (+27.5 dB @ 6–7 kHz per V1LateStagesTest), and the S-K cascade is confirmed
 > faithful. Individually both stages are correct, so the gap must come from their INTERACTION
@@ -249,14 +255,17 @@ without images.
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
 > | **I** | THD-vs-LEVEL slope wrong (V1E flat) | **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
-> | **D** | V2 zener drive tracking | **DEFERRED** — parked behind Gap I (almost certainly the same under-clamping zener). |
+> | **D** | V2 zener drive tracking (+ V1L) | ⭐ **UNPARKED 2026-07-18 — NEXT THD TASK.** Both park reasons expired: Gap I's V1E half is DONE, and the clean **THD-vs-LEVEL @101 Hz** metric is unconfounded (the old Vzt/Cj/m rule-outs used the Gap-G-confounded THD-vs-*freq* — **re-check them**). Target: V2 D0.90 pedal is level-FLAT 10.7/11.5/11.9 but plugin CLIMBS 16.5/21.3/23.3 — the zener under-clamps. NOT a level issue (kInputRef=1.3 worsens above) and NOT the V1E fix (rail vs zener). **V1L is now worst on harmonics (12.1 dB, erratic H2)** — same family, but its captures are drive+blend+bass confounded, so do V2 first. |
 > | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
 > | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
 > | **A/A′, P3–P7** | (various) | ✅ DONE/VOID — see table below. |
 >
-> **Deferred items (I, D) are blocked on external input, not on effort** — don't try to "fix" them;
-> they need the per-revision NAM capture input levels to resolve the kInputRef dispute. Everything
-> else is workable now with the tools + capture-free references in hand.
+> **Nothing is blocked on external input any more.** The old "I and D need the per-revision NAM capture
+> input levels" framing is SUPERSEDED: those levels are permanently unavailable (user, 2026-07-18), but
+> Gap I's level/taper half was solved anyway by fitting per-revision `kInputRef` to the captures we have
+> (a documented judgement call), and Gap D is unparked with a clean metric. What remains genuinely
+> best-effort is only the V1E onset-shape floor and the drive-dependent H2 spread — everything else is
+> workable now with the tools + capture-free references in hand.
 >
 > ### 2026-07-17 (later session): METRIC FIXES + TWO NEW GAPS — read `phase10-gap-audit.md` M / I / J
 >

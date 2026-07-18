@@ -1269,17 +1269,39 @@ interaction effect into fixed component values that are individually schematic-f
 
 ---
 
-## D: V2 zener drive tracking — PARKED: symptom metric confounded (Gap G); likely a facet of Gap I
+## D: V2 zener drive tracking — ⭐ UNPARKED 2026-07-18, NOW THE TOP THD TASK (clean metric available)
 
-**Status (corrected 2026-07-18): NOT diagnosable with current metrics, all component fixes ruled
-out.** The old header "ROOT CAUSE FOUND: GBW" was wrong — this section's own body retracts the GBW
-hypothesis. Knee/Cj/m are all fit or refuted. What remains is a real but UN-MEASURABLE symptom.
+**STATUS: ACTIONABLE — this is the next THD/harmonics work item.** Both reasons it was parked have
+expired:
+1. *"Parked behind Gap I"* — Gap I's V1E half is DONE (the stack unwind, §I). Nothing blocks D now.
+2. *"Symptom metric confounded (Gap G)"* — the old rule-outs were scored on THD-vs-**FREQUENCY**, which
+   the twin-T makes unusable. **THD-vs-LEVEL at the clean 101 Hz anchor is unconfounded** (the notch
+   attenuates the fundamental equally at every level, so it cancels), and it is exactly the metric the
+   V1E unwind was validated on. **⇒ Re-check the "ruled out" verdicts (Vzt / Cj / m) against the CLEAN
+   metric before accepting them** — they were rejected on the confounded one.
 
-**⇒ Most likely the same root as Gap I (the V2 zener does not clamp hard enough at high drive).**
-Gap I records: at D0.90 the *pedal* is nearly level-independent in THD (zener clamping hard, 10.7→11.9%
-across 12 dB) while the *plugin climbs* (16.5→23.3%). That is the SAME D0.90 over-production this gap
-describes, seen in THD-vs-LEVEL (unconfounded) instead of THD-vs-FREQUENCY (confounded). **Work Gap I's
-V2 half first; D probably falls out of it.** Gap I is DEFERRED (kInputRef dispute), so D is too.
+**THE TARGET — sharp and unconfounded** (report_audit.py, THD@101 Hz, pedal / plugin, −18/−12/−6 dBFS):
+```
+V2 D0.90 BL1.00   pedal 10.7 / 11.5 / 11.9   <- nearly LEVEL-FLAT (zener clamping hard)
+                 plugin 16.5 / 21.3 / 23.3   <- CLIMBS: too hot AND wrong slope
+V2 D0.50 BL1.00   pedal  0.4 /  2.8 /  7.6      plugin 0.4 / 4.9 / 14.5  (~2x too steep)
+V2 D0.25 BL1.00   pedal  0.2 /  0.3 /  0.7      plugin 0.6 / 0.5 /  3.8
+```
+The pedal COMPRESSES at high drive; the plugin does not. **The lever is the zener's clamp hardness at
+high current, not the level** — V2's `kInputRef` is already fit at 1.3 and Gap I measured that it gets
+monotonically WORSE above it, so this is NOT a level problem (unlike V1E's, which the unwind fixed).
+
+**NOT the same fix as V1E.** V1E clips on the op-amp RAIL; V1L/V2 clip through the ZENER module. The
+unwind (per-rev kInputRef + kDriveEndR=0 + rail-only) does not transfer.
+
+**V1L is in the same family and is now the WORST revision on harmonics** (median |H-delta| 12.1 dB vs
+V1E 6.5, V2 5.7), driven by an ERRATIC H2 (delta −13.9 / +16.2 / +20.0 across its three captures) plus
+the same high-level over-distortion (D0.65: plugin 19.8% vs pedal 12.9% at −6). ⚠ V1L is harder to
+arbitrate: its three captures move **drive + blend + bass together** (confounded by matrix design) and
+two are partial-blend, so the dry leg dilutes the wet distortion. Do V2 first (clean full-wet captures
+at three drives), then see how much of V1L falls out of the same zener fix.
+
+**Old (pre-unpark) analysis retained below — but note its rule-outs used the confounded metric.**
 
 At D0.90 the plugin over-produces 100 Hz THD (21.8% vs 11.5%) and under-produces 400 Hz (16.9% vs
 37.4%) — i.e. the plugin's THD **falls** with frequency where the pedal's **rises**.
