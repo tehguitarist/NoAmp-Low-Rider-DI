@@ -97,6 +97,14 @@ nalr::ZenerDriveParams zenerParamsFromArgs(int argc, char** argv, nalr::ZenerDri
     def.Vz = argVal(argc, argv, "--zener-vz", def.Vz);
     def.Vf = argVal(argc, argv, "--zener-vf", def.Vf);
     def.m = argVal(argc, argv, "--zener-m", def.m); // per-polarity asymmetry -> even harmonics
+    // Gap D ABLATION KNOB (L-009: a null result is worthless from a switch that does nothing). The
+    // module's inter-stage coupling caps are schematic values, NOT fit parameters — these flags exist
+    // only so the ablation "remove the caps" can be rendered. A very large C is an AC short, which
+    // reproduces the pre-Gap-D (uncoupled) model exactly; pass e.g. --zener-cin 1e3.
+    def.CinA = argVal(argc, argv, "--zener-cin", def.CinA);
+    def.CinB = argVal(argc, argv, "--zener-cin", def.CinB);
+    def.CinA = argVal(argc, argv, "--zener-cina", def.CinA);
+    def.CinB = argVal(argc, argv, "--zener-cinb", def.CinB);
     return def;
 }
 

@@ -24,6 +24,12 @@ constexpr double kPi = 3.14159265358979323846;
 // Steady-state peak of the module's response to a sine, measured over the back half of the buffer.
 double peakOut(nalr::ZenerDriveModule& m, double amp, double f, double fs)
 {
+    // RESET FIRST — mandatory since Gap D gave the module real memory (the C28/C8 coupling caps).
+    // Each call here is an independent steady-state measurement, but a preceding large-amplitude call
+    // leaves the coupling cap charged to whatever it held when that sine was cut off mid-cycle (up to
+    // tens of volts), which then bleeds through R with tau = 22 ms and corrupts the next reading. That
+    // is not a modelling error, it is the memory we deliberately added; the harness has to reset.
+    m.reset();
     const int total = (int) (fs * 0.15), settle = total / 2;
     double pk = 0.0;
     for (int n = 0; n < total; ++n)
@@ -168,11 +174,23 @@ int main()
     {
         drive.reset();
         drive.setDrive(0.0); // 4.4x: +0.5 V in -> ~+2.2 V, still linear
-        double y = 0.0;
+        // Read the step's LEADING EDGE, not its settled value. Since Gap D the module carries the real
+        // C28/C8 coupling caps, so it correctly BLOCKS DC — a settled DC step decays toward 0 (tau =
+        // 22 ms stage A, 242 ms stage B at this drive) and says nothing about polarity. The first
+        // sample after the step is the undecayed response and is what the polarity check wants.
+        // Peak of the leading edge (first 200 samples = 4.2 ms, far inside both taus). Not sample 0:
+        // the zener leg's Cj (220 pF into Rf 220k = 48 us) smooths the edge over a few samples.
+        double yEdge = 0.0, y = 0.0;
         for (int n = 0; n < 2000; ++n)
+        {
             y = drive.process(0.5);
-        std::printf("      DC step +0.5 V in -> %.3f V out\n", y);
-        check(y > 1.5, "positive input -> positive output (net non-inverting)");
+            if (n < 200)
+                yEdge = std::max(yEdge, y);
+        }
+        std::printf("      DC step +0.5 V in -> %.3f V leading edge, %.3f V after 2000 samples (caps decay it)\n",
+                    yEdge, y);
+        check(yEdge > 1.5, "positive input -> positive output (net non-inverting)");
+        check(std::abs(y) < 0.5 * std::abs(yEdge), "coupling caps block DC — the step decays (C28/C8 are modelled)");
     }
 
     // ------------------------------------------------------------------------------------------------

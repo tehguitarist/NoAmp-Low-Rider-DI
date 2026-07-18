@@ -278,6 +278,11 @@ target_link_libraries(ZenerClipTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(ZenerClipTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME ZenerClipTest COMMAND ZenerClipTest)
 
+add_executable(ZenerCouplingCapTest tests/ZenerCouplingCapTest.cpp)
+target_link_libraries(ZenerCouplingCapTest PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(ZenerCouplingCapTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME ZenerCouplingCapTest COMMAND ZenerCouplingCapTest)
+
 # ToneWarpShelf — base-rate tone-stack top-octave warp correction (Gap C, V1L/V2). Header-only,
 # <cmath> only (no chowdsp/JUCE). Gates the 48k correction curve, fs-scaling, and (L-003) non-no-op.
 add_executable(ToneWarpShelfTest tests/ToneWarpShelfTest.cpp)

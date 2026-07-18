@@ -189,6 +189,17 @@ public:
         par.wdf.a = par.wdf.b = 0.0;
     }
 
+    // Drive the stage with an ALREADY-COMPUTED input current. The V1L/V2 DRIVE module uses this: its
+    // stage-B input is not a bare resistor but a series R+C (the C4/C8 coupling cap), so the current is
+    // frequency-dependent and is computed by a SeriesRcCurrent one-port instead of vIn/Rin.
+    inline double processCurrent(double ig) noexcept
+    {
+        src.setCurrent(ig);
+        zener.incident(par.reflected());
+        par.incident(zener.reflected());
+        return -wdft::voltage<double>(zener);
+    }
+
     inline double process(double vIn) noexcept
     {
         src.setCurrent(vIn * oneOverRin); // Ig into the virtual ground

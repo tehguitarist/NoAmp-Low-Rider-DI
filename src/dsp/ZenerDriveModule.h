@@ -26,8 +26,24 @@
 // only sets how hard the (already mid-scooped) signal hits that clamp — the "SansAmp" character.
 //
 // SCOPE: models the LINEAR small-signal gain, the stage-A op-amp RAIL clip (railA), the stage-B
-// zener clip, and the Cj HF rolloff. The sub-audio coupling HPs (C28/C8 2.2u -> < ~7 Hz corners) are
-// NOT modelled — they sit far below the band and the chain already carries DC blocks.
+// zener clip, the Cj HF rolloff, and BOTH inter-stage coupling caps (C28/C8 on V1L, C22/C4 on V2).
+//
+// THE COUPLING CAPS ARE NOT OPTIONAL — Gap D, 2026-07-19. They were excluded here for a year on the
+// argument that their corners "sit far below the band" (V2 1u into 10k = 15.9 Hz; V1L 2.2u = 7.2 Hz).
+// That is a LINEAR argument and it does not bind on a CLIPPING stage. What matters inside a clipping
+// loop is not the corner but the IN-CYCLE behaviour: a flat-topped (rail- or zener-clipped) wave
+// driving a series RC into a virtual ground has its flat top TILTED, which removes harmonic content
+// AND fundamental together — gain reduction with FEWER harmonics, i.e. exactly the memory effect the
+// captures show. The evidence (gap-audit §D, three independent probes):
+//   - The pedal's LF anomaly (compression MATCHED to ours, THD ~5 dB lower — impossible for any
+//     memoryless element) appears on V1L and V2 and is COMPLETELY ABSENT on V1E (0/3 at both
+//     anchors), and V1E is the one revision with no zener module and hence no such caps.
+//   - The reach tracks the cap sizes: V2's 1u (tau ~10 ms) => LF only; V1L's 2.2u (tau ~22 ms) =>
+//     reaches up to 440 Hz. Three revisions, three predictions, three matches — nothing fitted.
+// This is a RESTORED SCHEMATIC COMPONENT (netlists.md L4/V4), not a calibration layer: the values
+// are the schematic's and are not free parameters. Gated by ZenerCouplingCapTest (L-003).
+// ⚠ Do NOT generalise this into re-modelling every coupling cap in the pedal — the argument only
+// applies to caps INSIDE the clipping loop.
 //
 // STAGE-A RAIL CLIP (added with the OS/ADAA pass): IC100A's output (the pot wiper V_w) is an op-amp
 // output and saturates at the +-4.2 V supply rails (rail-to-rail TLC2262; VCOM 4.2 V per CLAUDE.md
@@ -51,6 +67,58 @@
 
 namespace nalr
 {
+// A series R+C driven by a voltage source and terminated in an op-amp VIRTUAL GROUND, returning the
+// CURRENT it injects into that node — the shape both module stages' inputs actually have
+// (netlists.md V4: "U1A.out —R12— C22— nD(-)" and "VR13.b —C4— R15— nX(-)"). Without the cap this
+// degenerates to the plain v/R the module used before.
+//
+// Read the current off the RESISTOR port, never the source port: a source port's waves are scheduled
+// one sample apart from the rest of the tree, so probing it mixes v[n] and v[n-1] into a spurious
+// 2-point average that reads as an innocent-looking top-octave droop (dsp.md, "use only PASSIVE
+// ports"). Sign is gated in ZenerCouplingCapTest against the analytic i = v/(R + 1/(sC)).
+class SeriesRcCurrent
+{
+public:
+    void setValues(double R, double C)
+    {
+        c.setCapacitanceValue(C);
+        r.setResistanceValue(R);
+    }
+
+    void setResistance(double R) noexcept { r.setResistanceValue(R); }
+
+    void prepare(double fs)
+    {
+        c.prepare(fs);
+        reset();
+    }
+
+    void reset() noexcept
+    {
+        c.reset();
+        r.wdf.a = r.wdf.b = 0.0;
+        ser.wdf.a = ser.wdf.b = 0.0;
+        vs.wdf.a = vs.wdf.b = 0.0;
+    }
+
+    inline double process(double v) noexcept
+    {
+        vs.setVoltage(v);
+        vs.incident(ser.reflected());
+        ser.incident(vs.reflected());
+        // NEGATED: the resistor port's current is defined into the element from the adaptor, which is
+        // the opposite of the current flowing OUT of the source and into the virtual ground. Verified
+        // 180 deg out against the analytic i = v/(R + 1/(sC)) before this flip; gated in the test.
+        return -wdft::current<double>(r);
+    }
+
+private:
+    wdft::ResistorT<double> r{10.0e3};
+    wdft::CapacitorT<double> c{1.0e-6};
+    wdft::WDFSeriesT<double, decltype(r), decltype(c)> ser{r, c};
+    wdft::IdealVoltageSourceT<double, decltype(ser)> vs{ser};
+};
+
 // Constants that differ between the CH34-9 (V1L) and CH40 (V2) module respins.
 struct ZenerDriveParams
 {
@@ -59,6 +127,8 @@ struct ZenerDriveParams
     double Rpot; // DRIVE pot value (100k both)
     double R17;  // stage-B input series R (V1L R17 10k / V2 R15 10k)
     double Rf;   // stage-B feedback R (V1L R102 220k / V2 R903 220k)
+    double CinA; // stage-A input coupling cap (V1L C28 2.2u / V2 C22 1u) — SCHEMATIC, not a fit
+    double CinB; // stage-B input coupling cap (V1L C8 2.2u / V2 C4 1u)  — SCHEMATIC, not a fit
     double Cj;   // zener pair effective junction capacitance (fit; sets §4 HF rolloff)
     double Vz;   // zener breakdown voltage
     double Vf;   // forward drop
@@ -78,12 +148,16 @@ public:
         prm = p;
         // Static stage-B feedback network (Rf/Cj/zener). Rin is a placeholder here; setDrive() sets it.
         clipB.setParams(prm.R17 + prm.Rpot, prm.Rf, prm.Cj, prm.Vz, prm.Vf, prm.Vzt, prm.Iref, prm.m);
+        couplingA.setValues(prm.R23, prm.CinA);
+        couplingB.setValues(prm.R17 + prm.Rpot, prm.CinB); // R is a placeholder; setDrive() sets it
         setDrive(drive01);
     }
 
     void prepare(double fs)
     {
         clipB.prepare(fs); // re-discretises Cj at fs
+        couplingA.prepare(fs);
+        couplingB.prepare(fs);
         railA.reset();
         setDrive(drive01);
     }
@@ -92,6 +166,8 @@ public:
     {
         railA.reset();
         clipB.reset();
+        couplingA.reset();
+        couplingB.reset();
     }
 
     // Stage-A op-amp rail saturation. Defaults to +-4.2 V (RailClip's own default = the locked VCOM);
@@ -115,13 +191,21 @@ public:
         drive01 = drive01_;
         const double Rwa = drive01 * prm.Rpot;
         const double Rwb = (1.0 - drive01) * prm.Rpot;
-        gainAmag = (prm.R25 + Rwa) / prm.R23; // |stage-A gain|
-        clipB.setInputResistance(Rwb + prm.R17);
+        RfeedbackA = prm.R25 + Rwa;           // stage-A feedback leg (pure R — netlists.md L4/V4)
+        gainAmag = RfeedbackA / prm.R23;      // |stage-A gain| ABOVE the CinA corner (reported/gated)
+        RinB = Rwb + prm.R17;                 // stage-B input series R, in series with CinB
+        couplingB.setResistance(RinB);        // R only — CinB is fixed, set once in setParams()
+        clipB.setInputResistance(RinB);       // kept in sync for thresholdVolts()/legacy callers
     }
 
-    // Net non-inverting: V_w = -gainAmag*vIn (stage A inverting), rail-clamped at the op-amp supply,
-    // then clipB (stage B) inverts again and clamps at the zener.
-    inline double process(double vIn) noexcept { return clipB.process(railA.process(-gainAmag * vIn)); }
+    // Net non-inverting: stage A is inverting (V_w = -Rf_A * Ig_A, Ig_A the current the R23+CinA
+    // coupling network injects into its virtual ground), rail-clamped at the op-amp supply; stage B
+    // inverts again — its input current comes through CinB + (Rwb+R17) — and clamps at the zener.
+    inline double process(double vIn) noexcept
+    {
+        const double vw = railA.process(-RfeedbackA * couplingA.process(vIn));
+        return clipB.processCurrent(couplingB.process(vw));
+    }
 
     double thresholdVolts() const noexcept { return clipB.thresholdVolts(); }
     double stageAGain() const noexcept { return gainAmag; }
@@ -132,15 +216,17 @@ public:
         // Cj 220 pF: the pair's two junction caps in series ~= half a DZ23 device (~450 pF) -> ~225 pF
         // (dsp.md's "~100-225 pF" range). Its ~3.3 kHz corner (< V1E's C28 ~4.8 kHz) is what makes V1L
         // roll off MORE at the top than V1E (FR §4 / §1). Fit parameter -- refine vs captures (Phase 10).
-        return {/*R23*/ 10.0e3,   /*R25*/ 22.0e3, /*Rpot*/ 100.0e3, /*R17*/ 10.0e3, /*Rf*/ 220.0e3,
-                /*Cj*/ 220.0e-12, /*Vz*/ 3.3,     /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
+        return {/*R23*/ 10.0e3,     /*R25*/ 22.0e3,    /*Rpot*/ 100.0e3, /*R17*/ 10.0e3, /*Rf*/ 220.0e3,
+                /*CinA(C28)*/ 2.2e-6, /*CinB(C8)*/ 2.2e-6,
+                /*Cj*/ 220.0e-12,  /*Vz*/ 3.3,        /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
                 /*m*/ 0.0}; // symmetric until fit against V1L captures (Phase 10)
     }
 
     // The CH40 (V2) respin. netlists.md V4: R12/R14/R15/R903 sit in the CH34-9's R23/R25/R17/Rf roles
     // with numerically IDENTICAL values (10k/22k/100k pot/10k/220k) -- min/max gain matches FR §4's
     // V2 column (+12.9/+48.6 dB, same as V1L, cross-validated in ZenerDriveModule.h's header comment).
-    // Only the un-modelled sub-audio coupling caps (2.2u -> 1u, C4 vs C8) and the zener package
+    // Only the inter-stage coupling caps (2.2u -> 1u, C22/C4 vs C28/C8 — modelled since Gap D) and the
+    // zener package
     // (BZB984-C3V3 vs DZ23C3V3, same nominal 3.3 V back-to-back topology) differ.
     // ASYMMETRY (m) FIT — Phase 10, 2026-07-13: the V2 captures show even harmonics (H2 ~ -47 dB, H4
     // ~ -56 dB re fundamental) that a symmetric pair produces at the numerical floor. A per-polarity
@@ -163,15 +249,18 @@ public:
     // is NOT the zener knee — it is elsewhere in the V2 signal chain.
     static ZenerDriveParams v2Params()
     {
-        return {/*R12*/ 10.0e3,   /*R14*/ 22.0e3, /*Rpot*/ 100.0e3, /*R15*/ 10.0e3, /*R903*/ 220.0e3,
-                /*Cj*/ 10.0e-12,  /*Vz*/ 3.3,     /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
+        return {/*R12*/ 10.0e3,    /*R14*/ 22.0e3,   /*Rpot*/ 100.0e3, /*R15*/ 10.0e3, /*R903*/ 220.0e3,
+                /*CinA(C22)*/ 1.0e-6, /*CinB(C4)*/ 1.0e-6,
+                /*Cj*/ 10.0e-12,  /*Vz*/ 3.3,       /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
                 /*m*/ 0.015};
     }
 
 private:
     ZenerDriveParams prm = v1LateParams();
-    double drive01 = 0.5, gainAmag = 4.4;
+    double drive01 = 0.5, gainAmag = 4.4, RfeedbackA = 44.0e3, RinB = 60.0e3;
+    SeriesRcCurrent couplingA;    // R23 + CinA into stage-A virtual ground
     RailClip railA;               // stage-A op-amp rail saturation on the wiper node V_w
+    SeriesRcCurrent couplingB;    // (Rwb+R17) + CinB into stage-B virtual ground
     ZenerFeedbackClipper<> clipB; // stage-B zener-pair clip
 };
 } // namespace nalr

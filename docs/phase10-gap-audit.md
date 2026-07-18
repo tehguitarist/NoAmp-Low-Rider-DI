@@ -1269,7 +1269,42 @@ interaction effect into fixed component values that are individually schematic-f
 
 ---
 
-## D: V2 zener drive tracking — ⭐ UNPARKED 2026-07-18, NOW THE TOP THD TASK (clean metric available)
+## D: V2 zener drive tracking — STILL OPEN; the coupling-cap mechanism was REFUTED 2026-07-19
+
+> **⚠ HEAD OF SECTION, READ FIRST (2026-07-19).** This section's investigation converged on
+> "the CH34-9/CH40 module's inter-stage coupling caps are the unmodelled memory element" and marked
+> it DECIDED/ACTIONABLE. **It was implemented and it is REFUTED.** `analysis/gapd_coupling_gate.py`
+> renders every capture twice from one binary (production vs `--zener-cin 1e3`, an AC short that
+> reproduces the pre-change model) and measures the target metric directly:
+>
+> | | required | measured |
+> |---|---|---|
+> | V2 @110 Hz mean \|dTHD\| improvement (n=5) | ~5 dB | **0.11 dB** (6.87 → 6.76) |
+> | isolated module, dTHD @110 Hz | ~5 dB | **0.00 dB** |
+> | V1E bit-identical control | PASS | **PASS** |
+>
+> The null is trustworthy: the ablation flag demonstrably changes the render (L-009), and the
+> V1E control — which has no such caps — is bit-identical as required.
+>
+> **Why it failed:** the "flat top tilts through a series RC" picture is the open-circuit droop of a
+> **disconnected** cap. The op-amp (−) input is a virtual ground, so there is always a resistive
+> return and the network is a plain LTI highpass: **|H| = 0.990 at 110 Hz** (corner 15.9 Hz), 0.999
+> at 440 Hz. A 0.99-gain linear filter cannot shed 5 dB of harmonics — and the harmonics sit further
+> above the corner than the fundamental does. The cross-revision "reach tracks cap size" pattern was
+> matching on component PRESENCE, not on any computed magnitude. See CLAUDE.md **L-010**.
+>
+> **The caps are KEPT** — schematic-faithful (netlists.md L4/V4), in-band transparent, and they fix a
+> genuine error: the module previously passed DC through both inverting stages. Gated by
+> `tests/ZenerCouplingCapTest` (shorted-cap control asserted to fail the same check).
+>
+> **What remains true:** the anomaly itself. On V1L/V2 the pedal shows ~5 dB fewer harmonics at
+> LF *at matched compression* (|dCmp| < 1.5 dB) — impossible for a memoryless element — and V1E
+> shows nothing (0/3 at both anchors). The mechanism must be **nonlinear or level-dependent**; a
+> linear element anywhere in the chain is excluded, both by `gapd_finding4_orders.py` (a uniform
+> offset across 330–770 Hz cannot be a filter) and now by direct measurement of the specific linear
+> candidate. Everything below is the (still-valid) characterisation plus the (dead) conclusion.
+
+### Original section (characterisation valid; the coupling-cap conclusion is superseded above)
 
 ### D — RULE-OUT RE-CHECK DONE 2026-07-18: all three SURVIVE, but the framing was wrong
 

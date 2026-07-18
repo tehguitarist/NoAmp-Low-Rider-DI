@@ -23,3 +23,4 @@ analysis/reports/
 
 # Kilo local agent state (worktrees + node_modules)
 .kilo/
+Testing/
