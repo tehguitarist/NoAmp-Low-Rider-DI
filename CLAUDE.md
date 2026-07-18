@@ -122,15 +122,34 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-18).** All work is on **`main`**.
+> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-19).** All work is on **`main`**.
 > **Read the "📋 GAP STATUS AT A GLANCE" table and the "⛔ CAPTURE MATRIX IS FINAL" block below FIRST**
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
+>
+> **⭐ START HERE — GAP D HAS AN ACTIONABLE, UN-IMPLEMENTED CONCLUSION. Read the "✅ GAP D — DECIDED
+> 2026-07-19. ACTIONABLE." block a few pages below (search for that heading) before doing anything
+> else on this pedal.** Short version: `ZenerDriveModule`'s inter-stage coupling caps (V2 `C22 1u` +
+> `C4 1u`; V1L `C28 2.2u` + `C8 2.2u`; netlists.md V4/L4) are schematic components that were
+> deliberately left OUT of the WDF model (`ZenerDriveModule.h:29`) on a linear "sits far below the
+> band" argument that does not hold for a clipping stage. Three independent capture-derived probes
+> this session (`gapd_compression_fr.py`, `V2ClipLocusProbe.cpp`, `gapd_sag_discriminator.py`) show
+> the pedal's zener-module revisions (V1L, V2) have a memory effect at LF that V1E — which has NO
+> zener/module at all — completely lacks, and the effect's frequency reach tracks the two modules'
+> cap sizes exactly (V2's smaller 1u ⇒ LF-only; V1L's larger 2.2u ⇒ reaches to 440 Hz). **NEXT
+> ACTION: add these caps as real WDF elements inside `ZenerDriveModule`, gated so the test FAILS if
+> they're removed (L-003) and V1E stays bit-identical (it has none).** Full gate spec, the numeric
+> evidence table per revision, and two corrected mistakes from this session's own probes (a verdict
+> rule that initially gave the wrong answer, and an overstated-by-~4dB headline number) are in the
+> gap-audit block. This is a **schematic restoration, not a calibration fudge** — the six
+> artificial-correction guardrails do not apply here.
+>
 > **Last change: Gap H error 1 FIXED (R48/R49 33k→22k, §1-match override, commit 4eafd33), 23/23
 > green, reports regenerated.** ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
 > that used to sit here was OVERTURNED — it rested on a §1 target that had been edited to the model's
 > value (L-001) and on splitting two summing causes. Do not restore it.
-> **IN PROGRESS: Gap D — V2 zener drive tracking** (then V1L). **Rule-out re-check DONE 2026-07-18:
+> **Gap D history below (for context only — the ⭐ block above supersedes the historical
+> "IN PROGRESS" framing that follows).** Rule-out re-check DONE 2026-07-18:
 > Vzt/Cj/m all SURVIVE the clean metric ⇒ the cause is NOT the zener knee params. Do not re-scan them.**
 > (Vzt=0.20 is now an INTERIOR minimum — the old sweep was one-sided 0.20→0.60, a boundary non-result;
 > Cj and m are *structurally invisible* to a THD-vs-level metric — an HF shunt and an even-harmonic-only
@@ -326,15 +345,114 @@ without images.
 >
 > Ordered. Each item names its tool and its gate. Read gap-audit §D before 1–3.
 >
-> **1. Gap D MIDBAND — the biggest audible, well-supported error. DO THIS FIRST.**
-> `110 Hz +5.3 dB too HOT | 440 Hz −5.6 | 1 kHz −4.3 dB too COLD` (30–38% absolute THD, V2 D0.90).
-> **440 Hz only became available on 2026-07-19** — it was excluded by folklore (the bridged-T trap is
-> V1E-only; V2 deleted that network) and it is one of the largest errors in the band.
-> *Constraint that shapes the search:* the error **flips sign across frequency**, so no single scalar
-> or clamp parameter can fix it (dsp.md tell-tale) — and Vzt/Cj/m/post-blend-clipping are all now
-> eliminated. Look at **frequency-dependent behaviour of the drive stage** (what makes the pedal
-> distort MORE at 440 Hz/1 kHz but LESS at 110 Hz than we do). Tool: `gapd_anchor_map.py`.
-> Gate: improve 440/1k without regressing 110/220 or the FR shape rms.
+> **1. Gap D MIDBAND — ATTACKED 2026-07-19 with a new Gap-G-immune metric. Read gap-audit §D
+> "THE MIDBAND, ATTACKED WITH A GAP-G-IMMUNE METRIC" before touching this.** New tool:
+> `analysis/gapd_compression_fr.py` — **COMPRESSION vs FREQUENCY**, `gain_driven(f,L) −
+> gain_clean(f)` read WITHIN one file, so it is immune to Gap G (a notch cuts driven and clean
+> equally ⇒ cancels — **800 Hz is a usable anchor at last**), to L-005, and to the post-blend
+> headroom trap. Four findings:
+> - **NO CLIP-FREE SEGMENT EXISTS AT V2 D0.90.** The control (−36 vs −30, must be ~0) reads **5.2 dB
+>   pedal / 4.4 dB plugin** — the −30 "clean" sweep is ITSELF compressed. ⇒ **any metric using the
+>   clean sweep as a linear baseline is contaminated at high drive.** Use the baseline-free
+>   `dGain = gain(−6) − gain(−18)` (0 = linear, −12 = hard clamp).
+> - **THE CLIP DEPTH MATCHES EVERYWHERE IT CAN BE MEASURED.** `dGain` delta at D0.90 is **zero
+>   (±0.7 dB) at every frequency except 620/800 Hz (+5.5/+6.0)** — because everywhere else BOTH are
+>   deep in clamp, so the metric is **saturated and blind**. The notch is the ONLY band near the clip
+>   threshold ⇒ the only band with measuring power, and there **the pedal's clip node is ~6 dB hotter
+>   than ours**. (Durable trick: to measure clip-node drive on a clamping chain, read it IN a notch.)
+> - **At D0.50 (control PASSES) the deficit is broad: ~0 below 310 Hz, +2 to +3.5 dB from 440 Hz up.**
+>   ⇒ our clip node is **2–6 dB too cold from ~440 Hz up, correct at LF** — a PRE-DRIVE shaping
+>   error (twin-T shape / PRESENCE / drive gain), not a clip-element one.
+> - ⚠ **FINDING 4 — AN UNEXPLAINED ANOMALY; FIT NOTHING UNTIL IT IS RESOLVED.** For a memoryless
+>   nonlinearity, (compression, THD) must lie on ONE curve. **The pedal's does not:** identical
+>   dGain (−10.4 dB) at 110 Hz and 440 Hz with THD **12.0% vs 38.5%**. The pedal removes the
+>   harmonics of a 110 Hz fundamental (220–770 Hz) far more than we do, **downstream of the clip**.
+>   **This reframes the "110 Hz too HOT" headline** — we do not over-drive at 110; the pedal's
+>   220–770 Hz harmonic content is attenuated post-clip and ours is not. No modelled element does
+>   this (MID is gated; the twin-T is unambiguously pre-drive) ⇒ same shape as H err2: **every stage
+>   passes its own gate, the composite is wrong — suspect the INTERACTION or an unmodelled element.**
+>
+> **FINDING 4 IS NOW RESOLVED (2026-07-19) — AND IT REFRAMES GAP D. See gap-audit §D "FINDING 4
+> RESOLVED".** Two capture-free probes: `tests/V2PostClipProbe.cpp` (standalone, no JUCE) +
+> `analysis/gapd_finding4_orders.py`.
+> - **POST-CLIP FILTERING IS REFUTED.** The real post-clip chain's harmonic survival ratio
+>   `R_post(f) = G(2f) − G(f)` is FLAT across the midband (−1.7 @110 … −2.2 @1k), giving
+>   `R_post(110) − R_post(440) = +0.74 dB` where the pedal implies **−10.1**. Nothing modelled
+>   downstream of the clip does this.
+> - **The MID-orientation candidate was tested and is INSUFFICIENT** — mirroring gets only −2.57 dB
+>   of the ~10.8 needed. **Do not flip MID on this evidence.** ⚠ But note the real hole it exposed:
+>   `V2MidStage::setMid`'s orientation is an explicitly unpinned judgement call and **§7 gates
+>   magnitude + shift ratio but NOT direction**, so an inverted MID would pass every existing gate.
+> - **THE PLUGIN IS TEXTBOOK MEMORYLESS AND THE PEDAL IS NOT.** Per-order at D0.90: our odd orders
+>   are near-identical at 110 vs 440 Hz (H3 −14.1/−14.7, H5 −21.5/−22.4, H7 −26.2/−29.4) — equal
+>   compression ⇒ equal harmonics, exactly as theory demands. The **pedal's** 110 Hz deficit is
+>   **UNIFORM across every odd order (−9.7 / −11.7 / −9.5 dB)**, and a uniform offset across
+>   330–770 Hz **cannot be a filter**. ⇒ **the pedal's drive stage has frequency-dependent MEMORY
+>   we do not model** (present at 110 Hz, gone by 440): it compresses the fundamental ~10.4 dB while
+>   generating ~10 dB fewer harmonics.
+> - ⚠ The per-order script's own headline classifier **was not diagnostic and said so** (both
+>   anchors read "SHAPED"); the finding comes from the odd/even structure instead. Do not quote the
+>   classifier.
+>
+> **FINDING 4 SURVIVED ITS OWN PREMISE CHECK AND IS NOW QUANTIFIED (2026-07-19).** New tool
+> `tests/V2ClipLocusProbe.cpp` (standalone). The hole that had to be closed first was written down
+> in this very investigation: **Finding 2 says `dGain` SATURATES deep in clamp** — if 110 and 440 Hz
+> were both saturated, "equal dGain" would prove nothing and Finding 4 would collapse with no memory
+> required. Tracing the model's own drive stage through the `(dGain, THD)` plane (control PASSES: the
+> 110/440 loci coincide to 0.01 dB) settles it:
+> - **`dGain` is NOT saturated at −10.4 dB** (locus still climbing, THD 33.8% → 41.3% asymptote) ⇒
+>   **the metric IS informative at the pedal's operating point. Hole closed.**
+> - **Memoryless locus: `dGain` −10.3 ⇒ THD 33.8%.** The pedal's **440 Hz point lands ON it**
+>   (−10.3, 38.5%) — nothing anomalous there. The **110 Hz point is 9.0 dB BELOW it** (−10.4, 12.0%).
+> - ⇒ **THE MECHANISM REQUIREMENT CHANGES.** It is NOT "fewer harmonics at LF". It is **~8.4 dB of
+>   LF-specific, level-dependent gain reduction that is NOT clipping** — present at 110 Hz, absent by
+>   440 Hz, at D0.90. (THD of 12.0% sits at `dGain ≈ −2.0` on the locus; the pedal shows 8.4 dB more
+>   compression than its own harmonic content justifies.)
+>
+> ## ✅ GAP D — DECIDED 2026-07-19. ACTIONABLE. `analysis/gapd_sag_discriminator.py`
+>
+> ⚠ **CORRECTION to the line above: quote ~5 dB, not 9.0/8.4.** Those compared chain-Farina THD
+> against isolated-stage exact-projection THD — two estimators, two signal paths. Like-for-like
+> (pedal vs plugin, same chain, same estimator) it is **~5 dB**. The locus probe's *structure* stands
+> (control passed, `dGain` unsaturated, 440 Hz on-locus, 110 Hz off it); only its magnitude inflated.
+>
+> **THE TEST:** our model is memoryless on all 3 revs, so a THD gap is only anomalous once
+> compression is accounted for. If the pedal compresses much LESS it *should* make fewer harmonics
+> (ordinary); if **compression MATCHES (|dCmp| < 1.5 dB) and THD does not**, that is impossible for
+> a memoryless element. ⚠ The first verdict rule required "pedal compresses MORE" and **missed every
+> V2 row** (they sit at dCmp ≈ 0 with dTHD ≈ −5 dB — already impossible) while flagging V1E's large
+> positive dCmp, which is perfectly ordinary.
+>
+> | rev | @110 Hz | @440 Hz | reading |
+> |---|---|---|---|
+> | **V1E** | **0/3** | **0/3** | every difference FULLY explained by compression |
+> | **V1L** | 2/3 | 2/3 | anomalous at both anchors |
+> | **V2** | **5/5** | 1/5 | anomalous at LF only, at every drive AND every blend |
+>
+> - **SUPPLY SAG IS REFUTED.** V1E runs the **same unregulated supply** and shows **zero** signature
+>   at either anchor, at drives to D1.00 and compression to −9.9 dB (comparable to V2's D0.90). V1E
+>   is quantitatively clean, not merely unflagged: its 4.5 dB compression difference predicts −3.4 dB
+>   of THD on the locus and measures −3.6, with **nothing left over**.
+> - **⇒ THE MECHANISM IS INSIDE THE ZENER DRIVE MODULE** — the only major structure V1L and V2 share
+>   and V1E lacks entirely (V1E has NO clipping devices at all, only rail saturation).
+> - **⇒ THE CAP VALUES PREDICT THE CROSS-REVISION PATTERN.** The module's inter-stage coupling caps
+>   are **NOT MODELLED** (`ZenerDriveModule.h:29`, excluded because they "sit far below the band" —
+>   **a LINEAR argument that does not bind on a clipping stage**). What matters is in-cycle
+>   behaviour, not the corner: a flat-topped wave through a series RC **tilts**, removing harmonic
+>   content *and* the fundamental — gain reduction with fewer harmonics, the exact signature.
+>   V2's **1u** (τ≈10 ms) ⇒ LF only; V1L's **2.2u** (τ≈22 ms) ⇒ reaches higher; V1E none ⇒ nothing.
+>   **Three revisions, three predictions, three matches — nothing fitted.**
+>
+> **⇒ DO THIS: model the module's coupling caps as real WDF capacitors in `ZenerDriveModule`**
+> (V2 C22 1u + C4 1u; V1L C28 2.2u + C8 2.2u — netlists.md V4/L4). This is **restoring a schematic
+> component that was wrongly excluded, NOT a calibration layer** — the artificial-correction
+> guardrails do not apply and the values are not free parameters.
+> **Gate it so it FAILS when the caps are removed (L-003):** V2 @110 ~5 dB less THD **at matched
+> compression** (|dCmp| must stay <1.5 — if compression moves, it is doing something else);
+> V2 @440 ~unchanged; V1L's effect must reach 440 Hz; **V1E bit-identical** (no such caps — any V1E
+> change means the edit leaked). ⚠ Re-check the H2/`m` fit after (same signal path). ⚠ Do NOT
+> generalise this into re-modelling every coupling cap in the pedal — it is about the ones INSIDE
+> the clipping loop only.
 >
 > **2. TOP-OCTAVE DARKNESS — the highest-leverage single item: it closes THREE gaps at once.**
 > The model is **22 dB darker than the pedal at 16 kHz** (V2 D0.90; the ledger's ~6.4 dB median was
