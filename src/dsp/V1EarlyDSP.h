@@ -58,6 +58,19 @@ public:
         // stands. Re-enable via setRecoverySaturation() only with a level anchor to fit against.
         driveRegion.setRecoverySaturation(0.0, 0.25);  // gain 0 = disabled (V1EarlyDriveClipRecovery.h)
         driveRegion.setSaturationOffset(0.0);          // no even-harmonic bias with the saturator off
+
+        // Even-harmonic (H2) restoration via a small ASYMMETRIC rail (fit 2026-07-18,
+        // analysis/v1e_h2_asym_fit.py). Rail-only clipping is symmetric → makes ONLY odd harmonics, so
+        // disabling the saturator (above) left H2 absent (−111 dB vs pedal). V1E has no clip diodes;
+        // its even harmonics are physically the op-amp's asymmetric single-supply saturation (VCOM ≠
+        // exactly VCC/2 from the R31/R32 bias-divider tolerance + input-offset + output-stage
+        // asymmetry). A 0.10 V asymmetry (−4.10/+4.20 vs symmetric ±4.20) nails it: H2 delta −111 → +0.6
+        // dB while H3 (5.6→5.8) and THD (2.07→2.16) stay put — it adds H2 WITHOUT flattening the
+        // THD-vs-level slope the unwind fixed (unlike the tanh). 0.10 V ≈ 2.4% is physically modest and
+        // exactly a VCOM/offset magnitude. JUDGEMENT CALL on the exact value (the FINAL matrix cannot
+        // pin the DC bias independently); the alternative — a slightly different asymmetry source — is
+        // not ruled out, but the H2 fit is unambiguous. V1E only; V1L/V2 keep symmetric ±4.2.
+        driveRegion.setRailVoltages(-4.10, 4.20);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         output.prepare(baseFs);

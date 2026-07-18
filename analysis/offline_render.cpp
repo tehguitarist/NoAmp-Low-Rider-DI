@@ -113,6 +113,9 @@ int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor,
     dsp.prepare(fs, block);
     if (railKnee > 0.0)
         dsp.setRailKnee(railKnee);
+    // ±4.2 = "not specified, keep the DSP's prepare()-time default". NB post-2026-07-18 the V1E default
+    // is ASYMMETRIC (−4.10/+4.20, H2 restore) — so a bare render mirrors the plugin, but passing an
+    // explicit −4.2/4.2 will NOT force V1E symmetric (it reads as unspecified). V1L/V2 default ±4.2.
     if (railVNeg != -4.2 || railVPos != 4.2)
         dsp.setRailVoltages(railVNeg, railVPos);
     // NB: the guard is "was the flag SPECIFIED", not "is the value non-zero". It used to read

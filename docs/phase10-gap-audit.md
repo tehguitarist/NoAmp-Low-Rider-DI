@@ -587,12 +587,17 @@ onset — so the tractable, capture-based part was taken and the rest documented
   pedal (v1e_unwind_fr.py: D1.00 FR SHAPE 5.71 → 1.68). Odd harmonics (H3) median 12.5 → 7.0.
 - **V1L/V2 unchanged** — byte-identical renders (their kInputRef default is still 1.3; the driveEndR
   sentinel and V1E saturator only touch V1E).
-- **⚠ RESIDUAL 1 — EVEN HARMONICS (H2) now ABSENT.** Disabling the saturator removed its `offset`
-  (V1E's only H2 source); the symmetric rail clip makes only ODD harmonics. H2 went from +21.8 dB (too
-  hot) to −110 dB (absent), pushing the harmonic-magnitude median 12.0 → 48.8 (the whole regression is
-  H2). **FIX QUEUED:** a small ASYMMETRIC rail (railVNeg≠railVPos — already supported) generates H2
-  WITHOUT flattening the THD slope (unlike the tanh); V1E has no clip diodes, so its even harmonics are
-  physically the op-amp's asymmetric single-supply saturation. Next commit.
+- **RESIDUAL 1 — EVEN HARMONICS (H2) — RESTORED 2026-07-18 (asymmetric rail).** Disabling the
+  saturator had removed its `offset` (V1E's only H2 source); the symmetric rail makes only ODD
+  harmonics, so H2 went absent (−110 dB, median 12.0 → 48.8). FIXED via a small rail asymmetry
+  (`setRailVoltages(−4.10, +4.20)` in V1EarlyDSP, fit by `analysis/v1e_h2_asym_fit.py`): a 0.10 V offset
+  restores H2 (delta −111 → +0.6 dB) while H3 (5.6→5.8) and THD (2.07→2.16) stay put — it adds H2
+  WITHOUT flattening the slope (unlike the tanh). V1E has no clip diodes, so this is physically the
+  op-amp's asymmetric single-supply saturation (VCOM≠VCC/2, output-stage offset); 0.10 V is a modest,
+  plausible bias magnitude (JUDGEMENT CALL on the exact value). **Result: V1E harmonic median 48.8 →
+  6.5 dB — better than the pre-unwind 12.0.** Residual: a FIXED asymmetry can't track drive-dependent
+  H2 (D0.50 slightly hot +10 dB, D1.00 slightly cold −15) — best-effort, no level anchor to fit a
+  drive-dependent bias against. FR (1.71) and THD onset unchanged; V1L/V2 keep symmetric ±4.2.
 - **RESIDUAL 2 — onset floor.** Rail-only makes ~0% THD at very low drive/level where the pedal makes
   ~0.42% (crossover); no memoryless clip reproduces the 24.5 dB D0.50 swing (proto_v1e_nonlin.py).
   Best-effort; the FINAL matrix has no level anchor to fit a cascade against.
