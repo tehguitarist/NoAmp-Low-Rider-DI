@@ -366,6 +366,36 @@ V1L D=0.40 (BL=0.30, P=0.65, B=0.40, T=0.40):
 
 See `analysis/gapb_drive_fr_scan.py` for the measurement tool.
 
+### B — the "linear 3-4 kHz error on all revisions" is REFUTED; it was a PRESENCE confound (2026-07-18)
+
+The drive-FR scan ran at each capture's own **P=0.50** and never controlled for PRESENCE, which is a
+swept HF-emphasis corner sitting right in this band (§3: peak migrates 864->4829 Hz, +16.7 dB @ 4.8
+kHz at mid). `analysis/gapb_linear_3to4k.py` re-measures the full-wet 3-4 kHz FR at §1's OWN settings
+(P=0 D=0 BL=1.00 tones flat), self-normalised to each revision's 40-300 Hz passband, vs the §1
+"high bump" target (re own passband = §1 high_bump − §1 low_bump: V1E +0.5, V1L −1.0, V2 −7.0):
+
+```
+rev   3-4k @ P=0   vs §1 target   linear excess   PRESENCE adds (P=0->0.50)
+V1E     +0.42        +0.5           -0.08            +4.62
+V1L     -2.39        -1.0           -1.39            +4.78
+V2      -4.04        -7.0           +2.96            +4.69
+```
+
+- **There is NO shared linear recovery-LPF/tone-stack error.** At P=0, V1E is dead-on §1 (−0.08 dB)
+  and V1L is within tolerance (−1.4). The scan's "+5.7 dB on all revisions" was **~+4.7 dB of
+  PRESENCE** (near-identical on all three) plus a V2-only residual.
+- **The +4.7 dB PRESENCE contribution is FAITHFUL to SPICE §3** (already established under Gap H
+  error 2, `v1l_presence_s3_check.py`). So the pedal capture reading only +0.1 dB at 3-4 kHz at
+  P=0.50 (scan) is a **capture-vs-SPICE disagreement — the same unarbitrable class as Gap H error 2**,
+  NOT a fixable stage error. Do not retune the presence cell against it; the matrix is FINAL. (It is
+  a swept corner too — dsp.md forbids prewarping it.)
+- **The one real, actionable, capture-free piece is V2's ~+3 dB excess vs §1 at 3 kHz** — its
+  recovery pre-LP (R47 10k / C42 10n, the V2-only corner §1 attributes the HF loss to) under-
+  attenuates. ⚠ This overlaps **Gap C** (V2 HF, closed best-effort via ToneWarpShelf) and the already-
+  tuned C15=8.2n/C17=1.8n recovery caps — touching V2 recovery risks regressing both. +3 dB is within
+  a couple dB of §1's ±⅓-oct / "normalised its own way" uncertainty, so it is borderline. Decide
+  before acting; do NOT fit V2 recovery caps against this alone.
+
 ---
 
 ## G: THD-vs-FREQUENCY IS NOT A USABLE METRIC ON THIS PEDAL (NEW, 2026-07-17)
@@ -703,6 +733,39 @@ Neither the tanh nor the rail produces THIS shape at any input scaling.
 crossover deadzone/threshold (or a piecewise-linear model with a small-signal deadband). Adjusting
 kInputRef, kDriveEndR, or the saturator knee/gain cannot produce the threshold behavior.
 See `analysis/thd_level_probe.py` for the measurement tool.
+
+### I — Python PROTOTYPE of the "do both" fix: static redesign is INSUFFICIENT, and it is NOT the taper (2026-07-18)
+
+Before committing to a C++ nonlinearity redesign, `analysis/proto_v1e_nonlin.py` fit candidate
+memoryless nonlinearities (tanh; sharp soft-knee; soft-knee + crossover dead-zone) offline against the
+V1E THD@110Hz grid, using the probe's **offset-free SLOPE metric** (k moves the offset; shape sets the
+slope — so this isolates the shape question from the level anchor we don't have). Two runs:
+
+- **Schematic drive taper:** every model floors at SHAPE err ~5.4–5.9 dB, **~9 dB of it at D=0.50**.
+  The pedal's D=0.50 THD swings **24.5 dB** across the −18→−6 dBFS range (0.42→7.03%); no static model
+  exceeds ~3 dB of swing there. (D=1.00 is fine — nearly flat, and a clip plateaus in saturation, so
+  the earlier "static can't make D=1.00's DECLINE" claim is **overstated**: the decline is only 1.8 dB
+  and the models match it to 0.78 dB. The real wall is the D=0.50 ONSET, not the D=1.00 tail.)
+- **Free per-drive gain (`--free-taper`):** replacing the schematic taper with a free operating gain
+  per drive **does not rescue it** — SHAPE err stays 5.4–5.9 dB, D=0.50 still ~9 dB off. **So the
+  obstacle is the nonlinearity SHAPE, not the DRIVE TAPER** (this refutes the L-008-unwind option-2
+  hope that a taper-shape fit would close it).
+
+**⇒ Refinement of the "crossover deadzone/threshold" implication above: that is NOT sufficient either.**
+A crossover dead-zone produces THD that FALLS with level (fixed kink / growing fundamental), the
+opposite of D=0.50's steep RISE; a threshold clip's onset is too gentle to swing 24.5 dB over 4× level.
+The onset needs BOTH mechanisms superposed AND likely the actual cascade (presence-stage + drive-stage
+rail clips with the inter-stage twin-T pre-distorting/filtering) — a structural circuit-fidelity change,
+not a saturator swap. And pinning any of it still needs the level anchor that is permanently gone.
+
+**Prototype caveats (it is suggestive, not conclusive):** standalone crude model — one anchor freq
+(110 Hz), approximate analytic post-drive harmonic weight (~430 Hz bridged-T only), takes the audit's
+THD grid as ground truth (the 0.42% @−18 anchor is low enough to carry some estimator-floor risk, L-002),
+and does NOT model the multi-stage cascade. A conclusive test would require modeling the cascade — which
+is the very C++ build this prototype was meant to de-risk. **Verdict: do NOT proceed to the DSP redesign
+on the current evidence** — the clean "do both" fix cannot be pinned on the data we have, and the
+realistic outcome is either (a) accept V1E's THD onset as documented best-effort, or (b) a larger
+structural cascade redesign that is still level-anchor-limited and carries real L-008 stack-rebuild risk.
 
 ---
 
