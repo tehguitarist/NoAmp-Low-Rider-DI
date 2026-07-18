@@ -130,7 +130,9 @@ without images.
 > green, reports regenerated.** ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
 > that used to sit here was OVERTURNED — it rested on a §1 target that had been edited to the model's
 > value (L-001) and on splitting two summing causes. Do not restore it.
-> **Next actionable item: Gap H error 2** (~19 dB, dominant, likely best-effort). Then Gap C, Gap J+E.
+> **Next actionable item (2026-07-18): Gap J+E** (V1L 285 Hz phase notch + V2 BASS hump — ONE confounded
+> item). Gap C is ✅ CLOSED (ToneWarpShelf). Gap H err2 is exhausted (last mechanism ruled out) → §1
+> graph-edge re-read or CLOSE best-effort.
 > Gap I and Gap D are DEFERRED (blocked on the external kInputRef question, not on effort).
 > **Gap H error 2 OPEN** — the ~17 dB capture-only top-octave deficit. The ISOLATED PRESENCE
 > cell matches §3 (+27.5 dB @ 6–7 kHz per V1LateStagesTest), and the S-K cascade is confirmed
@@ -241,7 +243,7 @@ without images.
 >
 > | Gap | What | Status → next action |
 > |---|---|---|
-> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | **OPEN, the biggest live item.** Not PRESENCE/S-K/corner/compression. **← START HERE.** Likely best-effort (schematic + §1 already satisfied; only the NAM capture disagrees). |
+> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
