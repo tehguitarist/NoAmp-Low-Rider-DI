@@ -189,6 +189,183 @@ D1.00 FR@  60:-2.4 100:-1.5 250:+0.9 430:-1.9  800:-10.8  1500:+3.5  3000:+7.3  
 Same class as **D** (V2 zener drive tracking): saturation that needs drive-dependence. **Answer P6's
 GBW question first** — it may be the same root cause, and solving it once beats twice.
 
+### B — Drive-dependent FR sweep investigation (2026-07-18)
+
+**⚠ These are INVESTIGATION CONCLUSIONS derived from the data below. Re-verify against the raw
+`analysis/gapb_drive_fr_scan.py` output before acting on any of them.**
+
+**Question**: Is the 800 Hz notch fill-in error and 3-4 kHz hump present at ALL drives (linear model
+error) or only above some drive threshold (saturation-caused)? How does the error evolve across
+revisions and BLEND settings?
+
+**Method**: Swept DRIVE 0.05−1.00 on all 11 captures (V1E, V1L, V2), locking non-drive knobs to each
+capture's own settings. Measured FR on the clean sweep (−30 dBFS) via `analyze.transfer()`. Notch
+depth = minimum FR in [600, 1000] Hz band; 3-4 kHz = mean FR in [3000, 4000] Hz; 100 Hz reference
+= FR at 100 Hz (fundamental compression indicator). OS=4x.
+
+**Key findings across all revisions:**
+
+| Band | Finding | Mechanism |
+|------|---------|-----------|
+| 800 Hz notch | Plugin fill-in is **systematically less** than pedal on ALL revisions | Clipping is weaker in model → fewer intermodulation harmonics to fill the notch |
+| 800 Hz notch | Plugin starts with **shallower** notch at low drive (D=0.05: -29 dB vs pedal at D=0.50: -36 dB) | Indicates a linear notch-model error ON TOP OF the saturation error |
+| 3-4 kHz amp | Plugin is too hot **even at D=0.05** where nothing clips (+5.7 dB vs pedal +0.1 dB at D=0.50) | LINEAR FR error: recovery LPF or tone stack is inherently too hot |
+| 3-4 kHz amp | Plugin gain from D=0.50→1.00 = +11.8 dB vs pedal +5.8 dB (2× steeper) | Pedal saturates at 3-4 kHz at moderate drive; plugin doesn't |
+| 100 Hz ref | Plugin compresses LESS than pedal at ALL drives | Rail clip is too weak in the model (consistent with Gap I's finding) |
+| DRIVE threshold | No sharp threshold — errors grow smoothly with drive on all revisions | Not a threshold effect; proportional to drive level |
+
+**Selected data (V1E, BL=1.00, P=0.50, B=0.50, T=0.50):**
+```
+DRIVE   plugin notch  pedal notch  Δnotch  plugin 3-4k  pedal 3-4k  Δ3-4k  plug 100Hz
+0.05    -29.2 dB      —            —       +5.7 dB      —          —      +0.5 dB
+0.50    -26.1 dB      -35.8 dB     +9.7    +9.3 dB      +0.1 dB    +9.2   +4.4 dB
+1.00    -13.8 dB      -11.3 dB     -2.5    +21.1 dB     +5.9 dB    +15.2  +17.2 dB
+```
+The Δ sign FLIPS: at D=0.50 the plugin notch is 9.7 dB SHALLOWER than pedal; at D=1.00 it's 2.5 dB
+DEEPER. The 3-4k Δ grows monotonically with drive (+9.2→+15.2). The 100 Hz ref is always below
+pedal (plugin compresses less).
+
+**Full per-capture data (reproduced from `analysis/gapb_drive_fr_scan.py` output):**
+
+V1E D=0.50 (BL=1.00, P=0.50, B=0.50, T=0.50):
+  PEDAL: notch=-35.8dB @715Hz | 3-4k=+0.1dB | 100Hz=-3.8dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -29.17   715     +5.69   +0.45    —       —       —
+  0.10   -28.93   715     +5.99   +0.78    —       —       —
+  0.20   -28.39   715     +6.66   +1.52    —       —       —
+  0.30   -27.76   715     +7.42   +2.35    —       —       —
+  0.40   -27.02   715     +8.30   +3.31    —       —       —
+  0.50   -26.12   715     +9.34   +4.44    +9.65   +9.20   +8.27
+  0.60   -25.00   715    +10.58   +5.78    —       —       —
+  0.75   -22.67   715    +13.04   +8.45    —       —       —
+  0.90   -18.76   715    +16.78  +12.56    —       —       —
+  1.00   -13.77   715    +21.07  +17.24    —       —       —
+  [fill-in: -28.9 @ D=0.10 → -13.8 @ D=1.00 = +15.2 dB]
+
+V1E D=1.00 (BL=1.00, P=0.50, B=0.50, T=0.50):
+  PEDAL: notch=-11.3dB @674Hz | 3-4k=+5.9dB | 100Hz=+10.8dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -29.17   715     +5.69   +0.45    —       —       —
+  ...same plugin-only sweep as above (knobs are same as D=0.50 capture)...
+  1.00   -13.77   715    +21.07  +17.24    -2.50  +15.19   +6.43
+  [fill-in: -28.9 @ D=0.10 → -13.8 @ D=1.00 = +15.2 dB]
+
+V1E D=0.60 (BL=1.00, P=0.40, B=0.50, T=0.50):
+  PEDAL: notch=-30.6dB @715Hz | 3-4k=+4.0dB | 100Hz=+1.9dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -28.50   715     +6.02   +2.00    —       —       —
+  0.60   -24.42   715    +10.95   +7.35    +6.14   +6.91   +5.42
+  1.00   -13.27   715    +21.62  +18.80    —       —       —
+  [fill-in: -28.3 @ D=0.10 → -13.3 @ D=1.00 = +15.0 dB]
+
+V2 D=0.90 (BL=1.00, P=0.35, B=0.65, T=0.55, M=0.65, MS=500, BS=80):
+  PEDAL: notch=-20.1dB @721Hz | 3-4k=-1.0dB | 100Hz=+6.6dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -36.92   715    -10.35   -5.55    —       —       —
+  0.50   -23.62   715     +3.01   +7.88    —       —       —
+  0.90   -10.26   715    +12.55  +21.09    +9.89  +13.52  +14.49
+  1.00    -3.50   715    +13.71  +25.68    —       —       —
+  [fill-in: -35.0 @ D=0.10 → -3.5 @ D=1.00 = +31.5 dB]
+
+V2 D=0.50 (BL=1.00, P=0.40, B=0.65, T=0.60, M=0.60, MS=1000, BS=80):
+  PEDAL: notch=-35.1dB @715Hz | 3-4k=-3.8dB | 100Hz=-3.9dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -34.78   715     -6.50   -4.62    —       —       —
+  0.50   -21.49   715     +6.86   +8.81   +13.57  +10.68  +12.76
+  1.00    -1.36   715    +16.99  +26.55    —       —       —
+  [fill-in: -32.9 @ D=0.10 → -1.4 @ D=1.00 = +31.5 dB]
+
+V2 D=0.50 (BL=0.90, P=0.40, B=0.50, T=0.60, M=0.50, MS=500, BS=40):
+  PEDAL: notch=-35.4dB @715Hz | 3-4k=-4.9dB | 100Hz=-7.6dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -50.38   604     -5.78   -8.14    —       —       —
+  0.50   -37.87   715     +7.46   +6.09    -2.51  +12.32  +13.68
+  1.00    -2.97   715    +17.55  +24.01    —       —       —
+  [fill-in: -40.4 @ D=0.10 → -3.0 @ D=1.00 = +37.5 dB]
+  ⚠ Notch at D=0.05 actually @604 Hz (shifted — dry path interference at BL=0.90)
+
+V2 D=0.50 (BL=0.95, P=0.40, B=0.35, T=0.75, M=0.40, MS=500, BS=40):
+  PEDAL: notch=-35.9dB @727Hz | 3-4k=-3.0dB | 100Hz=-11.5dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -39.87   662     -1.82  -11.03    —       —       —
+  0.50   -26.85   715    +11.48   +2.77    +9.05  +14.51  +14.25
+  1.00    -2.46   715    +21.60  +20.59    —       —       —
+  [fill-in: -41.8 @ D=0.10 → -2.5 @ D=1.00 = +39.4 dB]
+  ⚠ Notch at D=0.05 @662 Hz (shifted — same dry-path interference at BL=0.95)
+
+V2 D=0.25 (BL=1.00, P=0.30, B=0.65, T=0.75, M=0.70, MS=1000, BS=40):
+  PEDAL: notch=-39.3dB @715Hz | 3-4k=-5.6dB | 100Hz=-5.3dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -28.89   715     +0.41   -0.21    —       —       —
+  0.50   -15.59   715    +13.78  +13.23    —       —       —
+  1.00    +4.54   715    +25.00  +31.09    —       —       —
+  [fill-in: -27.0 @ D=0.10 → +4.5 @ D=1.00 = +31.6 dB]
+
+V1L D=0.65 (BL=1.00, P=0.75, B=0.40, T=0.30):
+  PEDAL: notch=-12.0dB @756Hz | 3-4k=+12.5dB | 100Hz=+14.1dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -30.53   721     +5.30   -1.33    —       —       —
+  0.50   -13.97   715    +17.70  +11.03    —       —       —
+  0.90    +0.06   715    +22.79  +22.11    —       —       —
+  1.00    +6.85   715    +23.50  +25.72    —       —       —
+  [fill-in: -27.8 @ D=0.10 → +6.9 @ D=1.00 = +34.6 dB]
+  ⚠ Notch goes POSITIVE at D=1.00 — harmonic fill completely overwhelms the notch.
+
+V1L D=0.45 (BL=0.65, P=0.70, B=0.60, T=0.40):
+  PEDAL: notch=-13.7dB @762Hz | 3-4k=+10.7dB | 100Hz=+10.2dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05   -13.64   756     +1.11   +1.26    —       —       —
+  0.65   -10.19   721    +16.82  +15.33    —       —       —
+  1.00    +2.56   715    +20.63  +26.50    —       —       —
+  [fill-in: -13.5 @ D=0.10 → +2.6 @ D=1.00 = +16.0 dB]
+  ⚠ Baseline notch at D=0.05 is already only -13.6 dB (BL=0.65 mutes both notch and fill).
+
+V1L D=0.40 (BL=0.30, P=0.65, B=0.40, T=0.40):
+  PEDAL: notch=-4.8dB @715Hz | 3-4k=-1.8dB | 100Hz=+0.4dB
+  DRIVE   notch    @_Hz    3-4k    100Hz    Δnotch  Δ3-4k   Δ100Hz
+  0.05    -5.92   756     -5.44   -3.00    —       —       —
+  0.40    -5.76   756     +5.48   +3.07    -0.97   +7.30   +2.62
+  1.00    +0.48   721    +15.78  +18.02    —       —       —
+  [fill-in: -5.9 @ D=0.10 → +0.5 @ D=1.00 = +6.4 dB]
+  ⚠ At BL=0.30, dry path (70%) dominates — notch and fill both heavily diluted.
+
+**Conclusion — this is a TWO-part error** (re-verify before acting):
+
+1. **LINEAR 3-4 kHz error (~5 dB)**: The plugin's 3-4 kHz band is too hot at ALL drives, even
+   D=0.05 where nothing clips. This is a linear FR error in the recovery LPF corner, tone stack, or
+   a downstream gain stage. Present on all revisions. About half of the D=0.50 Δ3-4k can be
+   attributed to this linear offset.
+
+2. **DRIVE-DEPENDENT notch fill-in deficit (~9 dB at V1E)**: The plugin's notch fills in 15.2 dB
+   from low to high drive; the pedal's fills in 24.5 dB. The plugin clips LESS HARD (fewer
+   intermodulation harmonics → less notch fill). This is consistent with Gap I's finding that the
+   rail clip is too weak and the saturator is the wrong shape.
+
+3. **V2 zener amplifies notch fill-in**: V2's zener creates more harmonics → more fill-in (31+ dB)
+   than V1E's rail-only clip (15 dB). The plugin fill-in catches up less well at V2 because the
+   zener's drive-dependent behavior is wrong.
+
+4. **V1L at BL=1.00 over-fills the notch** (+6.9 dB hump at D=1.00): The plugin's harmonic output
+   at 715 Hz exceeds the notch depth. This may be V1L-specific (different recovery topology) or a
+   PRESENCE-stage gain interaction.
+
+5. **Notch center frequency is STABLE across drive** (~715 Hz on all revisions). The notch is a
+   LINEAR component (twin-T values are fixed), and the WDF doesn't shift it with drive. The center
+   is ~715 Hz for V1E/V2, ~721-756 Hz for V1L depending on presence.
+
+6. **100 Hz compression is monotonic and UNDER-compressed** in the plugin at all drives. The Δ100Hz
+   grows with drive, consistent with the rail clip being too weak.
+
+**Cross-revision comparison of notch fill-in:**
+
+| Revision | Plugin fill-in | Pedal fill-in | Δfill-in | Notes |
+|----------|---------------|---------------|----------|-------|
+| V1E (D=0.05→1.00) | +15.2 dB | +24.5 dB* | −9.3 dB | *pedal from D=0.50 to D=1.00 |
+| V2 (BL=1.00) | +31.5 dB | ~+15 dB* | +16 dB | *pedal at D=0.90: -20.1 dB from ~-35 at low |
+| V1L (BL=1.00) | +34.6 dB | — | — | Pedal at D=0.65: -12 dB (captures don't span drive) |
+
+See `analysis/gapb_drive_fr_scan.py` for the measurement tool.
+
 ---
 
 ## G: THD-vs-FREQUENCY IS NOT A USABLE METRIC ON THIS PEDAL (NEW, 2026-07-17)
@@ -441,6 +618,92 @@ first two as WRONG. Treat it as a symptom of the stack, not a property of the ci
 saturator ON — and prove the gate FAILS when the saturator is deleted. `analysis/thd_level_probe.py`
 is the measurement; the slope metric is the part no free scalar can move.
 
+### I — kInputRef THD investigation (2026-07-18)
+
+**⚠ These are INVESTIGATION CONCLUSIONS derived from the data below. Re-verify against the raw
+`thd_level_probe.py` output before acting on any of them. The data lives in this section only.**
+
+**Question**: Is Gap I's THD-vs-level mismatch on V1E an input-level issue (fixable by adjusting
+kInputRef) or a model-shape issue (requiring a different nonlinearity)?
+
+**Method**: Swept kInputRef 1.0–8.0 V (current = 1.3) on all 3 V1E captures with two chain
+configurations, plus drive-end-R=0 control. Run via `thd_level_probe.py --rev V1E --os 4 --inref-scan`
+(saturator OFF) and `--inref-scan-sat` (saturator ON, 0.40/0.25). Added `--drive-end-r 0` control
+(endR=0 vs 8k). See `.kilo/plans/v1e-inref-thd-diagnostic.md` for the test infrastructure changes.
+
+**Full data (100 Hz anchors, rail-only at best kInputRef, sat ON at default):**
+
+```
+Capture  Config                           THD@100Hz -18/-12/-6    slope_err
+D=0.50   PEDAL                             0.42/4.49/7.03          0.00
+D=0.50   default (inRef=1.3, sat=ON)        3.08/5.34/5.31          6.45 dB
+D=0.50   rail-only inRef=7.0               0.20/6.29/9.57          3.73 dB
+D=0.50   rail-only inRef=8.0              1.61/7.06/10.07          3.84 dB
+
+D=1.00   PEDAL                            10.42/9.79/8.46          0.00
+D=1.00   default (inRef=1.3, sat=ON)        4.71/4.47/7.09          5.55 dB
+D=1.00   rail-only inRef=7.0              8.99/9.99/10.89          1.54 dB
+D=1.00   rail-only inRef=8.0             9.24/10.15/11.13          1.51 dB
+
+D=0.60   PEDAL                             2.14/6.73/7.25          0.00
+D=0.60   default (inRef=1.3, sat=ON)        3.62/5.56/4.94          2.52 dB
+D=0.60   rail-only inRef=7.0              1.82/7.10/9.95           1.41 dB
+D=0.60   rail-only inRef=8.0              3.17/7.76/10.39          0.80 dB
+```
+
+**Full kInputRef sweeps** for all 3 captures × both chain configs: see the 2026-07-18 session
+transcript (the `thd_level_probe.py` output printed inline). Key extract for D=0.50 rail-only:
+```
+inRef  THD@100Hz -18/-12/-6       slope_err
+1.0    0.00/0.00/0.00              9.21
+4.0    0.00/1.59/7.04             27.30
+7.0    0.20/6.29/9.57              3.73
+8.0    1.61/7.06/10.07             3.84
+```
+
+**endR=0 control** (schematic-pure gain, kInputRef=7, rail-only, D=0.50):
+```
+endR=0   1.46/6.92/9.84          (vs endR=8k: 0.20/6.29/9.57)
+```
+Removing the kDriveEndR compensator doesn't change the THD shape — slightly hotter, same wrong shape.
+
+**Conclusion — this is NOT an input-level issue** (re-verify before acting):
+
+1. **The saturator makes the slope worse than rail-only at every kInputRef.** The tanh adds
+   level-independent distortion at ALL levels, flattening the THD-vs-level curve. Best slope_err for
+   saturator-ON: 5.49 dB (D=0.50) vs rail-only: 3.73 dB. The saturator is simply the wrong model.
+
+2. **Even rail-only cannot match D=0.50 at any kInputRef.** Best slope_err = 3.73 dB (kInputRef=7).
+   The pedal has 0.42% THD at −18 dBFS from op-amp crossover distortion; the rail produces 0.0% below
+   4.2V (signal doesn't reach the rail at −18 for kInputRef < ~8). At kInputRef=8 the rail gives 1.61%
+   at −18 (too hot) and 10.07% at −6 (too hot). The threshold is wrong.
+
+3. **Rail-only cannot reproduce D=1.00's declining THD.** Pedal THD DECLINES with level
+   (10.42→9.79→8.46%) — compressing/saturating. Rail-only RISES (8.99→9.99→10.89%) — rail clip gets
+   harder. Opposite direction = qualitatively different mechanism.
+
+4. **200 Hz THD is 2–3× too high in rail-only mode.** At D=0.50, kInputRef=7, rail-only: 200Hz THD
+   6.30→15.09→21.58% vs pedal 2.00→10.51→13.53%. The rail clip generates harmonics at the wrong
+   distribution — the pedal's 200Hz THD is shaped by recovery LPF/EQ filtering that the simple rail
+   model doesn't reproduce.
+
+5. **No single kInputRef works across all DRIVE settings.** D=0.50 wants kInputRef≈7 (slope 3.73),
+   D=1.00 wants ≈8 (slope 1.51), D=0.60 wants ≈8 (slope 0.80). Even at the individually-optimal
+   kInputRef, slope_err never approaches zero.
+
+**Mechanism**: The V1E TLC2264 op-amp produces crossover distortion at ALL output levels (a small-signal
+deadzone/kink). This is fundamentally different from:
+- A tanh saturator (analytic at zero — produces THD at every level, including arbitrarily small ones)
+- A hard rail clip (produces ZERO THD below 4.2V)
+
+The pedal's THD onset at D=0.50 has a THRESHOLD: ZERO THD at very small signals, then rises steeply.
+Neither the tanh nor the rail produces THIS shape at any input scaling.
+
+**Implication for Gap I**: Fixing Gap I requires a different nonlinearity model — one with a true
+crossover deadzone/threshold (or a piecewise-linear model with a small-signal deadband). Adjusting
+kInputRef, kDriveEndR, or the saturator knee/gain cannot produce the threshold behavior.
+See `analysis/thd_level_probe.py` for the measurement tool.
+
 ---
 
 ## J: V1L 285 Hz blend-tracking notch (NEW 2026-07-17) — a PHASE fault, not a level one
@@ -506,6 +769,80 @@ offset (L-005). On the corrected SHAPE metric V2's 12k anchors are **mixed, not 
 `−7.3, −2.5, +8.1, +5.3, −2.4`. The underlying claim (the 12.5k/16k deficit was an OS=1x artifact)
 may well still hold — a 1x-vs-8x comparison is plugin-vs-plugin and needs no capture — but the cited
 proof does not support it. **Re-derive on SHAPE before treating C as closed or as open.**
+
+### RE-DERIVED ON SHAPE — 2026-07-18 (`analysis/v2_gapc_shape_os.py`)
+
+Two capture-free-separable questions, both on the corrected SHAPE metric (per-file median offset
+removed, clean sweep). Median across the 5 V2 captures (positive = plugin brighter, dB):
+
+```
+band          6.0k    8.0k   10.0k   12.5k   14.5k   16.0k   18.0k
+(1) 8x-pedal  -0.1     0.5     0.5    -3.4   -13.6   -10.3   -23.8   (is it real at shipping OS?)
+(2) 1x-8x     -0.7    -0.1     0.0    -1.4    -6.6   -12.4   -23.6   (pure OS/warp, CAPTURE-FREE)
+```
+
+**Findings — the old "cumulative bilinear warp of the recovery cascade" framing is WRONG, and the
+gap is smaller/reshaped:**
+
+1. **Below 12 kHz: MATCHED (±0.5 dB).** P1's cap fix (C15/C17) genuinely holds on SHAPE. No issue.
+2. **The −5.9 dB @12.5k headline was LEVEL-CONFOUNDED.** On SHAPE the 12.5k median is **−3.4 dB** —
+   **inside the user's ±3 dB extreme-band tolerance.**
+3. **16k/18k are almost ENTIRELY the pure 1x→8x OS droop** (row 1 ≈ row 2: −10.3≈−12.4, −23.8≈−23.6).
+   That is a **1x-ONLY** problem, already recovered at the shipping **4x live / 8x render** (and
+   warp-free at 8x — V2's recovery S-K cascade runs INSIDE the oversampled region, so 8x discretises
+   it at 384 kHz). ⇒ **"recovery-cascade bilinear warp" is not the cause; 8x already resolves it.**
+4. **What survives at 8x and is NOT OS-related** = row(1)−row(2) ≈ **−2 dB @12.5k, −7 dB @14.5k,
+   ~0 @16k** — concentrated at 12.5–14.5 kHz, and it comes from a **BASE-RATE** stage (the tone
+   stack, OUTSIDE the OS region, so its fixed bilinear warp cancels in 1x-vs-8x but not vs the
+   pedal — the deferred `utils/Prewarp.h` target) PLUS a large **per-capture SIGN-FLIPPING spread**
+   (12.5k ranges **+4.2 → −8.0** across the 5 captures) — the same capture-vs-model, knob-tracking
+   signature as **Gap H error 2**, which the FINAL matrix cannot arbitrate.
+
+**⇒ Gap C verdict:** NOT a single clean prewarp target. It decomposes into three pieces, in
+descending tractability:
+  * **16k/18k OS droop** — already handled at the shipping OS (bites only at 1x/2x). No action.
+  * **12.5–14.5k base-rate tone-stack warp** — the one concrete capture-free lever left: prewarp the
+    fixed V2 tone-stack HF corner(s) (`Prewarp.h`, unused). Authority is small (~1–2 dB, knob-
+    independent) — worth trying, bounded upside. **Do NOT prewarp knob-swept corners** (dsp.md).
+  * **12.5–14.5k capture-vs-model spread** — sign-flips across captures, in the ±3 dB tolerance band,
+    matrix-final ⇒ **best-effort schematic-faithful**, same class as Gap H error 2.
+
+**⚠ CLAUDE.md's "Gap C UNSAFE — re-derive" is now DONE; do not re-run the re-derivation.** The
+remaining actionable item is ONLY the base-rate tone-stack warp (small, bounded). Everything else
+is either already-handled OS or unarbitrable.
+
+### RESOLVED (best-effort) 2026-07-18 — a calibration `ToneWarpShelf` on V1L/V2
+
+**Prewarp was tried FIRST and REVERTED — it did ~0.02 dB.** The fixed feedback pole (C32 22p ∥ R35
+1M ~7.23 kHz) is NOT what shapes the tone-stack top octave; the SWEPT treble caps are, and dsp.md
+forbids prewarping swept corners. An isolation probe proved the fixed-pole prewarp moves 12.5–16k by
+0.02 dB (not the ~2 dB first predicted). So prewarp is the wrong tool here.
+
+**What the warp actually is (`analysis/base_rate_warp_measure.py`, dry linear path, 48k vs a 96k
+self-render):** a smooth, knob-independent, monotonic droop from the base-rate PEAKING tone stack's
+swept caps: **V1L −1.5/−2.3/−3.0, V2 −1.7/−2.7/−3.7 dB @12.5/14.5/16k. V1E ≈ 0** (its SHELVING stack
+barely warps → no correction). V1L/V2 match within ~0.6 dB → one shared shelf.
+
+**Fix: `src/dsp/ToneWarpShelf.h`** — an always-on RBJ high-shelf (**+5.56 dB @48k, corner 15.0 kHz,
+Q 0.59**, SSE 0.006 through 18 kHz) in the V1L/V2 output path (after the tone stack), NONE on V1E.
+Tuned to the plugin's OWN analog truth (96k self-render), **NOT the captures** (whose 12.5–16k band
+sign-flips ±15 dB and is 40–60 dB down — fitting them = fitting noise). It is a **documented
+calibration shelf, not circuit-accurate** — a deliberate judgement call (matrix FINAL).
+  - **SR-adaptive:** gain scales by the analytic bilinear warp ratio at 16 kHz, so a 96 kHz session
+    is NOT over-brightened (~0.5 dB there) and 44.1 kHz gets ~4.8 dB. **OS-uniform** (base-rate stage
+    → identical at every OS factor; the `v2_gapc_shape_os.py` 1x-vs-8x row is unchanged, confirming).
+  - **Result:** model's own warp **V2 −3.68 → −0.36 dB @16k vs analog truth** (V1L → ~0); full-chain
+    deficit vs pedal improved 12.5k −3.4→−2.1, 14.5k −13.6→−11.3, 16k −10.3→−7.2. The residual 14.5/16k
+    is the capture-noise/sign-flip band nothing can fix. Gated by **`ToneWarpShelfTest`** (curve +
+    fs-scaling + L-003 non-no-op). 24/24 green; no §5/§6/§7 tone-gate regression.
+
+**⇒ Gap C is CLOSED best-effort:** the model now matches its OWN analog top octave (the correctable
+part); the remaining capture deficit is the unarbitrable noise-dominated band.
+
+**Prior verdict (kept for record) — Gap C decomposed into three pieces:** 16k/18k OS droop (already
+handled at shipping OS); 12.5–14.5k base-rate tone-stack warp (← the shelf just fixed this);
+12.5–14.5k capture-vs-model sign-flip spread (best-effort, Gap-H-err2 class). **Do NOT prewarp
+knob-swept corners** (dsp.md) — that was the reverted misstep.
 
 ---
 
@@ -779,12 +1116,27 @@ What remains, all capture-free:
     N-004's lesson ("never anchor on the least-supported point of your excitation") applies to a
     SPICE reference exactly as it does to a capture. **Cheapest remaining move, and it needs nothing
     but `schematics/crops/fr/`.**
-  * **Quantify the real S-K's stopband floor-out.** An ideal 4th-order cab-sim rolls off forever; a
-    REAL Sallen-Key's stopband FLOORS OUT (finite op-amp output impedance, plus the C14
-    positive-feedback path feeding straight through as the loop gain dies). That is the right SIGN —
-    it makes the real pedal brighter than its own ideal SPICE up top. But the TLC2264 still has
-    ~35 dB of loop gain at 12.5 kHz, so **put a number on it before believing it**; if it cannot
-    reach ~12 dB it is not the answer.
+  * ~~**Quantify the real S-K's stopband floor-out.**~~ **DONE 2026-07-18 — RULED OUT, and the
+    hypothesised SIGN WAS WRONG.** `analysis/v1l_sk_stopband_floor.py` re-solves both S-K sections
+    (L5a+L5b, live values, R48/R49=22k) with a finite-GBW/finite-Ro TLC2264 macromodel — a nodal
+    solve that does NOT enforce the nullor, so the C14/C33 positive-feedback feedthrough appears on
+    its own. Results (dB re 1 kHz passband, delta = real − ideal):
+      - **Real TLC2264 (GBW 0.72 MHz):** delta is **< 0.5 dB and NEGATIVE** across 10–18 kHz (Ro
+        100 Ω→3 kΩ). At 12.5 kHz the op-amp still holds ~35 dB loop gain and fully nulls the
+        feedthrough — the model reproduces the ideal stopband to within a fraction of a dB.
+      - **Op-amps FULLY DEAD (the mechanism's physical ceiling, A≈0):** the cascade floors at
+        **~−56 dB** across 10–18 kHz — which is **DARKER than the ideal stopband** everywhere in
+        band (delta −31/−21/−17/−12 dB at 10/12.5/14/16 kHz). The best (least-negative) brightening
+        the mechanism can reach in-band is **−11.7 dB** — i.e. it never brightens at all.
+      - **Why the audit's "right SIGN" intuition was wrong for THIS topology:** the general SK-leakage
+        picture assumes the feedthrough floor sits ABOVE a very deep ideal rolloff. Here C14 = **10n**
+        is large, so its feedthrough path is heavily attenuated and the floor lands at ~−56 dB —
+        BELOW the ideal response until ~18–20 kHz. So op-amp non-ideality can only **darken** V1L's
+        top octave, at **any** GBW or Ro. The result is independent of the exact TLC226x numbers.
+      - Model validated (L-009): dropping GBW to 50/15/5 kHz produces a large, monotonic *negative*
+        delta (never positive), and the dead-op-amp limit reproduces the pure passive floor — so the
+        null at 0.72 MHz is real, not a broken switch.
+    **⇒ Op-amp non-ideality in the S-K cascade is DEAD as an error-2 candidate.** Do not re-open it.
   * **Accept and document.** If neither closes it, the honest resolution is: **stay faithful to the
     schematic + §1** (which the plugin already is), record the ~12 dB capture disagreement as a known,
     bounded, unarbitrable residual, and do NOT bend the cab-sim to a capture that the SPICE

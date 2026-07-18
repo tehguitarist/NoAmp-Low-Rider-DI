@@ -79,6 +79,9 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `capture_band_snr.py` | Per-band SNR of each capture vs its own silence gap — can a band arbitrate an error at all? | `--filter`, `--min-snr` |
 | `v1l_topoct_attribute.py` | Gap H: top-band knob leverage + pedal-vs-plugin tracking | `--os` |
 | `v1l_spice_s1_check.py` | Gap H: V1L wet path vs SPICE §1 at matched settings (capture-free) | `--os` |
+| `v1l_sk_stopband_floor.py` | Gap H err2: finite-GBW/Ro TLC2264 nodal solve of the S-K cascade — does the real op-amp's stopband floor-out brighten the top octave? (capture-free; RULED OUT) | none |
+| `v2_gapc_shape_os.py` | Gap C: V2 HF deficit on SHAPE — plugin@8x-vs-pedal (real at shipping OS?) + plugin@1x-vs-8x (pure OS artefact, capture-free) | none |
+| `base_rate_warp_measure.py` | Gap C: model's OWN base-rate tone-stack warp (48k vs 96k self-render, dry linear path) — the ToneWarpShelf tuning target (analog-truth, not captures) | none |
 
 **ALWAYS write new analysis commands as scripts in `analysis/`** — never as inline Python in a
 tool call. Inline commands block the terminal on long-running harmonic/THD scans and the output

@@ -30,6 +30,7 @@
 #include "V1EarlyStages.h" // V1EarlyInputBuffer, reused verbatim (netlists.md V1 == E1/L1)
 #include "V1LateStages.h"  // V1LatePresenceStage, reused verbatim (netlists.md reuse map)
 #include "V2Stages.h"
+#include "ToneWarpShelf.h"
 #include "ZenerDriveClipRecovery.h"
 #include "../utils/ChangeGate.h"
 #include "Calibration.h"
@@ -57,6 +58,7 @@ public:
         blendLevel.prepare(baseFs);
         mid.prepare(baseFs);
         tone.prepare(baseFs);
+        warpShelf.prepare(baseFs);
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Force a param push on the first block regardless of the host's initial values.
@@ -70,6 +72,7 @@ public:
         blendLevel.reset();
         mid.reset();
         tone.reset();
+        warpShelf.reset();
         output.reset();
     }
 
@@ -156,7 +159,8 @@ public:
         {
             const double bl = blendLevel.process(dryTap[(size_t) i], data[i]); // V6
             const double midded = mid.process(bl);                             // V6: MID + MID SHIFT
-            data[i] = output.process(tone.process(midded));                    // V7 tone -> V8 output
+            const double toned = warpShelf.process(tone.process(midded));      // V7 tone + base-rate warp trim
+            data[i] = output.process(toned);                                   // V8 output
         }
     }
 
@@ -167,6 +171,7 @@ private:
     V2BlendLevelStage blendLevel;
     V2MidStage mid;
     V2PeakingToneStage tone;
+    ToneWarpShelf warpShelf; // base-rate tone-stack top-octave warp correction (calibration shelf)
     V2OutputStage output;
 
     std::vector<double> dryTap;

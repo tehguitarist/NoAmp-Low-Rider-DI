@@ -137,9 +137,14 @@ without images.
 > faithful. Individually both stages are correct, so the gap must come from their INTERACTION
 > or an unmodelled effect — not a NAM artefact. The error **flips sign** across captures
 > (−27.4 → +6.7 → −2.6 dB) tracking PRESENCE/BLEND, ruling out a fixed-value component error.
-> Candidates: op-amp non-idealities in the real S-K that the ideal NodalCircuit misses,
-> BLEND-stage HF loading, or a level-dependent effect at high-PRESENCE inputs. Investigation
-> needs a stage-by-stage breakout at the capture's actual knob settings.
+> Candidates: ~~op-amp non-idealities in the real S-K~~ (**RULED OUT 2026-07-18**,
+> `analysis/v1l_sk_stopband_floor.py` — the S-K stopband floor-out can only DARKEN the top octave,
+> not brighten it, at any GBW/Ro; the audit's assumed sign was wrong because C14=10n floors the
+> feedthrough at ~−56 dB, below the ideal stopband), BLEND-stage HF loading, or a level-dependent
+> effect at high-PRESENCE inputs. **Remaining capture-free move: re-read the §1 graph EDGE for
+> V1L's top octave (its −40 dB point is the least-supported point of the plotted curve, N-004),
+> then close best-effort.** Investigation otherwise needs a stage-by-stage breakout at the
+> capture's actual knob settings.
 > **⚠ Gap A is NOT closed — "VERIFIED CLOSED" was FALSE (reopened 2026-07-17). T-001's GBW
 > correction moved the output by only −53..−77 dB (inaudible), LARGEST where nothing clips and
 > SMALLEST at the D=1.00 it was built to fix. It has been REMOVED; the chain is now bit-identical
@@ -237,7 +242,7 @@ without images.
 > | Gap | What | Status → next action |
 > |---|---|---|
 > | **H err2** | V1L top octave ~19 dB too dark (capture-only) | **OPEN, the biggest live item.** Not PRESENCE/S-K/corner/compression. **← START HERE.** Likely best-effort (schematic + §1 already satisfied; only the NAM capture disagrees). |
-> | **C** | V2 12.5k/16k HF (−5.9/−19.1 dB) | **OPEN, status was UNSAFE** — its "closed" evidence was level-confounded. **Re-derive on the SHAPE metric first**, then treat (bilinear warp of the recovery LPF cascade; `Prewarp.h` exists, unused). |
+> | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
@@ -334,9 +339,10 @@ without images.
 >   the plugin already satisfies both §1 and the schematic, and only the NAM capture wants more, **this
 >   is an ARBITRATION with no arbiter — the matrix is FINAL.** "Do NOT retune the cab-sim/presence
 >   against the capture" stands; likely best-effort schematic-faithful. (The matched-pair PRESENCE
->   capture that would have arbitrated is GONE — matrix FINAL. Remaining capture-free angles: quantify
->   the real-S-K stopband floor-out, but the TLC2264 still has ~35 dB loop gain at 12.5 kHz, so put a
->   number on it before believing it.)
+>   capture that would have arbitrated is GONE — matrix FINAL. The **S-K stopband floor-out** angle
+>   is now **CLOSED (2026-07-18, `analysis/v1l_sk_stopband_floor.py`): RULED OUT** — it can only
+>   darken the top octave, not brighten it (C14=10n floors feedthrough at ~−56 dB, below the ideal
+>   stopband), at any GBW/Ro. Only capture-free angle left: **re-read the §1 graph EDGE**, then close.)
 > - **⚠ "The real circuit uses TL072 op-amps" was FACTUALLY WRONG and is deleted.** circuit.md:
 >   *"TL072 only appears in the XLR driver, which we're not modelling."* V1L's S-K is **TLC2264**
 >   (CMOS, GBW **0.72 MHz**) — not a TL072 (bipolar, 3 MHz). Use the right part's numbers.
@@ -524,11 +530,14 @@ the gate FAILS when you delete the feature it guards.
   - Band SNR is +105.5 dB — captures ARE trustworthy at 10–16 kHz (NOT a NAM artefact).
   - The deficit is V1L-specific (V2 with same presence cell reads −1.8 dB top-band).
   - LEVEL-INDEPENDENT ⇒ linear, not compression (`v1l_topoct_level_check.py`).
-  - **Candidates (2026-07-18, after error 1's fix):** NOT op-amp GBW (that was the wrong-part TL072
-    hypothesis, DELETED — V1L's S-K is TLC2264); NOT PRESENCE (authority argument). Remaining: the
-    C42 wet-buffer's real HF shape, a wet-path stage interaction, or a genuine schematic-vs-SPICE
-    disagreement that the FINAL matrix cannot arbitrate ⇒ **likely best-effort schematic-faithful**.
-    See `phase10-gap-audit.md` §H "Error 2" — that is the authoritative copy.
+  - **Candidates (updated 2026-07-18):** NOT op-amp GBW/non-ideality — the wrong-part TL072
+    hypothesis was DELETED, and the S-K **stopband floor-out is now RULED OUT** too
+    (`analysis/v1l_sk_stopband_floor.py`: it can only DARKEN, not brighten — the audit's assumed
+    sign was wrong, C14=10n floors feedthrough at ~−56 dB below the ideal stopband, at any GBW/Ro);
+    NOT PRESENCE (authority argument); NOT C42 (authority argument, eliminated — its ceiling is
+    10.1 dB). Remaining: a wet-path stage INTERACTION, or a genuine schematic-vs-SPICE disagreement
+    the FINAL matrix cannot arbitrate ⇒ **likely best-effort schematic-faithful**. Last capture-free
+    move: **re-read the §1 graph EDGE**. See `phase10-gap-audit.md` §H "Error 2" — authoritative copy.
 
 ### Open items (see phase10-gap-audit.md for the live copy; Gap H error 1 FIXED 2026-07-18, error 2 OPEN)
 > - **Gap B: V1E + V2 drive-dependent band saturation** — 800 Hz notch fill, 3-4 kHz +7.7 dB.
@@ -539,7 +548,8 @@ the gate FAILS when you delete the feature it guards.
 >   at drive) and 3–4 kHz (+8.7 dB; pedal gains only +5.6 dB there D0.50→D1.00 vs plugin +13.1).
 >   Drive-dependent band saturation — same class as V2 zener tracking. **Answer the GBW question first.**
 > - **V2 zener drive tracking** — knee/softness needs drive-dependence.
-> - P1 residual: V2 12.5k/16k (−5.9/−19.1 dB) = cumulative bilinear warp of the recovery LPF cascade.
+> - P1 residual: V2 12.5k/16k — see Gap C row (re-derived on SHAPE 2026-07-18; the old "recovery LPF
+>   cascade warp" cause is REFUTED — 8x oversamples that cascade; residual is base-rate tone-stack + OS droop).
 > - P2 residual: BASS=0.35/0.50 250–430 Hz hump correlates with MID shift throw, not BASS Q (C27 tested).
 > - V1L blend residual: +6 dB at BL=0.65 is NodalCircuit impedance loading — not fixable by a scalar.
 - **ISS-008 — V2 dry-path HF excess at BL<1.00 — SOLVED + CLOSED (2026-07-16).** Root cause was
