@@ -353,6 +353,32 @@ without images.
 >   not ruled out. A documented guess is honest; a guess that reads like a measurement is the L-008
 >   failure mode that produced the Gap I stack.
 >
+> ## ⚖ ARBITRATION RULE — SPICE/BLOG BEATS THE CAPTURES ON LINEAR BEHAVIOUR (user, 2026-07-19)
+>
+> **When the author's SPICE sims (`docs/reference-fr-targets.md` §§) or the blog schematic disagree
+> with a NAM capture about a LINEAR quantity — frequency response, corner, gain, notch depth — trust
+> SPICE/the schematic, FLAG the disagreement in the docs, and move on.** Do not retune a
+> schematic-verified stage to chase a capture.
+>
+> **Why:** the captures are NAM-model output of a pedal that is gone, taken at knob settings that are
+> often confounded (drive+blend+bass moving together, no matched pairs — see the FINAL-matrix block).
+> The SPICE curves are capture-free, at known settings, and permanently available. When the model
+> already satisfies the schematic AND §1 and only the capture disagrees, the capture is the weaker
+> witness. Precedent this immediately settles: **Gap H error 2** (~19 dB V1L top octave, capture-only,
+> PRESENCE/S-K/compression/stopband-floor all ruled out, schematic + §1 already satisfied) →
+> **CLOSE best-effort, schematic-faithful, documented.** Same for Gap C's 14.5/16k residual.
+>
+> **⚠ THE SCOPE LIMIT, which the user named explicitly: this rule covers LINEAR behaviour only.**
+> The author's sims are per-control **frequency-response** curves — they contain **no harmonic or THD
+> information whatsoever**, so they cannot arbitrate a nonlinear question even in principle. For
+> **THD, harmonic magnitudes, clip onset, compression and drive tracking the captures are the ONLY
+> evidence that exists** and remain authoritative (Gaps D, I, B). Do not invoke this rule to dismiss
+> a THD disagreement — there is nothing on the other side of the scale.
+>
+> **Practical test before applying it:** ask "does a capture-free reference actually SAY anything
+> about this quantity?" If yes and it conflicts → SPICE wins, flag it. If no (anything nonlinear) →
+> the capture stands alone and you are in best-effort/judgement-call territory, label accordingly.
+>
 > ## ▶ NEXT STEPS (set 2026-07-19, after the Gap D investigation) — START HERE
 >
 > Ordered. Each item names its tool and its gate. Read gap-audit §D before 1–3.
@@ -467,14 +493,23 @@ without images.
 > schematic fidelity); the required "~5 dB less THD at matched compression" came out at **0.11 dB**.
 > See the ⭐ block at the top. The anomaly characterised in the table above is REAL and UNEXPLAINED.
 >
-> **2. TOP-OCTAVE DARKNESS — the highest-leverage single item: it closes THREE gaps at once.**
-> The model is **22 dB darker than the pedal at 16 kHz** (V2 D0.90; the ledger's ~6.4 dB median was
-> too kind). This one defect feeds **Gap D's HF half, Gap H err2, and Gap C**. With artificial
-> corrections now sanctioned (see the block above), this is the textbook case for guardrail #6 — one
-> correction, several symptoms. **Tune to ANALOG TRUTH (§1 / schematic), not to the captures**, since
-> the 16 kHz band is exactly what the FINAL matrix cannot arbitrate. Precedent + pattern to copy:
-> `src/dsp/ToneWarpShelf.h`. Tools: `gapd_hf_fr_accounting.py` (re-run to measure how much of D's HF
-> deficit it actually closes), `v1l_spice_s1_check.py`, `s1_crossrev_check.py`.
+> **2. TOP-OCTAVE DARKNESS — ✅ MEASURED AND CLOSED, NO CORRECTION WARRANTED (2026-07-19).**
+> The "**22 dB darker at 16 kHz**" headline was CAPTURE-derived. Top-octave FR is a LINEAR quantity,
+> so the ⚖ arbitration rule applies, and the correct reference is the model's own **analog truth**
+> (identical chain rendered at 2× base rate — capture-free and exact; §1 cannot help here, its curve
+> has run off the bottom of the graph above the −40 dB point, N-004). New tool:
+> `analysis/topoct_analog_truth.py` (full WET path, both shipping OS factors).
+> **Result — median droop vs analog truth, OS=8: −0.16 @8k, −0.69 @12.5k, −1.65 @16k, −3.28 @18k**
+> (OS=4: −0.23 / −1.17 / −2.39 / −4.25). ⇒ **At most ~2 dB of the 22 dB is a real model error; the
+> other ~20 dB is a capture-vs-model disagreement the arbitration rule closes in the model's favour.**
+> Both measurement biases are conservative (they inflate the droop), and the 18 kHz residual is the
+> bilinear Nyquist zero that `dsp.md`/`TopOctaveShelf` already record as **uninvertible**. The
+> existing `ToneWarpShelf` has already taken the correctable part. **Do not build a top-octave
+> correction; do not re-open this from a capture number.**
+> ⚠ Consequence: the "one fix closes Gaps D-HF + H err2 + C at once" plan is **void** — there was no
+> 22 dB defect to share. Gap C is closed, H err2 is now closed by the arbitration rule, and **Gap D's
+> HF half is not an EQ problem** (its ~11 dB is a shortfall in H2 GENERATION, which no EQ closes —
+> see item 3).
 >
 > **3. Gap D's ~11 dB INTRINSIC HF shortfall — only after 2, and expect best-effort.**
 > Consistent at −10.9/−11.1/−11.5 dB ⇒ ONE mechanism, but NOT any shipped zener param (Cj/m tested at
@@ -506,7 +541,7 @@ without images.
 >
 > | Gap | What | Status → next action |
 > |---|---|---|
-> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
+> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
