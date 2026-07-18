@@ -73,6 +73,14 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `sat_v1_crosscheck.py` | Cross-check NEW sat params on V1L/V1E captures | — |
 | `sat_decision.py` | Per-revision RMS scores for sat param decision | — |
 | `inref_scan.py` | kInputRef THD-vs-level fit from clip onset | `--values`, `--metric`, `--os` |
+| `gapd_flag_check.py` | **L-009 gate for Gap D** — proves every `--zener-*` flag actually moves the output before any rule-out is believed | `--rev`, `--os` |
+| `gapd_zener_level.py` | **Gap D** — scans a zener param (Vzt/Cj/m/Vz/Vf/Iref) against the clean THD-vs-LEVEL metric; scores level-SHAPE (offset-free) and magnitude separately; warns on boundary "optima" | `--baseline`, `--param`, `--values`, `--min-drive`, `--os` |
+| `gapd_lowdrive_bracket.py` | **L-006 bracket test** — convicts a swept-THD reading using the −14 dBFS tones as an interval; showed V2 D0.25 is estimator noise for pedal *and* plugin | `--vzt`, `--os` |
+| `gapd_anchor_map.py` | **Which THD anchors are usable** — per-anchor notch guard + two-sided L-006 bracket, with 800 Hz as a negative control. Recovered 8 usable V2 anchors from the folkloric 100/200 | `--rev`, `--min-drive`, `--os` |
+| `gapd_hf_origin.py` | ⛔ **FAILED ITS CONTROL — numbers are not evidence.** Kept as a record of the method + the two faults to fix (see its docstring) | `--rev`, `--os` |
+| `gapd_postblend_test.py` | **Headroom precondition + LEVEL discriminator** — refuted post-blend clipping (8 kHz sits 47.8 dB below the rail); measures driven-segment gain, not clean-sweep | `--os` |
+| `gapd_hf_fr_accounting.py` | Splits the HF THD deficit into "model too dark at 2f" vs a true intrinsic shortfall (`THD(f)=THD_int+[G(2f)−G(f)]`) | `--os` |
+| `gapd_hf_zener_scan.py` | Re-tests Cj/m at the **HF** anchors where they have authority; scores HF THD, LF THD and FR 12/16k together as a trade | `--param`, `--values`, `--os` |
 | `gen_test_signal.py` | Comprehensive A/B reference signal (append-only) | — |
 | `fr_offset_decompose.py` | Splits FR error into LEVEL offset vs SHAPE; proves a makeup scalar is shape-neutral (L-005) | `--filter`, `--os` |
 | `v1l_shape_localise.py` | Localises FR-shape error into bands + cross-revision control (which stage owns it) | `--all`, `--os` |

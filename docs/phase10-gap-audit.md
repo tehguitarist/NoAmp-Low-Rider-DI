@@ -1271,6 +1271,231 @@ interaction effect into fixed component values that are individually schematic-f
 
 ## D: V2 zener drive tracking — ⭐ UNPARKED 2026-07-18, NOW THE TOP THD TASK (clean metric available)
 
+### D — RULE-OUT RE-CHECK DONE 2026-07-18: all three SURVIVE, but the framing was wrong
+
+The re-check the unpark demanded is complete (`analysis/gapd_zener_level.py`, clean THD-vs-LEVEL @
+100/200 Hz, V2 full-wet, OS=8x). **Vzt / Cj / m are all still ruled out — but only Vzt was ever a
+real test, and its old evidence was invalid even though its conclusion was right.**
+
+**Step 0 — L-009 switch check FIRST** (`analysis/gapd_flag_check.py`): all six `--zener-*` flags
+proven LIVE (perturbation moves the output −7 to −26 dB rms). Without this, every verdict below
+would be a null result from a possibly-dead switch — the exact trap that invalidated every V1E
+saturator-off experiment ever run.
+
+| Param | Verdict | Why it is now better-grounded than the old one |
+|---|---|---|
+| **Vzt** | **0.20 CONFIRMED** — and for the first time an **INTERIOR minimum** (0.16 → 1.92, **0.20 → 1.33**, 0.28 → 1.89 dB slope err) | The 2026-07-17 sweep ran **0.20 → 0.60, softer only**. 0.20 was the *end of the range*, so "already optimal" was a **boundary non-result**. Scanning both sides — the symptom (plugin climbs where the pedal is flat) argues for a *harder* clamp if anything — confirms it properly. |
+| **Cj** | No leverage: a **47× range (4.7–220 pF) moves the score 0.01 dB** | ⚠ **Not "Cj is correct" — this metric structurally CANNOT see Cj.** Cj is an HF shunt (~kHz corner); the clean anchors are 100/200 Hz. Orthogonal, not vindicated. Cj's own evidence remains `cj_scan.py`. |
+| **m** | No leverage on THD (≤0.5 dB across 0 → 0.15) | **Expected BY DESIGN** — `dsp.md`: a per-polarity mismatch moves **even harmonics only**, leaving odd/THD/level unchanged. m must be fit on **H2 magnitude** (as it was, 2026-07-13). Orthogonal to a THD metric by construction. |
+
+**⇒ Gap D's cause is NOT in the zener knee parameters.** Two of the three "rule-outs" were never
+capable of being anything else; the one real test (Vzt) confirms the shipped value. A new hypothesis
+is needed — do not re-scan these.
+
+### D — THE ANCHOR SET WAS 4× TOO NARROW; WIDENING IT REFRAMES THE GAP (2026-07-18)
+
+**Every Phase-10 THD number was read at 100/200 Hz — one octave out of nine — and that habit is
+BROADER THAN GAP G ACTUALLY REQUIRES.** Gap G's claim is that THD inflates *near a notch* (the
+fundamental gets attenuated, downstream harmonics do not) and that a pedal−plugin delta does not
+rescue it because our notch is ~11 dB too deep. **Away from a notch, none of that applies.** Two
+openings it was hiding, both now confirmed by `analysis/gapd_anchor_map.py`:
+
+* **V2 DELETED the bridged-T** (circuit.md — the ~430 Hz cut is gone on V2, replaced by MID). The
+  "400 Hz is confounded" standing trap was written for **V1E** and **does not bind on V2**: measured
+  local dip at 440 Hz is −2.9 dB (pedal) / −5.3 (plugin), i.e. no notch. It is one of the LARGEST
+  errors in the band and had been excluded by folklore.
+* **Everything above the ~800 Hz twin-T is notch-free** on every revision.
+
+Each anchor now carries **two independent guards** — a structural notch guard (local dip vs the
+median over f/2..2f, computed for pedal AND plugin, so a notch-DEPTH mismatch is also caught) and
+the L-006 bracket against the −14 dBFS tones **on both sides**. 800 Hz is kept as a NEGATIVE CONTROL
+and is correctly rejected (dip 9.3/10.7 dB) — if it ever passes, the guard is broken.
+
+**V2 D0.90, all guard-validated (THD %, −18/−12/−6):**
+
+| anchor | pedal | plugin | err @−6 |
+|---|---|---|---|
+| 110 Hz | 10.8 / 11.8 / 12.0 | 15.6 / 20.1 / 22.1 | **+5.3 dB (too HOT)** |
+| 220 Hz | 19.4 / 21.6 / 21.6 | 12.9 / 17.3 / 19.3 | −1.0 |
+| 440 Hz | 33.2 / 37.6 / 38.5 | 8.2 / 16.3 / 20.3 | **−5.6 (too COLD)** |
+| 1 kHz | 26.5 / 28.8 / 26.9 | 5.9 / 13.1 / 16.3 | −4.3 |
+| 2 kHz | 3.8 / 4.1 / 4.1 | 4.0 / 4.3 / 4.4 | +0.6 (MATCHED) |
+| 3 kHz | 0.60 / 0.66 / 0.63 | 0.51 / 0.52 / 0.54 | −1.3 |
+| 6 kHz | 1.00 / 1.72 / 2.80 | 0.26 / 0.27 / 0.27 | **−20** |
+| 8 kHz | 2.53 / 9.02 / **13.10** | 0.07 / 0.07 / **0.08** | **−44** |
+
+**The error is NON-MONOTONIC in frequency** — hot at 110, matched at 2–3 kHz, then collapsing. No
+clamp-hardness parameter can do that, which independently corroborates the zener exoneration above.
+
+⚠ **6 kHz is WEAK evidence** (no discrete tone exists there ⇒ unbracketed, and the pedal's D0.50
+reading is non-monotonic 0.64/0.35/0.83). **8 kHz is the solid one**: monotonic in level and
+brackets OK on pedal *and* plugin.
+
+**HYPOTHESIS (structural, schematic-grounded): WE MODEL NO NONLINEARITY AFTER THE BLEND.** V2DSP's
+stage 3 (`blendLevel → mid → tone → output`) is entirely linear; every harmonic the model makes is
+generated inside `driveRegion`, i.e. **upstream of the cab-sim rolloff** (−40 dB by ~8 kHz on V2), so
+our HF harmonics are annihilated by construction. The real pedal's post-blend stages — including
+**U3B, a +10.1 dB gain stage** — sit on ±4.2 V rails *downstream* of that rolloff, so whatever they
+clip reaches the output unattenuated. That matches the table's shape exactly.
+
+**COMPETING EXPLANATION, not yet excluded: NAM HF inaccuracy** in a band 40+ dB down. Note this is
+the SAME SHAPE as **Gap H error 2** ("the capture claims more HF than our model/SPICE has", V1L) —
+**these two open gaps may share one cause, and should be tested together rather than separately.**
+
+#### D — POST-BLEND CLIPPING IS REFUTED (2026-07-18), and the HF deficit tracks DRIVE not LEVEL
+
+`analysis/gapd_postblend_test.py`. The hypothesis required the post-blend stages to actually reach
+their ±4.2 V rail at the frequency under test. **They never do.** During a swept sine at f the only
+signal in the chain IS f, and the wet path has already attenuated HF before the blend:
+
+| freq | volts @−6 dBFS | margin below ±4.2 V |
+|---|---|---|
+| 110 Hz | 1.74 V | 7.6 dB |
+| 440 Hz | 0.95 V | 12.9 dB |
+| 2 kHz | 0.59 V | 17.0 dB |
+| 8 kHz | **0.017 V** | **47.8 dB** |
+
+A rail clipper cannot distort what never reaches its rail ⇒ **refuted at every anchor, not just HF.**
+Corroborating: the measured post-blend level is nearly level-INDEPENDENT (1.50/1.64/1.74 V) exactly
+as it should be with the zener clamping upstream; and Part B shows the 8 kHz deficit does **not**
+track LEVEL (−44.7 / −27.3 / −44.4 / −36.5 / −27.5 dB across LEVEL 0.20→0.40, non-monotonic).
+
+⚠ **Scope limit, not a reprieve:** every V2 capture has LEVEL ≤ 0.40, and 110 Hz is only 7.6 dB shy
+of the rail — at a high LEVEL setting the mechanism may well exist in the real pedal. It simply is
+not active anywhere in THIS matrix, so it cannot explain these captures. Do not resurrect it here.
+
+⚠ **A measurement trap this cost, worth keeping:** the first run computed the gain from the CLEAN
+sweep and applied it to the driven amplitude, yielding **12 V through a 4.2 V rail** — impossible on
+its face, and it would have "confirmed" the hypothesis at LF. The clean sweep is read at −30 dBFS
+where the chain is linear and passing full gain; at −6 dBFS it is clipping and its real gain is far
+lower. **Measure the driven segment against its OWN reference segment.** This is CLAUDE.md's standing
+FR trap ("FR is read on the −30 dBFS CLEAN sweep... the plugin barely clips") resurfacing in a
+headroom calculation.
+
+**WHAT PART B DOES SHOW: the 6 kHz deficit tracks DRIVE, not LEVEL** — −20.3 dB at D0.90 → −1.0 dB
+at D0.25, with LEVEL moving the OTHER way, so the anti-correlation resolves in DRIVE's favour.
+
+#### D — NEXT HYPOTHESIS, AND IT UNIFIES THREE GAPS: the model is too DARK above ~10 kHz
+
+If the harmonics are generated pre-cab (as the refutation above implies), the question is why ours do
+not survive. **THD at 8 kHz IS H2 at 16 kHz** (order-limited estimator), so any excess model rolloff
+at 16 kHz subtracts DIRECTLY from THD@8k. And the model's top-octave darkness is already documented:
+median |Δ| **4.4 dB @12.9k, 7.0 @14.5k, 6.4 @16.3k, 11.0 @18.2k**.
+
+That is the **same defect as Gap H error 2** (V1L top octave too dark) and adjacent to **Gap C**
+(base-rate top-octave warp, partly fixed by `ToneWarpShelf`). **One cause, three symptoms:** an FR
+deficit, an HF THD deficit, and H err2's capture-vs-model disagreement. ⚠ Sizing caveat up front: the
+FR darkness is 6–11 dB while the 8 kHz THD deficit is 44 dB, so it can only be PART of it — quantify
+before believing it (`analysis/gapd_hf_fr_accounting.py`).
+
+#### D — THE HF ACCOUNTING: half darkness, half a real shortfall (2026-07-19)
+
+`analysis/gapd_hf_fr_accounting.py`. THD@8k **IS H2@16k** (order-limited), and both fundamental and
+harmonic are filtered by the same chain at different frequencies, so
+`THD(f) = THD_intrinsic(f) + [G(2f) − G(f)]`. Differencing plugin vs pedal splits the deficit into a
+part explained by the model being darker at 2f (`predicted = dG(2f) − dG(f)`) and a genuine
+intrinsic remainder:
+
+| capture | pair | dG(f) | dG(2f) | predicted | deficit | residual | FR explains |
+|---|---|---|---|---|---|---|---|
+| D0.90 | 8k/16k | +1.1 | **−22.0** | −23.1 | −44.7 | −21.6 | ~52% |
+| D0.90 | 6k/12k | −0.1 | −8.9 | −8.8 | −20.3 | −11.5 | ~43% |
+| D0.50 | 8k/16k | −0.9 | −17.1 | −16.2 | −27.3 | −11.1 | ~59% |
+| D0.50 | 6k/12k | −2.7 | −2.6 | +0.1 | −10.7 | −10.9 | ~0% |
+
+* **The top-octave darkness is WORSE than the ledger records** — at D0.90 the model is **22 dB darker
+  than the pedal at 16 kHz** (ledger: ~6.4 dB median @16.3k). So **Gap D, Gap H err2 and Gap C are
+  genuinely linked** — one top-octave fix moves all three.
+* **But a residual survives, and it is suspiciously consistent: −10.9 / −11.1 / −11.5 / −21.6 dB.**
+  Three of four at ~−11 dB looks like ONE mechanism, not noise. The model under-GENERATES H2 up
+  there; no top-octave EQ can close that part.
+* Sanity check passes: 3k/6k and 4k/8k show no deficit and the accounting correctly reports none.
+* ⚠ **The split is uncertain even though the linkage is not.** The dominant term dG(16k) sits in the
+  band **Gap H err2 says we cannot arbitrate**. The better-supported 6k/12k rows give 43% / 0%.
+
+#### D — Cj and m RE-TESTED AT HF, where they finally have authority — both genuinely ruled out
+
+`analysis/gapd_hf_zener_scan.py`. This is **not** a re-run of the LF scan: that verdict was recorded
+as hollow (Cj is an HF shunt a 100/200 Hz metric cannot see; m moves even harmonics only). The 6/8 kHz
+anchors are guard-validated and THD@8k is a nearly pure H2 read — exactly what both parameters touch.
+
+* **Cj — RULED OUT for real.** 1 pF → 100 pF (100×) moves HF THD by **0.3 dB**. It does move FR@16k
+  by ~4 dB, confirming it acts as a FILTER, not a harmonic source. The earlier "no leverage" is now
+  a real result rather than an artefact of the metric.
+* **m — RULED OUT on the trade.** It has some 8 kHz authority at D0.50 (−27.5 → −22.1 dB at m=0.40)
+  but drags 6 kHz the WRONG way (−10.6 → −13.4), pushes 110 Hz hotter (5.8 → **7.9**, already the
+  worst LF error), and does ~1 dB across the whole range at D0.90. m=0.40 is also far beyond device
+  tolerance. A fix that buys one anchor by spending two others is not a fix.
+
+**⇒ The ~11 dB intrinsic HF shortfall is NOT any shipped zener parameter.** Cause unknown.
+⚠ **Do not reach for op-amp slew limiting without checking the SIGN first** — slew limiting *removes*
+HF harmonic content, and the pedal has MORE than the model, so the naive version is the wrong sign.
+That is precisely how the S-K stopband-floor candidate died in Gap H err2 (`v1l_sk_stopband_floor.py`).
+
+#### D — PRIORITY NOTE: the HF residual is the SMALL, least-arbitrable part of Gap D
+
+Before any more HF work, weigh what is actually at stake. At 8 kHz the pedal's H2 sits ~17.7 dB below
+a fundamental that is itself ~40 dB down — a very low absolute energy, in the band the FINAL matrix
+cannot arbitrate (H err2). Meanwhile Gap D's **large, well-supported, plainly audible** errors are in
+the midband, at anchors with 30–38% absolute THD:
+
+| anchor | pedal | plugin | error |
+|---|---|---|---|
+| 110 Hz | 12.0% | 22.1% | **+5.3 dB too HOT** |
+| 440 Hz | 38.5% | 20.3% | **−5.6 dB too COLD** |
+| 1 kHz | 26.9% | 16.3% | **−4.3 dB too COLD** |
+
+**Recommend working those before the 8 kHz residual** — they are bigger, audible, capture-supported,
+and free of the 16 kHz trust problem.
+
+#### D — first attempt to localise the HF source FAILED ITS OWN CONTROL (2026-07-18) — do not cite it
+
+`analysis/gapd_hf_origin.py` tried an authority argument: a harmonic generated pre-cab is filtered by
+`R(f) = G(2f)/G(f)`, so inverting the measured THD gives the intrinsic pre-cab ratio `r_required`,
+and an absurd value (>100%) would refute pre-cab generation. **It did not work, and the tell was the
+CONTROL.** The plugin — 100% pre-cab by construction — should have given a flat `r_required` and gave
+**28.8 / 46.6 / 48.6 / 6.8 / 7.1 / 2.6 / 16.6 / 5.9%** (~19× spread). The pedal's peak was 71.3%,
+never firing the ">100% is impossible" test either. **A test whose control misbehaves cannot convict
+anything** — the pedal column is not evidence and must not be quoted (this is the L-005 discipline:
+ask what the metric reads when the model is fine).
+
+Two faults, both worth keeping because the corrected test is still the right idea:
+1. **`r` is not frequency-flat even for a genuinely pre-cab source** — the zener's distortion tracks
+   the amplitude at the CLIP NODE, which the twin-T and PRESENCE shape strongly *before* the drive
+   stage. The premise was wrong on its face.
+2. **`R(f)` was taken from the FULL-CHAIN FR, double-counting the pre-drive shaping.** The correct
+   penalty is the CLIP-NODE→OUTPUT transfer only (recovery cab-sim + MID + tone); the fundamental's
+   trip through the twin-T is upstream of the clip and must not appear in the harmonic's survival
+   term.
+
+**Corrected test (not yet built):** a small probe exercising `V2RecoveryStage + MID + tone + output`
+to get the post-clip FR directly — capture-free, since the topology is known — giving an uncontaminated
+`R_post(f)`. The control flattening is the gate that says the method works. **Even then it can only
+separate "pre-cab" from "post-cab or artefact"**; splitting post-cab clipping from a NAM artefact
+needs the LEVEL-knob dependence (real post-blend clipping must scale with LEVEL; an artefact need not).
+
+### D — TWO CORRECTIONS TO THIS SECTION'S OWN PREMISE (2026-07-18)
+
+**1. D0.25 IS UNUSABLE — it fails the L-006 bracket test** (`analysis/gapd_lowdrive_bracket.py`).
+The tones sit at −14 dBFS, between the −18/−12 sweeps, so a sound reading must satisfy
+`sweep(−18) ≤ tone(−14) ≤ sweep(−12)`. At D0.25 **both the PEDAL and the plugin violate it at both
+anchors** (pedal @110 Hz: 0.24 / **0.17** / 0.32; plugin: 0.56 / 0.51 / **0.48** — the plugin's swept
+THD *falls* with level, which is unphysical). Sub-1% THD here is estimator noise, not measurement.
+**This nearly produced a wrong fit:** scored on all three drives, Vzt=0.16 appeared to beat the
+shipped 0.20 on both slope and magnitude — and **that win was almost entirely the D0.25 capture**
+(slope 4.33 → 1.72). Dropping it (`--min-drive 0.4`) restores 0.20 as the interior optimum. A
+constant was one step from being fitted to noise (L-008's failure mode, caught by L-006's trick).
+**V2 therefore has TWO usable drive points, not three.**
+
+**2. The headline framing below is PARTLY WRONG — the residual is MAGNITUDE, not slope.** On the
+offset-free slope metric **D0.90 is the BEST drive (0.95 dB), not the worst**; D0.50 is 1.72. What
+is actually large is the absolute error (D0.50 **3.47 dB**, D0.90 **3.79 dB**) — e.g. D0.50 @ −6:
+plugin **14.6%** vs pedal **7.6%**. And it is **frequency-dependent**: at D0.90 the plugin is far too
+HOT at 100 Hz (23.4 vs 11.9%) yet too COLD at 200 Hz at −18 (13.0 vs 17.5%). **A single clamp-hardness
+scalar cannot produce an error that flips sign across frequency** (`dsp.md`'s tell-tale) — which is
+consistent with the zener params being exonerated above, and points the next move at something
+frequency-shaping in the wet path rather than at the clip element itself.
+
 **STATUS: ACTIONABLE — this is the next THD/harmonics work item.** Both reasons it was parked have
 expired:
 1. *"Parked behind Gap I"* — Gap I's V1E half is DONE (the stack unwind, §I). Nothing blocks D now.
