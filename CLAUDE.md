@@ -524,11 +524,28 @@ without images.
 > **5. Gap F / Gap B** — F is likely the same phenomenon as H/J (don't split it until 2 lands);
 > B is drive-dependent band saturation, shares a root with D.
 >
-> **6. V1L — re-run the whole Gap D toolchain on it.** V1L is now the WORST revision on harmonics
-> (median |H-delta| **12.1 dB** vs V1E 6.5, V2 5.7) and its zener is the same family. ⚠ Harder to
-> arbitrate: its three captures move drive+blend+bass together and two are partial-blend. Start with
-> `gapd_anchor_map.py --rev V1L` to find which anchors are even usable there (expect 440 Hz to FAIL —
-> V1L HAS the bridged-T).
+> **6. V1L harmonics — ✅ SCOPED AND UNCONFOUNDED 2026-07-19; the target is now NARROW.
+> See gap-audit "V1L HARMONICS".** Still worst on harmonics (median |H-delta| **11.2 dB** on fresh
+> data, vs V1E 8.9, V2 6.6), but the fault is no longer diffuse:
+> - **It is PURELY EVEN-ORDER.** H2 is wrong by −13.8 → +25.5 dB across the three captures while
+>   **H3 stays within 0.2–3.9 dB**. An ASYMMETRY error, not a clipping-strength error.
+> - **The rail has ZERO authority** (flat to 0.1 dB across a range that moves V1E by 100 dB) — a REAL
+>   null, flag proven live on V1L per-revision. V1L's zener clamps at ~±3.9 V **before** the ±4.2 rail,
+>   so at −18 dBFS the rail never engages. ⇒ **attack the ZENER MODULE, never the rail; V1E's
+>   asymmetric-rail fix is structurally inapplicable to V1L.**
+> - **The drive/blend confound is BROKEN without a new capture** — V1E (all BL=1.00, drive-only) shows
+>   the SAME monotone law at constant blend (+12.6/+5.6/−16.4 over D0.50→1.00). ⇒ **DRIVE is
+>   sufficient; BLEND is not required.** Do not let Gap J/F's blend story absorb the H2 spread.
+> - ⚠ The shared law across two revisions with **different clip elements** argues for a common cause
+>   UPSTREAM of the clip, not two element-level errors — same shape as Gap D.
+> - Anchor map DONE (`gapd_anchor_map.py --rev V1L`, negative control PASSED): usable anchors
+>   **110, 220, 440, 2000, 3000**. **440 Hz is usable on V1L after all** — the expectation that the
+>   bridged-T would fail it was wrong.
+> - ⚠ **NEW, UNEXPLAINED, DO NOT FIT YET:** the plugin's HF THD is **level- AND drive-INDEPENDENT** on
+>   every revision (V1E 3 kHz reads 2.6/2.8/2.8% at D0.50, D0.60 *and* D1.00; V1L 4.7% vs pedal
+>   0.5–0.8%). A THD that ignores a 28 dB gain change is not clipping. Suspect an estimator or fixed
+>   artefact and **validate before treating it as a circuit error** (L-006). ⚠ The L-006 bracket has
+>   LOW POWER on a flat curve — it is trivially satisfied — so "bracket ok" is NOT evidence here.
 >
 > **Housekeeping:** `src/dsp/GbwCorrection.h` is dead code (zero references since T-001's removal) —
 > delete or keep deliberately. `analysis/reports/*` predate the 2026-07-18/19 work; regenerate before
@@ -544,9 +561,9 @@ without images.
 > | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
-> | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | OPEN — shared root with D/I; THD-adjacent. Likely follows Gap I. |
+> | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **V1L's half ROOT-CAUSED 2026-07-19: it is the Gap F RECOVERY SATURATOR** (`v1l_sat_hf_ablate.py`, ablation L-009-verified live). It supplies **2.9 of 3.19 pp** of V1L's 4 kHz THD; mean \|err\| over 6 HF rows **ON 2.55 → OFF 1.61 pp**. A floor that ignores DRIVE can't come from the drive stage — the saturator sits DOWNSTREAM of the clamping zener, so its input is drive-independent. ⚠ **DO NOT DELETE IT** — Gap F measured it as a 9× LF improvement; it helps at LF and over-contributes at HF. **STRUCTURAL mismatch, not a bad parameter:** a broadband memoryless saturator standing in for frequency-weighted distortion (same shape as Gap D Finding 4). Next: a band-limited/pre-emphasised saturator scored on **LF and HF anchors together** — Gap F scored LF only, which is how this was missed. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
-> | **I** | THD-vs-LEVEL slope wrong (V1E flat) | **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
+> | **I** | THD-vs-LEVEL slope wrong (V1E flat) | 🔄 **H2 remnant CHARACTERISED 2026-07-19 and confirmed NOT closable by the rail** (`analysis/h2_asym_perdrive.py`). Required asymmetry is **0.05 V at D0.50/0.60 but 0.60 V at D1.00 (12×)** ⇒ **guardrail #6 FAILS, do not ship a fixed OR drive-dependent asymmetry.** The mechanism is wrong in KIND: a real rail asymmetry is a fixed voltage, and the only drive-dependent candidate (CMOS output Ron) lacks authority — the stage drives 330k, so output current is ~µA (L-010). Shipped −4.10 STAYS (best single value, plausible magnitude). ⚠ **A SECOND L-009 DEFECT WAS FOUND AND FIXED HERE** — `--rail-vneg/--rail-vpos` treated ±4.2 as "unspecified", so the symmetric baseline silently rendered V1E's −4.10 default; every scan grid containing −4.2 duplicated the −4.10 column, incl. the fit that chose the shipped value. Now NaN-sentinel, verified per revision. Prior state: **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
 > | **D** | V2 zener drive tracking (+ V1L) | 🔄 **OPEN. Coupling-cap mechanism REFUTED 2026-07-19** (implemented, ablation-measured at 0.11 dB of ~5 needed; caps KEPT as schematic fidelity + a real DC-blocking fix, `ZenerCouplingCapTest`). See the ⭐ block at the top + L-010. Anomaly characterisation (matched compression, ~5 dB fewer harmonics at LF on V1L/V2, absent on V1E) STANDS; mechanism unknown; must be nonlinear or level-dependent — no linear element can do it. Prior state: **IN PROGRESS 2026-07-18. Zener knee params EXONERATED on the clean metric (Vzt/Cj/m — do not re-scan); D0.25 discarded as estimator noise (L-006 bracket, pedal AND plugin); residual is MAGNITUDE + FREQUENCY-DEPENDENT (sign flips 100 vs 200 Hz), not slope ⇒ needs a new hypothesis in the wet path, not the clip element.** Original framing follows: ⭐ **UNPARKED 2026-07-18 — NEXT THD TASK.** Both park reasons expired: Gap I's V1E half is DONE, and the clean **THD-vs-LEVEL @101 Hz** metric is unconfounded (the old Vzt/Cj/m rule-outs used the Gap-G-confounded THD-vs-*freq* — **re-check them**). Target: V2 D0.90 pedal is level-FLAT 10.7/11.5/11.9 but plugin CLIMBS 16.5/21.3/23.3 — the zener under-clamps. NOT a level issue (kInputRef=1.3 worsens above) and NOT the V1E fix (rail vs zener). **V1L is now worst on harmonics (12.1 dB, erratic H2)** — same family, but its captures are drive+blend+bass confounded, so do V2 first. |
 > | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
 > | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
@@ -1015,6 +1032,17 @@ the gate FAILS when you delete the feature it guards.
   default" and "0 means zero" cannot share an encoding; use a sentinel.** This is L-003's mirror:
   L-003 says prove the gate fails without the feature — L-009 says make sure you can actually remove
   it. A null result from an unverified switch is not evidence of anything.
+  **⚠ EXTENSION (2026-07-19) — IT HAPPENED AGAIN, IN A FLAG THE FIRST FIX DIDN'T AUDIT.**
+  `--rail-vneg/--rail-vpos` encoded "unspecified" as `±4.2`, which is a LEGAL VALUE. Because V1E's
+  `prepare()` default is asymmetric (−4.10/+4.20), asking for a SYMMETRIC rail silently rendered
+  −4.10 — so the flag could not express symmetric at all, and **every scan grid containing −4.2
+  duplicated the −4.10 column**, including the fit that chose the shipped −4.10. The 2026-07-17 fix
+  repaired the three saturator flags that had bitten someone and left the identical defect next to
+  them for two days. **When you find a sentinel defect in one flag, AUDIT EVERY FLAG THAT ENCODES
+  "unspecified" AS A LEGAL VALUE — the bug class is the finding, not the one instance.** Also learn
+  the tell: **two different flag values producing identical numbers while the value between them
+  differs is not physics.** And verify the switch **per revision** — proving it live on V1E and then
+  drawing a null conclusion about V1L is L-009 wearing a different hat.
 - **L-006: Validate an ESTIMATOR against an independent measurement before believing any number it
   produces — and when it carries its own "validate me" note, that note is a defect report.**
   `analyze.harmonic_thd_curve`'s docstring said *"VALIDATE against discrete-tone thd() before trusting
@@ -1032,6 +1060,18 @@ the gate FAILS when you delete the feature it guards.
   bit-identical below 2714 Hz on all 11 captures (`analysis/farina_regression_check.py`), so no fit
   moved. Sibling of L-005: L-005 asks whether the *comparison* is sound, L-006 whether the
   *estimator* is.
+  **⚠ EXTENSION (2026-07-19) — THE BRACKET GUARD ITSELF IS PARTLY BROKEN AS USED.** It asks
+  `sweep(−18) <= tone(−14) <= sweep(−12)`, which fuses **ORDERING** (does THD rise with level?) with
+  **AGREEMENT** (do the two estimators give the same magnitude?). Only agreement is evidence about the
+  estimator. On a **flat or falling** THD curve the ordering fails for reasons that have nothing to do
+  with the estimator — and flat curves are exactly the regime you invoke it in, so it **begs the
+  question**: V1E D1.00 @4 kHz reports "bracket FAIL" while the estimators agree to **0.03 pp**.
+  Conversely a flat curve makes the bracket **trivially satisfiable**, so "ok" is not a pass either.
+  **Low power in BOTH directions, precisely where it is most used.** ⇒ compare
+  **|tone − nearest sweep|**, and report ordering separately as a statement about the CIRCUIT.
+  Some `✗ bracket (L-006)` rejections in `gapd_anchor_map.py` are therefore SPURIOUS — re-check any
+  anchor rejected on bracket grounds before treating it as unusable. Tool:
+  `analysis/hf_thd_flatness_check.py`.
 - **L-007: "Disagrees with everything else" is a QUESTION, not a verdict — and the tool that asks it
   must compare at matched settings.** ISS-011's corrupt capture damaged five good ones, so a tripwire
   is worth having (`analysis/capture_outlier_scan.py`). But the same signature has two opposite

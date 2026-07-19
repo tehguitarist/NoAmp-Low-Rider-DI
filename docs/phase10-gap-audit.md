@@ -797,6 +797,165 @@ structural cascade redesign that is still level-anchor-limited and carries real 
 
 ---
 
+### I — THE H2 REMNANT IS NOT CLOSABLE BY A RAIL ASYMMETRY (2026-07-19). And the harness was lying again.
+
+**Tool: `analysis/h2_asym_perdrive.py`.** It exists because `v1e_h2_asym_fit.py` scored the AVERAGE
+over V1E's three captures, and an average cannot see a spread — it will always report "one value
+works" even when each capture wants a different one. This one reports the PER-CAPTURE optimum, which
+is what guardrail #6 actually asks for.
+
+**⚠ FIRST: A SECOND L-009 DEFECT, IN A FLAG NOBODY HAD AUDITED — FIXED (offline_render.cpp).**
+`--rail-vneg/--rail-vpos` used `if (railVNeg != -4.2 || railVPos != 4.2)` as "was the flag
+specified". Since V1E's `prepare()` default is **asymmetric** (−4.10/+4.20 since the H2 restore),
+`--rail-vneg -4.2 --rail-vpos 4.2` did **not** render a symmetric rail — it silently rendered
+−4.10/+4.20, **bit-identical to the −4.10 column**. So:
+- The flag **could not express "symmetric" at all**, and the symmetric baseline was unmeasurable.
+- **Any scan whose grid contained −4.2 silently lost that point and duplicated −4.10** —
+  `v1e_h2_asym_fit.py`'s default grid (`-4.2,-4.1,...`) did exactly this, so the fit that chose the
+  shipped −4.10 was made against a grid with a corrupted endpoint.
+- The tell was visible in the output and is worth recognising: **two different flag values produced
+  identical numbers to 0.1 dB while the value between them differed.** That is not physics.
+
+Fixed with the NaN-sentinel pattern this same file already adopted for the saturator flags after the
+first L-009 incident. **Verified per revision on the rebuilt binary** (`bare ≡ −4.10` on V1E,
+`bare ≡ −4.20` on V1L/V2, and `sym` now differs from `−3.40` on all three). 25/25 green.
+**Lesson extension (L-009): when a sentinel defect is found in one flag, AUDIT EVERY OTHER FLAG THAT
+ENCODES "unspecified" AS A LEGAL VALUE — the 2026-07-17 fix repaired the three saturator flags that
+had bitten someone and left the identical defect sitting in the rail flags for two days.**
+
+**RESULT ON THE FIXED BINARY (H2 delta = plugin − pedal, dB, mean over 100/200 Hz, sweep_drv_−18):**
+
+```
+V1E        -4.20    -4.15    -4.10    -4.00    -3.90    -3.80    -3.60    -3.40   best
+D1.00     -100.5    -22.4    -16.4    -10.4     -6.8     -4.3     -0.8     +1.7   -3.60
+D0.60     -124.7     -0.4     +5.6    +11.7    +15.3    +17.8    +21.5    +24.1   -4.15
+D0.50     -109.3     +6.5    +12.6    +18.8    +22.4    +25.0    +28.8    +31.5   -4.15
+```
+
+- **The symmetric column is now measurable and reads ≈ −110 dB** — i.e. H2 is ABSENT at a symmetric
+  rail, exactly as physics demands (symmetric clipping makes only odd harmonics). This confirms the
+  rail asymmetry is V1E's **sole** H2 mechanism. The old scan could never show this.
+- **H3 is essentially untouched by vneg** (≤0.5 dB drift across the whole range) — the asymmetry adds
+  H2 without disturbing what the unwind fixed, as designed.
+- **GUARDRAIL #6 FAILS, decisively.** The required asymmetry is **0.05 V at D0.50/D0.60 and 0.60 V at
+  D1.00 — a 12× range.** At the shipped −4.10 the error is +12.6 dB (D0.50) to −16.4 dB (D1.00).
+  No single value serves them; **do not ship a fixed asymmetry as a sanctioned correction.**
+
+**AND THE MECHANISM IS WRONG IN KIND, NOT MERELY IN VALUE — an L-010 authority argument.** A real
+op-amp's rail asymmetry is a **fixed voltage**. If the pedal's H2 needed 0.05 V at noon and 0.60 V at
+max, then the pedal's H2 does not come from a fixed rail asymmetry either. The one physical mechanism
+that *would* make output-stage saturation drive-dependent — CMOS output Ron asymmetry growing with
+output current — **does not have the authority here: the stage drives a 330k feedback network, so
+output current is ~µA and the Ron drop is negligible, nowhere near 0.60 V.** Do not build a
+drive-dependent asymmetry on this evidence; it would be a curve fit wearing a physics label (L-008).
+
+**⇒ Gap I's H2 remnant stays BEST-EFFORT, and the shipped −4.10 stays** (it is the best single value
+across the drive range and is physically plausible in magnitude). What has changed is that the
+residual is now *characterised* rather than merely noted: it is not a value error, it is a missing
+drive-dependence whose physical source is unidentified.
+
+---
+
+### V1L HARMONICS — H2 IS ZENER-BORNE, RAIL-INSENSITIVE, AND TRACKS **DRIVE**, NOT BLEND (2026-07-19)
+
+V1L is the worst revision on harmonics (median |H-delta| **11.2 dB** on the fresh 2026-07-19 data, vs
+V1E 8.9, V2 6.6). Same tool as above; the V1L rows are the finding.
+
+```
+V1L                        H2 delta across railVNeg -4.20 .. -3.40      H3 delta
+D0.65 BL1.00 P0.75         -13.8 at EVERY value (flat to 0.1 dB)          +0.2
+D0.45 BL0.65 P0.70         +21.3 at EVERY value                           +3.9
+D0.40 BL0.30 P0.65         +25.5 at EVERY value                           +0.5
+```
+
+1. **H2 is 39 dB wrong across V1L's captures while H3 is within 0.2–3.9 dB.** V1L's ODD harmonics are
+   essentially correct; the fault is **purely even-order**, i.e. an ASYMMETRY error, not a
+   clipping-strength error. That is a much narrower target than "V1L harmonics are bad".
+2. **The rail has ZERO authority over it** — flat to 0.1 dB across a range that moves V1E by 100 dB.
+   **This is a real null, not a dead flag:** the rail flag is proven live on V1L (per-revision L-009
+   check, `max|sym − asym| = 1.5e-01`). The physical reason is clean — V1L's zener clamps at ~±3.9 V
+   **before** the ±4.2 V rail is reached, so at sweep_drv_−18 the rail never engages and H2 is
+   entirely determined by the **zener module**. ⇒ **Attack V1L's H2 at the zener/module, never at the
+   rail.** (Corollary: the V1E asymmetric-rail fix is structurally inapplicable to V1L.)
+3. **THE DRIVE-vs-BLEND CONFOUND IS BROKEN — using V1E as the control, with no new capture.** V1L's
+   three captures move DRIVE, BLEND and BASS together (matrix FINAL, L-007), so V1L alone cannot say
+   which drives the 39 dB swing. **V1E's three captures are all BL=1.00 and differ in DRIVE only**,
+   and V1E shows the same law in the same direction at constant blend: H2 delta **+12.6 (D0.50) →
+   +5.6 (D0.60) → −16.4 (D1.00)**, a 29 dB monotonic swing with drive. V1L: **+25.5 (D0.40) → +21.3
+   (D0.45) → −13.8 (D0.65)** — same sign, same monotone.
+   **⇒ DRIVE is SUFFICIENT to explain V1L's H2 spread; BLEND is not required.**
+   ⚠ Stated precisely: this does not prove blend contributes *nothing* — it removes the *need* to
+   invoke it, and it means **Gap J/F's blend story must not absorb the H2 spread by default.** Note
+   also that V1L swings **more** (39 dB) over a **narrower** drive range (0.40–0.65) than V1E does
+   (29 dB over 0.50–1.00), which is itself consistent with a zener rather than a rail as the source.
+4. **The shared law across two revisions with different clip elements is the useful part:** whatever
+   makes H2 fall relative to the fundamental as drive rises is under-modelled on **both** V1E (rail)
+   and V1L (zener). That argues for a common cause upstream of the clip element rather than two
+   coincidental element-level errors — and it is the same shape as Gap D's "every stage passes its own
+   gate, the composite is wrong".
+
+---
+
+### V1L / Gap B — THE HF THD FLOOR IS REAL, AND IT IS THE RECOVERY SATURATOR (2026-07-19)
+
+**Tools: `analysis/hf_thd_flatness_check.py`, `analysis/v1l_sat_hf_ablate.py`.**
+
+**1. The observation.** The plugin's HF THD is nearly **LEVEL- and DRIVE-independent**. V1E's 3 kHz
+reading is 2.64/2.65/2.92% at D0.50, D0.60 **and** D1.00 — across a ~28 dB gain change. A distortion
+percentage that ignores 28 dB of gain is not clipping.
+
+**2. It is REAL, not an estimator artefact — checked against an INDEPENDENT estimator.** The discrete
+tones (−14 dBFS, plain harmonic binning: no deconvolution, no reference-spectrum division, so no
+shared failure mode with Farina) reproduce the swept magnitudes on **every plugin row, to 0.00–0.15
+pp** (V1E D0.50 @4 kHz: sweep 0.76/0.79/0.80, tone **0.79**). ⇒ the flatness may be used as evidence.
+
+**3. ⚠ AND THE L-006 BRACKET GUARD, AS USED, IS PARTLY BROKEN — it conflates two questions.**
+The guard asks `sweep(−18) <= tone(−14) <= sweep(−12)`, which tests **ORDERING** (does THD rise with
+level?) and **AGREEMENT** (do the estimators give the same magnitude?) in a single comparison. Only
+agreement is evidence about the estimator. On a **flat or falling** THD curve the ordering fails for
+reasons that have nothing to do with the estimator — and flat curves are exactly the regime under
+investigation, so the guard **begs the question**. Concretely, V1E D1.00 @4 kHz reports "bracket
+FAIL" while the two estimators agree to **0.03 pp**. ⇒ **some `✗ bracket (L-006)` rejections in
+`gapd_anchor_map.py` are SPURIOUS**; re-check any anchor rejected on bracket grounds by comparing
+|tone − nearest sweep| instead. (Related trap already known: on a flat curve the bracket is also
+trivially *satisfiable*, so a "ok" there is not a passing grade either. The guard has low power in
+both directions precisely where it is most often invoked.)
+
+**4. ROOT CAUSE ON V1L: the Gap F recovery saturator supplies ~90% of the HF floor.** A floor that
+ignores DRIVE cannot come from the drive stage; V1L's recovery saturator sits **downstream of the
+zener**, whose clamping makes its input level drive-independent — so a static saturator there
+produces exactly a drive-independent floor. Ablation (L-009-verified live, `max|on−off|` = 0.39 /
+0.36 / 0.125), tone THD %:
+
+```
+capture              f     pedal   sat ON  sat OFF    ON-ped   OFF-ped
+V1L D0.65 BL1.00   2000     6.19    10.75     7.82     +4.56     +1.63
+V1L D0.65 BL1.00   4000     2.07     3.19     0.32     +1.12     -1.75
+V1L D0.45 BL0.65   2000     8.55     8.78     5.53     +0.23     -3.02
+V1L D0.45 BL0.65   4000     0.72     2.92     0.22     +2.20     -0.51
+V1L D0.40 BL0.30   2000     1.29     6.59     3.79     +5.30     +2.50
+V1L D0.40 BL0.30   4000     0.37     2.25     0.14     +1.88     -0.22
+```
+At 4 kHz the saturator supplies **2.9 of 3.19 pp**. Mean |error| over the six rows: **ON 2.55 pp,
+OFF 1.61 pp**.
+
+**5. ⚠ DO NOT DELETE IT ON THIS EVIDENCE.** Gap F measured the same saturator as a **9× improvement
+at the LF anchors** (RMS 11.1 vs 102.1 dB disabled). It does real work at LF and over-contributes at
+HF. **The correct reading is a STRUCTURAL mismatch, not a wrong parameter:** it is a broadband
+memoryless saturator standing in for a distortion the pedal generates in a **frequency-weighted** way.
+Re-fitting its three scalars cannot fix that — the same shape as Gap D's Finding 4 ("the pedal's drive
+stage has frequency-dependent MEMORY we do not model"). **The actionable next step is a band-limited
+or pre-emphasised saturator, scored on LF and HF anchors TOGETHER** (Gap F scored LF only, which is
+how this was missed). Any such change must re-run the Gap F LF gate, or it will trade one band for
+the other.
+
+**6. Gap B connection.** Gap B's "the plugin's 3–4 kHz is too hot and does not saturate like the
+pedal's" is, on V1L, substantially THIS: a saturator-borne floor that does not track drive. Gap B's
+remaining V1E/V2 3–4 kHz item is separate (already reduced to V2's ~+3 dB vs §1 after the PRESENCE
+confound was removed).
+
+---
+
 ## J: V1L 285 Hz blend-tracking notch (NEW 2026-07-17) — a PHASE fault, not a level one
 
 **FR shape (plugin − pedal, median offset removed) around 285 Hz:**

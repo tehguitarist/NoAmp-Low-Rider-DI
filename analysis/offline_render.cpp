@@ -52,6 +52,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -121,11 +123,26 @@ int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor,
     dsp.prepare(fs, block);
     if (railKnee > 0.0)
         dsp.setRailKnee(railKnee);
-    // ±4.2 = "not specified, keep the DSP's prepare()-time default". NB post-2026-07-18 the V1E default
-    // is ASYMMETRIC (−4.10/+4.20, H2 restore) — so a bare render mirrors the plugin, but passing an
-    // explicit −4.2/4.2 will NOT force V1E symmetric (it reads as unspecified). V1L/V2 default ±4.2.
-    if (railVNeg != -4.2 || railVPos != 4.2)
+    // NaN sentinel = "not specified, keep the DSP's prepare()-time default".
+    //
+    // This USED to read `if (railVNeg != -4.2 || railVPos != 4.2)`, i.e. "±4.2 means unspecified" —
+    // the exact L-009 defect the saturator block below documents, in a flag nobody had audited.
+    // Because V1E's prepare() default is ASYMMETRIC (−4.10/+4.20 since the 2026-07-18 H2 restore),
+    // `--rail-vneg -4.2 --rail-vpos 4.2` did not render a SYMMETRIC rail — it silently rendered
+    // −4.10/+4.20, bit-identical to `--rail-vneg -4.10`. So the flag could not express "symmetric"
+    // at all, and any scan whose grid included −4.2 silently lost that point and duplicated −4.10.
+    // (`v1e_h2_asym_fit.py`'s default grid did exactly this.) A value is a value; use a sentinel.
+    const bool railSpecified = (railVNeg == railVNeg) || (railVPos == railVPos);  // NaN != NaN
+    if (railSpecified)
+    {
+        if (railVNeg != railVNeg || railVPos != railVPos)
+        {
+            std::cerr << "error: --rail-vneg and --rail-vpos must be given together (a lone rail "
+                         "flag cannot know the revision's default for the other rail).\n";
+            return 1;
+        }
         dsp.setRailVoltages(railVNeg, railVPos);
+    }
     // NB: the guard is "was the flag SPECIFIED", not "is the value non-zero". It used to read
     // `if (satGain > 0.0 && satKnee > 0.0)`, which made `--sat-gain 0` a SILENT NO-OP: the setter
     // was skipped, so the DSP kept its prepare()-time default (V1E: 0.40/0.25) and the render came
@@ -189,8 +206,10 @@ int main(int argc, char** argv)
     // so a bare render mirrors the plugin; any explicit value (incl. 0 or 8000) is honoured.
     const double driveEndR = argVal(argc, argv, "--drive-end-r", -1.0);
     const double railKnee  = argVal(argc, argv, "--rail-knee", 0.0);
-    const double railVNeg  = argVal(argc, argv, "--rail-vneg", -4.2);
-    const double railVPos  = argVal(argc, argv, "--rail-vpos", 4.2);
+    // NaN sentinel = not specified (see runRender). -4.2/4.2 are REAL VALUES here, not "unset".
+    const double kUnset    = std::numeric_limits<double>::quiet_NaN();
+    const double railVNeg  = argVal(argc, argv, "--rail-vneg", kUnset);
+    const double railVPos  = argVal(argc, argv, "--rail-vpos", kUnset);
     // -1 = "flag not specified, keep the DSP's own prepare()-time default". 0 means ZERO — see the
     // no-op guard note in runRender(). Do not change these back to a 0.0 default: it makes the
     // saturator impossible to switch off from the CLI, silently.
