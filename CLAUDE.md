@@ -187,9 +187,33 @@ without images.
 > a bug to fix. V1L shows an interior |dTHD| minimum AT the datasheet value (3.22→1.03→2.98 over
 > 0.20/0.475/0.60) — suggestive, confounded, do not act on it. V2's knee params are still documented
 > V1L placeholders, which may explain V2's incoherence here.
-> **⇒ Gap D is back where the element-set screen left it, minus one candidate — but with a stronger
-> guardrail-#2 record: seven rule-outs on computed magnitude plus one on measured authority. The
-> SANCTIONED CORRECTION is now the live option.**
+> **⭐⭐ MEMORY IS NOW *PROVEN* REQUIRED, KNEE-SHAPE-INDEPENDENTLY (2026-07-19,
+> `analysis/gapd_memoryless_impossibility.py` — no renders, no model, two pedal numbers).**
+> A memoryless element maps compression → THD **one-to-one** for a sine. **V2 D0.90: the pedal is
+> compressed within 0.17 dB at 110 vs 440 Hz while its THD differs by 10.12 dB** (12.00% vs 38.46%)
+> — against a *measured* post-clip allowance of 0.74 dB ⇒ **9.4 dB unexplainable by ANY memoryless
+> element.** (V2 D0.50 BL1.00 corroborates at 4.5 dB.) ⇒ **no knee shape, ever, can close Gap D.
+> Re-fitting Vzt/Vth/Cj/m is structurally futile — this supersedes and EXPLAINS the under-powered
+> Vzt result above.**
+> ⚠ **CONFOUND THAT NEARLY PRODUCED A FALSE HEADLINE:** the first run flagged **V1E** as the most
+> impossible capture — the revision with NO clipping devices at all, i.e. the control. **That
+> contradiction was the tell.** V1E/V1L carry the **~430 Hz bridged-T DOWNSTREAM of the clip**
+> (E5c/L5c; V2 deleted it), which CUTS 110 Hz's harmonics (220–770) but not 440 Hz's (880+) — same
+> sign as the effect under test. **Gap G wearing a different hat.** ⇒ **V1E/V1L rows are CONFOUNDED
+> and prove nothing; only V2 can carry a two-frequency THD argument.** Never run one on V1E/V1L
+> without accounting for the bridged-T.
+> ⚠ `analysis/gapd_locus_reachability.py` (192 renders) agreed but is **SUPERSEDED — do not cite its
+> rows.** Its own pooling control FAILED (V1L 5.6–12.9 dB where a memoryless chain needs ~0) because
+> pooling full-chain points across frequencies traces no locus at all. The control invalidated its
+> own script; the superseding argument needs no renders, so nothing is left to invalidate.
+> **⇒ THE CORRECTION MUST BE DYNAMIC (Branch B). Firm design constraints:** envelope-driven gain
+> reduction with **τ tens of ms** (long ⇒ generates no harmonics — the "gain reduction that is not
+> clipping" signature), **LF selectivity from a FILTERED SIDECHAIN, not from τ** (this dissolves the
+> element-screen's τ∈[0.36,1.45] ms window, which only binds if the frequency discrimination comes
+> FROM the memory element). ⚠ **Guardrail #5 has NO analog reference here and cannot get one** —
+> SPICE carries no harmonic information, so this must be capture-fitted ⇒ **guardrail #6 is
+> load-bearing: ONE correction across V1L AND V2, LF AND drive. Per-capture values ⇒ curve fit ⇒
+> STOP.** Full record: gap-audit §D "MEMORY IS NOW PROVEN REQUIRED".
 > ⚠ The earlier "stop hunting, take the sanctioned correction" recommendation is **WITHDRAWN** — the
 > element-set screen covered the module's LINEAR elements and I let it stand for the whole module.
 > Full record: gap-audit §D "PAPER SCREEN" + "THE ZENER KNEE IS ~2.4–3× TOO HARD".

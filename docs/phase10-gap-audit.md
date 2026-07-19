@@ -1941,6 +1941,63 @@ fidelity limitation), but it has not been shown to be worth ~5 dB on Gap D.**
 sanctioned-correction conversation is now the live option again — but with a better guardrail-#2
 record than before: **seven** rule-outs on computed magnitude plus one on measured authority.
 
+#### D — MEMORY IS NOW PROVEN REQUIRED, KNEE-SHAPE-INDEPENDENTLY (2026-07-19). BRANCH A IS DEAD
+
+Tool: `analysis/gapd_memoryless_impossibility.py` — **no renders, no model, two pedal numbers.**
+
+**The argument.** A memoryless nonlinearity driven by a sine maps compression → THD **one-to-one**:
+equal compression ⇒ equal amplitude at the element ⇒ equal THD, whatever the element's shape. So if
+the pedal shows the *same* compression at two frequencies but *different* THD, **no memoryless
+element of any knee shape can produce both** — and no re-fit of Vzt/Vth/Cj/m can ever close Gap D.
+
+**The result, on V2 (the only revision that can carry it — see the confound below):**
+
+| capture | dCmp (440−110) | dTHD | beyond the allowance |
+|---|---|---|---|
+| V2 D0.90 BL1.00 | **+0.17 dB** | +10.12 dB | **9.4 dB** |
+| V2 D0.50 BL1.00 | +1.16 dB | +5.22 dB | 4.5 dB |
+
+At D0.90 the pedal is compressed **within 0.17 dB** at 110 and 440 Hz while its THD differs by
+**10.1 dB** (12.00% vs 38.46%). The post-clip filtering allowance is a *measured* 0.74 dB
+(`V2PostClipProbe`: `R_post` flat, −1.7 @110 … −2.2 @1k). **9.4 dB is unexplainable by any
+memoryless element.** Both impossible captures are BL=1.00, i.e. full wet with no dry dilution.
+
+**⚠ THE CONFOUND THAT NEARLY PRODUCED A FALSE HEADLINE — and the tell that caught it.** The first
+run flagged **V1E D1.00 as the most impossible capture of all (15.5 dB)**. V1E *has no zener module
+and no clipping devices at all*, and is the revision this whole investigation uses as its clean
+control. **That contradiction was the tell.** Cause: V1E and V1L carry the **~430 Hz / −10 dB
+bridged-T downstream of the clip** (netlists.md E5c/L5c), which V2 deleted. Harmonics of 110 Hz
+(220–770) straddle that notch and are CUT; harmonics of 440 Hz (880+) sit above it and PASS. So the
+notch suppresses THD@110 relative to THD@440 — **the same sign as the effect under test, at unknown
+multi-dB size**. This is **Gap G wearing a different hat**: an in-path notch inflating a THD
+comparison. The 0.74 dB allowance was measured on V2 and **does not transfer**. V1E and V1L rows are
+now marked CONFOUNDED and prove nothing either way. ⇒ **Never apply a two-frequency THD argument on
+V1E/V1L without accounting for the bridged-T.**
+
+**⇒ VERDICT: BRANCH A (a memoryless knee-shape correction) IS DEAD.** This supersedes and explains
+the under-powered Vzt result above: that measurement was not merely confounded by leakage, it was
+**chasing something structurally unreachable**. No knee shape was ever going to work.
+
+⚠ **`gapd_locus_reachability.py` (192 renders) reached the same verdict but is SUPERSEDED and its
+rows must not be cited.** Its own pooling control failed — 5.6–12.9 dB on V1L where a memoryless
+chain requires ~0 — because pooling *full-chain* points across frequencies does not trace a locus of
+anything (the chain's linear shaping differs by frequency either side of the clip). Only V2 D0.90
+was clean (0.10–0.59 dB). It also printed THD 100× high for an hour (display only; the off-locus dB
+were unaffected). **The control was worth having: it invalidated its own script.** The superseding
+argument needs no renders and no model, so there is nothing left in it to invalidate.
+
+**⇒ THE CORRECTION MUST BE DYNAMIC — Branch B.** Design constraints, now firm:
+- **Level-dependent gain reduction that generates no harmonics** ⇒ an envelope-driven attenuation
+  with τ long relative to the waveform (tens of ms), not an in-cycle shaper.
+- **Frequency-selective (LF), from a FILTERED SIDECHAIN, not from τ.** This is the move that
+  dissolves the element-set screen's τ ∈ [0.36, 1.45] ms requirement: that window only binds if the
+  frequency discrimination comes *from* the memory element. Separate them and both constraints are
+  satisfiable at once.
+- ⚠ **Guardrail #5 has no analog reference here and cannot get one.** The author's SPICE curves
+  contain no harmonic information, so the ⚖ rule explicitly does not cover this; it must be fitted
+  to captures. That makes **guardrail #6 load-bearing**: ONE correction fitted once across V1L *and*
+  V2, LF *and* the drive axis. **If it needs per-capture values it is a curve fit and we stop.**
+
 ### Original section (characterisation valid; the coupling-cap conclusion is superseded above)
 
 ### D — RULE-OUT RE-CHECK DONE 2026-07-18: all three SURVIVE, but the framing was wrong
