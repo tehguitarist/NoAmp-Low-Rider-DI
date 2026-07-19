@@ -86,6 +86,11 @@ without images.
   - `verify_sat_fix.py` — verify calibrated saturation offset params
   - `gen_test_signal.py` — comprehensive A/B reference signal
   - `inref_scan.py` — kInputRef THD-vs-level fit
+  - `gapd_memoryless_impossibility.py` — ⭐ **the proof that memory is required** (no renders, no model)
+  - `gapd_module_tau_screen.py` — time-constant screen of the whole zener-module element set (paper only)
+  - `zener_model_vs_datasheet.py` — zener knee r_dif vs the DZ23C3V3 datasheet (paper only)
+  - `gapd_vzt_authority.py` — knee-softness ablation sweep with liveness + V1E controls
+  - `gapd_locus_reachability.py` — ⚠ SUPERSEDED, do not cite (its own pooling control failed)
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
 - **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
   `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).
@@ -127,109 +132,93 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
-> **⭐ START HERE — GAP D AND V1L-440 ARE ONE MECHANISM, AND EVERY LINEAR CANDIDATE IS NOW DEAD
-> (2026-07-19).** Two investigations on different revisions, axes and anchors converged on the same
-> door. **The mechanism is inside the shared ZENER DRIVE MODULE, is frequency-dependent, and is NOT
-> linear.** Do not spend another session on a linear candidate ahead of or around the clip.
+> **⭐ START HERE — GAP D AND V1L-440 ARE ONE MECHANISM, MEMORY IS *PROVEN* REQUIRED, AND THE NEXT
+> STEP IS TO BUILD THE CORRECTION (2026-07-19).** The hunt for a physical cause is COMPLETE and it
+> came up empty; that is a finding, and it satisfies sanctioned-correction guardrail #2. **Do not
+> re-open the search. Build the dynamic correction described at the bottom of this block.**
 >
-> **What each road found.** Gap D (V2, LEVEL axis): pedal level-FLAT, plugin climbs; "matched
-> compression, ~5 dB fewer harmonics at LF" — impossible for a memoryless element; Finding 4 →
-> *"the pedal's drive stage has frequency-dependent MEMORY we do not model."* V1L-440 (DRIVE axis,
-> new this session): pedal's 440 Hz THD is drive-INDEPENDENT (16.75→15.83 % over D0.65→D0.45) while
-> ours collapses (16.56→3.57), a **−12.26 pp** error — the largest single V1L THD error in the matrix.
-> Attribution is clean and capture-free: **BLEND +0.48 pp, DRIVE −14.31 pp**; confounds closed
-> (PRESENCE 0.72 pp, TREBLE 0.66, BASS 0.43, LEVEL 0.00 over their capture ranges).
+> **The one deficit, seen on two axes.** V2 (LEVEL axis, D0.90): pedal THD level-FLAT 10.7/11.5/11.9
+> while ours climbs 16.5/21.3/23.3. V1L (DRIVE axis, 440 Hz): pedal drive-INDEPENDENT 16.75→15.83 %
+> over D0.65→D0.45 while ours collapses 16.56→3.57 (**−12.26 pp**, the largest single V1L THD error
+> in the matrix; attribution capture-free — BLEND +0.48 pp vs DRIVE −14.31 pp, all other knobs
+> ≤0.72 pp). **Same statement both times: the pedal's distortion is far less sensitive to how hard
+> you drive it than ours.** One deficit, two symptoms ⇒ ONE correction (guardrail #6).
 >
-> **⛔ REFUTED — DO NOT RE-ATTEMPT ANY OF THESE.** Each died on **magnitude or sign**, checked on
-> paper. Required authority throughout is **~5 dB**:
+> **⭐ THE PROOF THAT ENDS THE SEARCH** (`analysis/gapd_memoryless_impossibility.py` — no renders, no
+> model, two pedal numbers). A memoryless nonlinearity driven by a sine maps compression → THD
+> **one-to-one**: equal compression ⇒ equal amplitude at the element ⇒ equal THD, whatever its shape.
+> **V2 D0.90: the pedal is compressed within 0.17 dB at 110 vs 440 Hz while its THD differs by
+> 10.12 dB** (12.00 % vs 38.46 %), against a *measured* post-clip allowance of 0.74 dB
+> (`V2PostClipProbe`) ⇒ **9.4 dB unexplainable by ANY memoryless element.** V2 D0.50 BL1.00
+> corroborates at 4.5 dB. Both are BL=1.00 (full wet, no dry dilution).
+> ⇒ **No knee shape, no clip element, no re-fit of Vzt/Vth/Cj/m can EVER close Gap D.**
+>
+> ⚠ **ONLY V2 CAN CARRY A TWO-FREQUENCY THD ARGUMENT.** The first run flagged **V1E** — the revision
+> with no clipping devices at all, i.e. this investigation's control — as the *most* impossible
+> capture. **That contradiction was the tell.** V1E/V1L carry the **~430 Hz bridged-T DOWNSTREAM of
+> the clip** (netlists.md E5c/L5c; V2 deleted it), which CUTS 110 Hz's harmonics (220–770) but not
+> 440 Hz's (880+) — the same sign as the effect under test. **Gap G wearing a different hat.** Never
+> run a two-frequency THD comparison on V1E/V1L without accounting for the bridged-T.
+>
+> **⛔ REFUTED — DO NOT RE-ATTEMPT ANY OF THESE.** Each died on **computed magnitude or sign**,
+> mostly on paper before any code. Required authority throughout is **~5 dB**:
 >
 > | candidate | verdict | tool |
 > |---|---|---|
 > | module coupling caps | 0.11 dB of ~5 — an LTI highpass at \|H\|=0.990. **Caps KEPT** (real DC-blocking fix). Full lesson: **L-010** | `gapd_coupling_gate.py`, `ZenerCouplingCapTest` |
-> | twin-T | faithful to **0.004 dB** in the 110→440 relationship; 440 Hz isn't even on the notch (−7.37 dB below its own shoulder, min at 716 Hz) | `tests/TwinTAuthorityProbe.cpp` |
+> | twin-T | faithful to **0.004 dB** in the 110→440 relationship; 440 Hz isn't even on the notch (min at 716 Hz) | `tests/TwinTAuthorityProbe.cpp` |
 > | PRESENCE | faithful to **0.003 dB**; right sign but entire ceiling is **+2.67 dB** | `tests/PresenceAuthorityProbe.cpp` |
-> | band-limited/pre-emphasised saturator | error is **non-monotonic** (2k/4k too hot, 8k too COLD) so no corner works. Saturator KEPT (net joint win) | `v1l_sat_joint_score.py` |
-> | zener knee params (Vzt/Cj/m) | exonerated at LF, re-tested at HF | `gapd_hf_zener_scan.py` |
+> | band-limited/pre-emphasised saturator | error is **non-monotonic** (2k/4k too hot, 8k too COLD) so no corner works. Saturator KEPT | `v1l_sat_joint_score.py` |
 > | post-blend clipping | never reaches its rail (7.6–47.8 dB short) | `gapd_postblend_test.py` |
-> | **zener self-heating** | **~0.004 dB** of ~5. ⚠ frequency structure AND sign are both PERFECT (ms thermal τ tracks 110 Hz, averages out by 440; negative TC below 5 V ⇒ hotter clamps tighter) — it dies purely on power: ~420 µA × 3.9 V = **1.6 mW** ⇒ ΔT ~0.5–0.8 K ⇒ ΔVz 1–2 mV. **A perfect qualitative fit is not a magnitude** | paper (§D screen) |
-> | **module bias-node sag** (V1L C1 47u) | dead ×3: τ = **3.23 s**; the node feeds a (+) input so signal current is **zero**; and V2 ties pin 4 to main VCOM so it is **V1L-only** while the anomaly is on both | paper (§D screen) |
-> | **op-amp slew limiting** | dead ×3: **~50× margin** (needs 0.011 V/µs, part does 0.55), sign inverted, and it is an HF effect where the anomaly is LF | paper (§D screen) |
+> | zener self-heating | **~0.004 dB** of ~5. ⚠ frequency structure AND sign both PERFECT (ms thermal τ tracks 110 Hz, averages out by 440; negative TC below 5 V ⇒ hotter clamps tighter) — dies purely on power: 420 µA × 3.9 V = **1.6 mW** ⇒ ΔT ~0.5–0.8 K ⇒ ΔVz 1–2 mV. **A perfect qualitative fit is not a magnitude** | paper (§D screen) |
+> | module bias-node sag (V1L C1 47u) | dead ×3: τ = **3.23 s**; node feeds a (+) input so signal current is **zero**; V2 ties pin 4 to main VCOM so it is **V1L-only** while the anomaly is on both | paper (§D screen) |
+> | op-amp slew limiting | dead ×3: **~50× margin** (needs 0.011 V/µs, part does 0.55), sign inverted, and it is an HF effect where the anomaly is LF | paper (§D screen) |
+> | coupled DRIVE pot | already MODELLED (`ZenerDriveModule.h` stage-A rail clip); composite is memoryless — two memoryless nonlinearities separated by networks flat at both anchors | paper (§D screen) |
+> | **every LINEAR element in the module** | **element-set screen: the window is EMPTY.** A 110-vs-440 split needs τ ∈ [0.36, 1.45] ms; the module has 4 elements too SLOW (1.1–15.9 Hz) and 2 too FAST (3.3–72 kHz), gaps **7× on each side**; total splitting power **0.196 dB of ~5** | `gapd_module_tau_screen.py` |
+> | **the zener knee itself** | **measured, +2.19 dB of ~5 at best**, non-monotonic, V1L and V2 prefer DIFFERENT values with V2's anchors moving in OPPOSITE directions; and the +2.19 is confounded upward by a **−4.51/−6.20 dB** small-signal gain loss. Now also **structurally excluded** by the impossibility proof above | `gapd_vzt_authority.py` |
 >
-> | **coupled DRIVE pot** | already MODELLED (`ZenerDriveModule.h` stage-A rail clip), and the composite is memoryless: two memoryless nonlinearities separated by networks flat at both anchors | paper (§D screen) |
-> | **every LINEAR element in the module** | **element-set screen: the window is EMPTY.** A 110-vs-440 split needs τ ∈ [0.36, 1.45] ms; the module has 4 elements too SLOW (1.1–15.9 Hz) and 2 too FAST (3.3–72 kHz), nearest gaps **7× on each side**. Total splitting power **0.196 dB of ~5**. ⇒ **no parameterisation of any existing module element can do it** | `gapd_module_tau_screen.py` |
+> **⇒ The entire chain is excluded**: pre-drive (buffer ~3.4 Hz, twin-T, PRESENCE), the clip element
+> and every element in the module, and post-clip (`R_post` flat to 0.74 dB, post-blend clipping
+> 7.6–47.8 dB short). Nine rule-outs on computed magnitude plus one on measured authority.
 >
-> **⭐ BUT THE ZENER ITSELF WAS NEVER CHECKED AGAINST ITS DATASHEET — AND IT IS WRONG (2026-07-19).**
-> `analysis/zener_model_vs_datasheet.py`. `r_dif = Vzt/I` is a free, no-free-parameter prediction and
-> the DZ23C3V3 datasheet gives two points: **95 Ω @5 mA (model 40) and 600 Ω @1 mA (model 200)** ⇒ our
-> knee is **2.4–3× TOO HARD**; the datasheet implies Vzt **0.475–0.60**, we ship **0.20**.
-> **The cause is the MODEL FORM, not a bad fit:** a single `2·Is·sinh(V/Vzt)` ties knee softness to
-> sub-knee leakage through one parameter (at Vzt=0.475 it leaks 677 µA at 3 V vs the 220k leg's 13.6 —
-> 50× over, which is why 0.20 was chosen, `ZenerPairT.h:26-34`). The real device is two junctions in
-> series with different slopes and an **independent** reverse-leakage floor.
-> **Sign and mechanism MATCH Finding 4** (a softer knee compresses earlier/gentler ⇒ fewer harmonics
-> per dB of compression) and it is **datasheet-faithful, not a calibration layer**. ⚠ It is
-> **MEMORYLESS**, so it is a MAGNITUDE candidate only — the 110-vs-440 split stays open.
-> **PRIOR ART: we are one paper behind.** Werner et al. DAFx-15 (the source of our eqn-18) generalises
-> to **two Lambert W functions** with independent per-orientation parameters instead of treating the
-> reverse branch as an open circuit — structurally the freedom we lack, validated vs SPICE. Take that
-> generalisation rather than inventing an element. No published WDF zener-*breakdown* element exists.
-> **⛔ THE AUTHORITY WAS MEASURED AND IT FAILED ITS OWN PRE-REGISTERED GATE (2026-07-19,
-> `analysis/gapd_vzt_authority.py`, 44 renders, all controls PASS incl. V1E bit-identical).**
-> Best reading **+2.19 dB of ~5** (V1L@110); **non-monotonic and revision-inconsistent** (V1L wants
-> 0.475, V2 wants 0.60, and V2's two anchors move in OPPOSITE directions); and the predicted leakage
-> cost is real — small-signal gain **−4.51 dB (V1L) / −6.20 dB (V2)** at Vzt=0.475, up to −12 dB at
-> 0.60. ⚠ **And the +2.19 is CONFOUNDED UPWARD by that very gain change** — in a single-exponential
-> model softening ALWAYS drags leakage with it, so the ablation cannot isolate the mechanism by
-> construction. **⇒ DO NOT ship a softened Vzt (settled), and DO NOT build the two-branch element on
-> this evidence** — substantial nonlinear WDF work justified only by an authority number this
-> experiment failed to produce. **Vzt stays 0.20.**
-> **What stands:** the knee IS 2.4–3× too hard vs datasheet — record as a KNOWN MODEL LIMITATION, not
-> a bug to fix. V1L shows an interior |dTHD| minimum AT the datasheet value (3.22→1.03→2.98 over
-> 0.20/0.475/0.60) — suggestive, confounded, do not act on it. V2's knee params are still documented
-> V1L placeholders, which may explain V2's incoherence here.
-> **⭐⭐ MEMORY IS NOW *PROVEN* REQUIRED, KNEE-SHAPE-INDEPENDENTLY (2026-07-19,
-> `analysis/gapd_memoryless_impossibility.py` — no renders, no model, two pedal numbers).**
-> A memoryless element maps compression → THD **one-to-one** for a sine. **V2 D0.90: the pedal is
-> compressed within 0.17 dB at 110 vs 440 Hz while its THD differs by 10.12 dB** (12.00% vs 38.46%)
-> — against a *measured* post-clip allowance of 0.74 dB ⇒ **9.4 dB unexplainable by ANY memoryless
-> element.** (V2 D0.50 BL1.00 corroborates at 4.5 dB.) ⇒ **no knee shape, ever, can close Gap D.
-> Re-fitting Vzt/Vth/Cj/m is structurally futile — this supersedes and EXPLAINS the under-powered
-> Vzt result above.**
-> ⚠ **CONFOUND THAT NEARLY PRODUCED A FALSE HEADLINE:** the first run flagged **V1E** as the most
-> impossible capture — the revision with NO clipping devices at all, i.e. the control. **That
-> contradiction was the tell.** V1E/V1L carry the **~430 Hz bridged-T DOWNSTREAM of the clip**
-> (E5c/L5c; V2 deleted it), which CUTS 110 Hz's harmonics (220–770) but not 440 Hz's (880+) — same
-> sign as the effect under test. **Gap G wearing a different hat.** ⇒ **V1E/V1L rows are CONFOUNDED
-> and prove nothing; only V2 can carry a two-frequency THD argument.** Never run one on V1E/V1L
-> without accounting for the bridged-T.
-> ⚠ `analysis/gapd_locus_reachability.py` (192 renders) agreed but is **SUPERSEDED — do not cite its
-> rows.** Its own pooling control FAILED (V1L 5.6–12.9 dB where a memoryless chain needs ~0) because
-> pooling full-chain points across frequencies traces no locus at all. The control invalidated its
-> own script; the superseding argument needs no renders, so nothing is left to invalidate.
-> **⇒ THE CORRECTION MUST BE DYNAMIC (Branch B). Firm design constraints:** envelope-driven gain
-> reduction with **τ tens of ms** (long ⇒ generates no harmonics — the "gain reduction that is not
-> clipping" signature), **LF selectivity from a FILTERED SIDECHAIN, not from τ** (this dissolves the
-> element-screen's τ∈[0.36,1.45] ms window, which only binds if the frequency discrimination comes
-> FROM the memory element). ⚠ **Guardrail #5 has NO analog reference here and cannot get one** —
-> SPICE carries no harmonic information, so this must be capture-fitted ⇒ **guardrail #6 is
-> load-bearing: ONE correction across V1L AND V2, LF AND drive. Per-capture values ⇒ curve fit ⇒
-> STOP.** Full record: gap-audit §D "MEMORY IS NOW PROVEN REQUIRED".
-> ⚠ The earlier "stop hunting, take the sanctioned correction" recommendation is **WITHDRAWN** — the
-> element-set screen covered the module's LINEAR elements and I let it stand for the whole module.
-> Full record: gap-audit §D "PAPER SCREEN" + "THE ZENER KNEE IS ~2.4–3× TOO HARD".
+> **📌 KNOWN MODEL LIMITATION, RECORDED NOT FIXED.** The zener knee is **2.4–3× harder than its own
+> datasheet** (`r_dif` 95 Ω @5 mA / 600 @1 mA vs model 40/200 ⇒ datasheet implies Vzt 0.475–0.60, we
+> ship **0.20**). The cause is the MODEL FORM: a single `2·Is·sinh(V/Vzt)` welds knee softness to
+> sub-knee leakage through one parameter (at 0.475 it leaks 677 µA at 3 V vs the 220k leg's 13.6 —
+> 50× over), while the real device has an **independent** reverse-leakage floor. Fixing it properly
+> means a two-branch element — **Werner et al. DAFx-15** generalises our own eqn-18 to **two Lambert
+> W functions** with independent per-orientation parameters (validated vs SPICE; no published WDF
+> zener-*breakdown* element exists). **NOT built: the measured authority does not justify it, and the
+> impossibility proof says it would not close Gap D anyway.** Documented in `ZenerPairT.h`.
+> **Do not change the shipped Vzt=0.20.**
 >
-> ⇒ **the whole linear chain ahead of V1L's clip is exonerated**: buffer (~3.4 Hz), twin-T, PRESENCE,
-> module coupling caps (~7 Hz). **And the puzzle SHARPENS:** net pre-drive shaping is **−1.97 dB at
-> 440 vs 110**, so 440 arrives at the clip node COLDER — yet the pedal saturates there at a lower
-> drive than at 110 Hz. Nothing linear does that.
+> **▶ THE CORRECTION TO BUILD (Branch B) — design constraints are firm:**
+> - **Envelope-driven gain reduction, τ tens of ms.** Long relative to the waveform ⇒ it generates
+>   **no harmonics**, which is precisely the required "gain reduction that is not clipping" signature
+>   (Finding 4: the pedal compresses ~5 dB more than its own harmonic content justifies at LF).
+> - **LF selectivity from a FILTERED SIDECHAIN, not from τ.** This is the move that dissolves the
+>   element-screen's τ ∈ [0.36, 1.45] ms window — that window only binds if the frequency
+>   discrimination comes FROM the memory element. Separate them and both constraints hold at once.
+> - **Its own named calibration layer** (guardrail #1) — never an altered component value, taper or
+>   rail. Precedents already in tree: `ToneWarpShelf.h`, `TopOctaveShelf.h`.
+> - **Gated by a test that FAILS when it is deleted** (guardrail #3, and verify the gate can fail).
+> - ⚠ **Guardrail #5 has NO analog reference here and cannot get one** — the author's SPICE curves
+>   carry **no harmonic information**, so the ⚖ arbitration rule explicitly does not cover this. It
+>   must be capture-fitted. **⇒ guardrail #6 is load-bearing: ONE correction fitted once across V1L
+>   AND V2, LF AND the drive axis. If it needs per-capture values it is a curve fit — STOP.**
+> - **Document as a JUDGEMENT CALL** naming the unruled-out alternative (guardrail #4).
 >
-> **NEXT: a genuinely nonlinear, frequency-dependent (memory-bearing) mechanism inside the zener
-> module.** Per **L-010**, before writing any code: **compute its magnitude AND check its sign.**
-> ⚠ Sign trap, already fatal twice (S-K stopband floor in H err2; the twin-T here): mechanisms that
-> REMOVE HF harmonics are the wrong direction where the pedal has MORE.
+> Full record: `docs/phase10-gap-audit.md` §D — "PAPER SCREEN OF THE MEMORY-BEARING CANDIDATES",
+> "THE ZENER KNEE IS ~2.4–3× TOO HARD", "THE Vzt AUTHORITY WAS MEASURED", "MEMORY IS NOW PROVEN
+> REQUIRED". ⚠ `gapd_locus_reachability.py` agreed but is **SUPERSEDED — do not cite its rows**: its
+> own pooling control failed (V1L 5.6–12.9 dB where a memoryless chain needs ~0), because pooling
+> full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
-> **Last change: Gap H error 1 FIXED (R48/R49 33k→22k, §1-match override, commit 4eafd33), 23/23
-> green, reports regenerated.** ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
+>
+> **Last change: Gap D's physical-cause hunt CLOSED — memory proven required, correction not yet
+> built (commits 01d5f57, 485fc36). 25/25 ctest green on a full `-j8` build; no DSP behaviour changed
+> this session (the only source edit was a comment in `ZenerPairT.h`).** Prior: Gap H error 1 FIXED
+> (R48/R49 33k→22k, §1-match override, commit 4eafd33). ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
 > that used to sit here was OVERTURNED — it rested on a §1 target that had been edited to the model's
 > value (L-001) and on splitting two summing causes. Do not restore it.
 > **Gap D history below (for context only — the ⭐ block above supersedes the historical
@@ -451,12 +440,22 @@ without images.
 > about this quantity?" If yes and it conflicts → SPICE wins, flag it. If no (anything nonlinear) →
 > the capture stands alone and you are in best-effort/judgement-call territory, label accordingly.
 >
-> ## ▶ NEXT STEPS (set 2026-07-19, after the Gap D investigation) — START HERE
+> ## ▶ NEXT STEPS (revised 2026-07-19 end-of-session) — START HERE
+>
+> **0. ⭐ BUILD GAP D's DYNAMIC CORRECTION.** This is the single live task. The physical-cause hunt is
+> CLOSED (memory proven required; see the ⭐ block at the top for the proof, the constraints and the
+> guardrails). Everything numbered below was written BEFORE that proof and is superseded wherever it
+> proposes hunting for a physical mechanism for Gap D — the characterisations remain valid and useful
+> as fitting targets, the "next candidate" framings do not. Items 4–6 (Gap J+E, Gap F/B, V1L
+> harmonics) are independent of Gap D and stand unchanged.
+>
 >
 > Ordered. Each item names its tool and its gate. Read gap-audit §D before 1–3.
 >
-> **1. Gap D MIDBAND — STILL OPEN. Its leading candidate (the module coupling caps) was implemented
-> and REFUTED 2026-07-19 — read the ⭐ block at the top of this file FIRST, then gap-audit §D.
+> **1. Gap D MIDBAND — ⚠ SUPERSEDED BY ITEM 0; KEPT FOR ITS CHARACTERISATION ONLY. Do not act on its
+> "next candidate" framing — memory is now PROVEN required and no physical mechanism will be found.
+> The measurements below are still valid and are the FITTING TARGET for the correction.**
+> (Historical: its leading candidate, the module coupling caps, was implemented and REFUTED.)
 > The anomaly's characterisation below stands; only the proposed mechanism is dead. Read gap-audit §D
 > "THE MIDBAND, ATTACKED WITH A GAP-G-IMMUNE METRIC" before touching this.** New tool:
 > `analysis/gapd_compression_fr.py` — **COMPRESSION vs FREQUENCY**, `gain_driven(f,L) −
@@ -599,7 +598,8 @@ without images.
 > REFUTED"). Its residual is ~2 pp; the 440 Hz item below is 6× larger.
 >
 > **⭐ 1b. V1L 440 Hz — THE LARGEST SINGLE V1L THD ERROR IN THE MATRIX, AND IT IS GAP D's TWIN.
-> Work this with item 1.** (2026-07-19, `v1l_sat_joint_score.py` + `v1l_440_blend_drive.py` +
+> ⚠ SUPERSEDED BY ITEM 0 — it is the SAME deficit as Gap D and the SAME correction must close both
+> (guardrail #6). Its characterisation below is a fitting target; its pre-drive framing is dead.** (2026-07-19, `v1l_sat_joint_score.py` + `v1l_440_blend_drive.py` +
 > `v1l_440_confound_check.py`.) Pedal **16.75/15.83/5.85 %** vs plugin **16.56/3.57/1.86** across the
 > three captures ⇒ **−12.26 pp at D0.45 BL0.65**, exceeding every HF anchor error combined.
 > - **The pedal's 440 Hz THD is nearly DRIVE-INDEPENDENT** (16.75→15.83 over D0.65→D0.45); ours
@@ -692,7 +692,7 @@ without images.
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **DEMOTED 2026-07-19 — the saturator is NOT V1L's main THD error, and the planned fix is REFUTED.** The joint LF+HF score §5 asked for was built (`v1l_sat_joint_score.py`) and it killed the fix it was built to gate: the error is **NON-MONOTONIC in frequency** (2k **+4.6/+0.2/+5.3**, 4k **+1.1/+2.2/+1.9** too HOT, but 8k **−6.2/−0.1/−0.6** too COLD), so **no band-limit/pre-emphasis can work** — a lowpass on the nonlinear drive cuts 2k, 4k AND 8k, and 8k needs MORE. **Do not implement it.** Saturator is a net JOINT win (rms **3.81 shipped vs 4.88 disabled**) ⇒ **KEEP, unchanged**; but Gap F's "9×" was an LF-only score, worth ~22% on a joint one. ⭐ **The real V1L THD error is 440 Hz** (see Gap D row). Prior state: V1L half root-caused to the Gap F saturator (`v1l_sat_hf_ablate.py`), 2.9 of 3.19 pp of 4 kHz THD. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
 > | **I** | THD-vs-LEVEL slope wrong (V1E flat) | 🔄 **H2 remnant CHARACTERISED 2026-07-19 and confirmed NOT closable by the rail** (`analysis/h2_asym_perdrive.py`). Required asymmetry is **0.05 V at D0.50/0.60 but 0.60 V at D1.00 (12×)** ⇒ **guardrail #6 FAILS, do not ship a fixed OR drive-dependent asymmetry.** The mechanism is wrong in KIND: a real rail asymmetry is a fixed voltage, and the only drive-dependent candidate (CMOS output Ron) lacks authority — the stage drives 330k, so output current is ~µA (L-010). Shipped −4.10 STAYS (best single value, plausible magnitude). ⚠ **A SECOND L-009 DEFECT WAS FOUND AND FIXED HERE** — `--rail-vneg/--rail-vpos` treated ±4.2 as "unspecified", so the symmetric baseline silently rendered V1E's −4.10 default; every scan grid containing −4.2 duplicated the −4.10 column, incl. the fit that chose the shipped value. Now NaN-sentinel, verified per revision. Prior state: **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
-> | **D** | V2 zener drive tracking (+ V1L) | 🔄 **OPEN. Coupling-cap mechanism REFUTED 2026-07-19** (implemented, ablation-measured at 0.11 dB of ~5 needed; caps KEPT as schematic fidelity + a real DC-blocking fix, `ZenerCouplingCapTest`). See the ⭐ block at the top + L-010. Anomaly characterisation (matched compression, ~5 dB fewer harmonics at LF on V1L/V2, absent on V1E) STANDS; mechanism unknown; must be nonlinear or level-dependent — no linear element can do it. Prior state: **IN PROGRESS 2026-07-18. Zener knee params EXONERATED on the clean metric (Vzt/Cj/m — do not re-scan); D0.25 discarded as estimator noise (L-006 bracket, pedal AND plugin); residual is MAGNITUDE + FREQUENCY-DEPENDENT (sign flips 100 vs 200 Hz), not slope ⇒ needs a new hypothesis in the wet path, not the clip element.** Original framing follows: ⭐ **UNPARKED 2026-07-18 — NEXT THD TASK.** Both park reasons expired: Gap I's V1E half is DONE, and the clean **THD-vs-LEVEL @101 Hz** metric is unconfounded (the old Vzt/Cj/m rule-outs used the Gap-G-confounded THD-vs-*freq* — **re-check them**). Target: V2 D0.90 pedal is level-FLAT 10.7/11.5/11.9 but plugin CLIMBS 16.5/21.3/23.3 — the zener under-clamps. NOT a level issue (kInputRef=1.3 worsens above) and NOT the V1E fix (rail vs zener). **V1L is now worst on harmonics (12.1 dB, erratic H2)** — same family, but its captures are drive+blend+bass confounded, so do V2 first. |
+> | **D** | V2 zener drive tracking (+ V1L) — ONE item with V1L-440 | 🔄 **PHYSICAL-CAUSE HUNT CLOSED 2026-07-19; CORRECTION NOT YET BUILT.** **MEMORY IS PROVEN REQUIRED, knee-shape-independently** (`gapd_memoryless_impossibility.py`: V2 D0.90 is compressed within **0.17 dB** at 110 vs 440 Hz while THD differs by **10.12 dB**, vs a measured 0.74 dB post-clip allowance ⇒ 9.4 dB unexplainable by ANY memoryless element). ⇒ no knee shape / clip element / Vzt-Vth-Cj-m refit can ever close it. Nine rule-outs on computed magnitude + one on measured authority; the whole chain (pre-drive, module, post-clip) is excluded. **NEXT: build the dynamic correction — envelope-driven gain reduction, τ tens of ms, LF selectivity from a FILTERED SIDECHAIN, own calibration layer, guardrail #6 load-bearing (one fit across V1L AND V2; per-capture values ⇒ curve fit ⇒ stop).** ⚠ Only V2 can carry a two-frequency THD argument — V1E/V1L's ~430 Hz bridged-T sits DOWNSTREAM of the clip and cuts 110 Hz's harmonics but not 440 Hz's (Gap G in a new hat). ⚠ Known model limitation recorded, not fixed: the zener knee is **2.4–3× harder than its datasheet**; cause is the single-exponential model form; Werner DAFx-15's two-Lambert-W generalisation is the proper fix, NOT built (authority measured at +2.19 dB of ~5, and the impossibility proof says it would not close Gap D anyway). **Vzt stays 0.20.** See the ⭐ block at the top + gap-audit §D. |
 > | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
 > | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
 > | **A/A′, P3–P7** | (various) | ✅ DONE/VOID — see table below. |
