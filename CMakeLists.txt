@@ -287,6 +287,19 @@ target_link_libraries(ZenerCouplingCapTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(ZenerCouplingCapTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME ZenerCouplingCapTest COMMAND ZenerCouplingCapTest)
 
+# Gap J DRY/WET ALIGNMENT gate — the oversampled wet path has FIR latency, the dry tap is a wire;
+# summing them unaligned at BLEND was a comb filter (the ~285 Hz null). Gates the physical invariant
+# that blend response must be OS-INDEPENDENT. Pre-fix headroom: V1L -12.3, V2 -17.7 dB vs a 1.0 dB
+# tolerance. JUCE console app (the OS region needs juce::dsp).
+juce_add_console_app(DryTapAlignmentTest PRODUCT_NAME "DryTapAlignmentTest")
+target_sources(DryTapAlignmentTest PRIVATE tests/DryTapAlignmentTest.cpp)
+target_compile_definitions(DryTapAlignmentTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(DryTapAlignmentTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME DryTapAlignmentTest COMMAND DryTapAlignmentTest)
+
 # Gap J POLARITY GATES. Two shipped stages read a node voltage off a chowdsp WDFSeriesT child,
 # which returns it NEGATED (once per nesting level) — so TwinTNotch (all three revisions) and
 # V1 Late's L5d wet make-up buffer were both inverted. Neither was detectable by any existing

@@ -27,6 +27,7 @@
 
 #include "V1EarlyStages.h" // V1EarlyInputBuffer, reused verbatim (netlists.md L1 == E1, small-signal)
 #include "V1LateStages.h"
+#include "DryTapDelay.h"
 #include "ToneWarpShelf.h"
 #include "ZenerDriveClipRecovery.h"
 #include "../utils/ChangeGate.h"
@@ -96,6 +97,10 @@ public:
         warpShelf.prepare(baseFs);
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
+        // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
+        // the dry tap is a plain wire. Summing them unaligned at BLEND is a comb filter (~285 Hz
+        // null at 8x). Sized generously once here; the per-block setDelay() below never allocates.
+        dryDelay.prepare(kMaxDryDelay);
         // Force a param push on the first block regardless of the host's initial values.
         lastDrive = lastPresence = lastBlend = lastLevel = lastBass = lastTreble = -1.0;
     }
@@ -104,6 +109,7 @@ public:
     {
         driveRegion.reset();
         blendLevel.reset();
+        dryDelay.reset();
         tone.reset();
         warpShelf.reset();
         output.reset();
@@ -174,11 +180,17 @@ public:
     // tap buffered between them.
     void processBlock(double* data, int n) noexcept
     {
+        // Gap J: track the OS region's CURRENT latency (it changes with the factor, and is 0 at
+        // 1x where this becomes an exact no-op). Cheap, allocation-free, and reading it from the
+        // oversampler itself means there is no constant here to drift out of sync.
+        dryDelay.setDelay(driveRegion.getLatencySamples());
+
         // Stage 1 (base rate): input buffer -> dry tap; twin-T notch + PRESENCE = wet-pre-drive.
         for (int i = 0; i < n; ++i)
         {
             const double inb = input.process(data[i]); // L1: input buffer
-            dryTap[(size_t) i] = inb;                  // buffered dry tap (feeds BLEND's dry leg)
+            // Gap J: align the dry leg with the wet path's oversampler latency (a wire has none).
+            dryTap[(size_t) i] = dryDelay.process(inb);
             data[i] = presence.process(inb);           // L2/L3: twin-T notch + PRESENCE
         }
 
@@ -204,6 +216,10 @@ private:
     V1LateOutputStage output;
 
     std::vector<double> dryTap;
+    // Gap J dry/wet alignment. 1024 base-rate samples is far above any factor's latency here
+    // (~84 at 8x), so setDelay() only ever clamps, never reallocates on the audio thread.
+    static constexpr int kMaxDryDelay = 1024;
+    DryTapDelay dryDelay;
 
     double lastDrive = -1.0, lastPresence = -1.0, lastBlend = -1.0, lastLevel = -1.0, lastBass = -1.0,
            lastTreble = -1.0;
