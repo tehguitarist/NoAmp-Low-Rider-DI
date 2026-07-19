@@ -142,7 +142,7 @@ without images.
 >
 > | half | state |
 > |---|---|
-> | **V1L DRIVE axis (440 Hz)** | ✅ **CORRECTED AND SHIPPED** — resid rms 9.42 → 3.01 dB, SPREAD error +9.84 → **+1.58 dB**. Live in `V1LateDSP::prepare()`, gated by `tests/V1LateGapDTest` (proven to FAIL on revert). ⚠ `makeup`/`tau`/`scHz` are PLACEHOLDERS, not fitted — a `makeup` re-fit was in flight at session end. |
+> | **V1L DRIVE axis (440 Hz)** | ✅ **CORRECTED AND SHIPPED** — resid rms 9.42 → 3.01 dB, SPREAD error +9.84 → **+1.58 dB**. Live in `V1LateDSP::prepare()`, gated by `tests/V1LateGapDTest` (proven to FAIL on revert). `depth 0.5`/`target 2.0` fitted; **`makeup 1.0` RE-FIT AND VALIDATED** (pooled V1L THD+compression: 1.0 = 2.819 dB vs 0.5 = 3.478); verified NOT clamp-limited by proof-by-widening. ⚠ `tau 30 ms`/`scHz 200 Hz` still NEVER SWEPT. |
 > | **V2 LEVEL axis (110 Hz)** | ⛔ **NOT CLOSED; THIS MECHANISM IS REFUTED FOR IT.** Spread error +2.13 → **+2.79 dB (worse)** at every `makeup`. V2 stays `depth 0`. |
 >
 > **⛔ DO NOT RE-ATTEMPT A DRIVE NORMALISER ON V2. Two measured reasons:** (1) **V2's COMPRESSION IS
@@ -238,10 +238,15 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change: Gap D's physical-cause hunt CLOSED — memory proven required, correction not yet
-> built (commits 01d5f57, 485fc36). 25/25 ctest green on a full `-j8` build; no DSP behaviour changed
-> this session (the only source edit was a comment in `ZenerPairT.h`).** Prior: Gap H error 1 FIXED
-> (R48/R49 33k→22k, §1-match override, commit 4eafd33). ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
+> **Last change (2026-07-19, this session): GAP D's CORRECTION BUILT, FITTED, AND SPLIT — V1L's half
+> SHIPPED (first audio change of this work), V2's half REFUTED for this mechanism.** New:
+> `src/dsp/ClipDriveNormaliser.h` (sanctioned calibration layer), `analysis/gapd_fit_harness.py`
+> (joint scorer enforcing guardrail #6 by regret, scoring THD *and* compression),
+> `tests/V1LateGapDTest` (L-003 gate, verified to fail on revert), `ZenerDriveModule::clipDriveGain()`,
+> and `--gapd-*` flags on OfflineRender with clamp telemetry. **27/27 ctest green on a full `-j8`
+> build.** V1L audio CHANGES; V1E and V2 are bit-identical to before. **Guardrail #6 is NOT satisfied
+> and Gap D is NOT closed** — see the ⭐ block.
+> Prior: Gap H error 1 FIXED (R48/R49 33k→22k, §1-match override, commit 4eafd33). ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
 > that used to sit here was OVERTURNED — it rested on a §1 target that had been edited to the model's
 > value (L-001) and on splitting two summing causes. Do not restore it.
 > **Gap D history below (for context only — the ⭐ block above supersedes the historical
@@ -465,12 +470,19 @@ without images.
 >
 > ## ▶ NEXT STEPS (revised 2026-07-19 end-of-session) — START HERE
 >
-> **0. ⭐ GAP D — THE CORRECTION IS BUILT; V1L SHIPPED, V2 STILL OPEN.** ⚠ This item is DONE as
-> written; what remains is narrower. **(a)** Re-fit V1L's `makeup` against the COMPRESSION metric now
-> in `gapd_fit_harness.py` (the shipped 1.0 is a placeholder; V1L compresses 2.17 dB less than the
-> pedal) and consider sweeping `tau`/`scHz`, which were never swept. **(b)** V2's half needs a
-> mechanism that removes harmonics WITHOUT changing gain — a drive normaliser is refuted for it, see
-> the ⭐ block. Do not re-run a drive normaliser on V2. Historical framing of the original task: The physical-cause hunt is
+> **0. ⭐ GAP D — THE CORRECTION IS BUILT AND V1L IS DONE; V2's HALF IS THE LIVE WORK.** ⚠ The
+> original task as written below is COMPLETE. What remains:
+> **(a) V2 — the real open item.** It needs a mechanism that removes HARMONICS WITHOUT CHANGING GAIN.
+> Its compression already matches the pedal to 0.25 dB, so there is no compression lever left; a
+> drive normaliser is REFUTED for it (it breaks the compression: −0.25 → +2.48 dB) and must not be
+> re-run. Start from the ⭐ block's two measured reasons, not from a fresh sweep.
+> **(b) V1L polish, low value.** `makeup` is now fitted and validated; only `tau`/`scHz` were never
+> swept, and V1L knowingly keeps a +2.17 dB compression deficit as the better side of a measured
+> trade (closing it costs +5.35 dB at D0.40). Do not reopen without a reason.
+> **(c) ⚠ When using `gapd_fit_harness.py`, read the PER-AXIS columns for any per-revision decision.**
+> Its "best JOINT" headline pools both axes with the layer ENABLED ON V2, which is not the shipping
+> configuration — that is how it recommended a `makeup` that loses on V1L's own metric.
+> Historical framing of the original task: The physical-cause hunt is
 > CLOSED (memory proven required; see the ⭐ block at the top for the proof, the constraints and the
 > guardrails). Everything numbered below was written BEFORE that proof and is superseded wherever it
 > proposes hunting for a physical mechanism for Gap D — the characterisations remain valid and useful

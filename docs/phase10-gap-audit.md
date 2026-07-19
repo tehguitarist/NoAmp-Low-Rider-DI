@@ -1674,9 +1674,28 @@ interaction effect into fixed component values that are individually schematic-f
 >   0→1, which was the downstream saturator, not the parameter. This was a DEFECT IN THE HARNESS
 >   reported as a result until it was caught.
 > - The compression metric added afterwards finds V1L compresses **2.17 dB LESS than the pedal**
->   (−6.11 vs −8.28), which `makeup` acts on directly. **A makeup re-fit was in flight at the end of
->   this session — the shipped 1.0 may well be wrong. Re-run the sweep before trusting it.**
-> - `tau`/`scHz` were never swept at all.
+>   (−6.11 vs −8.28), which `makeup` acts on directly.
+> - **`makeup` RE-FIT LANDED — the shipped 1.0 STANDS, and is now validated rather than assumed.**
+>   Swept 0 / 0.25 / 0.5 / 1.0 at depth 0.5, target 2. On the V1L axis pooled over its THD anchors
+>   AND its compression term: **`makeup 1.0` = 2.819 dB vs `makeup 0.5` = 3.478 dB.** `makeup 0.5`
+>   nearly closes the compression error (+2.17 → **−0.45 dB**) and tightens the spread (+1.58 →
+>   −1.05), but pays for it at D0.40, where THD goes 8.04 → 10.83 % (+2.75 → **+5.35 dB** residual).
+>   Net loss. ⚠ **It was luck, not judgement — the value was shipped unfitted and happened to be
+>   right.**
+> - ⚠ **DO NOT TAKE THE HARNESS'S OWN "best JOINT" PICK FOR A V1L-ONLY DECISION.** It chose
+>   `makeup 0.5`, because the joint score pools BOTH axes and the sweep enables the layer on V2 —
+>   but **V2 SHIPS WITH IT OFF**, so that optimum is partly fitted to a configuration that does not
+>   exist. For a per-revision decision read the per-axis columns, not the joint headline.
+> - **NOT clamp-limited, verified by proof-by-widening at THIS operating point** (not by reusing the
+>   earlier point's verdict): widening the guards 6× (0.02/50 vs 0.125/8) leaves the V1L numbers
+>   IDENTICAL (resid rms 3.01 both ways, comp +2.17 both ways). ⇒ the 23.5 % clamp fraction is
+>   clamping in SILENCE, outside the analysed segments — further evidence the fraction proxy
+>   over-triggers and the widening test is the real criterion.
+> - **The compression metric independently corroborated the V2 verdict from an unplanned direction:**
+>   enabling the layer on V2 drives its compression residual **−0.25 → +2.48 dB**, i.e. it BREAKS the
+>   one thing V2 already had right.
+> - **STILL UNFITTED on V1L: `tau` (30 ms) and `scHz` (200 Hz) were never swept**, and the +2.17 dB
+>   compression deficit is knowingly left open as the better side of the trade above.
 >
 > ### TOOLING BUILT THIS SESSION (and the defects each one caught)
 >

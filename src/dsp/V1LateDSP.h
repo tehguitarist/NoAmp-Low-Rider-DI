@@ -75,12 +75,20 @@ public:
         // the pedal is flat AND cold. That is the memoryless-impossibility signature restated, and no
         // setting of this layer resolves it.
         //
-        // ⚠ NOT ALL FIVE PARAMETERS ARE FITTED. depth and target were swept and have a clean interior
-        // optimum. `makeup` is UNCONSTRAINED by the harness's THD-only objective — THD is a ratio, so
-        // a post-clip scalar cancels exactly — and tau/scHz were never swept at all; both keep the
-        // ClipDriveNormaliser defaults. Fitting makeup requires a COMPRESSION metric alongside THD
-        // (the Finding-4 signature is a level phenomenon, not a harmonic one). Treat 1.0 / 30 ms /
-        // 200 Hz as placeholders pending that fit, not as measured values.
+        // WHAT IS AND IS NOT FITTED. `depth` and `target` were swept and sit at a clean interior
+        // optimum. `makeup` WAS initially unfittable — THD is a ratio, so a post-clip scalar cancels
+        // out of it exactly — and was shipped as a placeholder until a COMPRESSION metric was added
+        // to the harness (the Finding-4 signature is a level phenomenon, not a harmonic one). It has
+        // since been swept over 0/0.25/0.5/1.0 and **1.0 is confirmed**: on the V1L axis pooled over
+        // its THD anchors AND its compression term, 1.0 = 2.819 dB vs 0.5 = 3.478 dB. `makeup 0.5`
+        // nearly closes the compression error (+2.17 -> -0.45 dB) and tightens the spread, but costs
+        // +5.35 dB of THD residual at D0.40 — a net loss, so the +2.17 dB compression deficit is
+        // KNOWINGLY LEFT OPEN as the better side of a measured trade.
+        // ⚠ `tau` (30 ms) and `scHz` (200 Hz) were NEVER SWEPT and remain ClipDriveNormaliser
+        // defaults — do not cite them as fitted.
+        // ⚠ Do NOT take gapd_fit_harness's "best JOINT" headline for a V1L-only decision: it pools
+        // both axes with the layer ENABLED ON V2, which is not the shipping configuration, and on
+        // that basis it recommends a makeup that loses on V1L's own metric. Read the per-axis columns.
         driveRegion.setClipDriveNormalisation(/*depth*/ 0.5, /*targetV*/ 2.0, /*tauMs*/ 30.0,
                                               /*scHz*/ 200.0, /*makeup*/ 1.0);
         blendLevel.prepare(baseFs);
