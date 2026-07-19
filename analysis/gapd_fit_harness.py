@@ -152,15 +152,41 @@ def render(parsed, extra_args, os_factor):
     return x
 
 
+def depth_of(extra_args):
+    """The --gapd-depth in a flag list, or None if absent."""
+    for i, a in enumerate(extra_args[:-1]):
+        if a == "--gapd-depth":
+            return float(extra_args[i + 1])
+    return None
+
+
 def assert_flags_live(parsed, extra_args, os_factor):
-    """L-009: prove the correction flags actually change THIS revision's output before scoring it.
+    """L-009, in BOTH directions — the check is on the correction's SIGN OF LIFE, not on each grid
+    point, because depth=0 is the deliberate OFF value and must be identical.
+
+        depth == 0  -> assert the render IS bit-identical to baseline. This is the ablation control
+                       (guardrail #3 / L-003): if the "off" setting is not exactly the uncorrected
+                       chain, the layer is leaking and every score in the sweep is contaminated.
+        depth  > 0  -> assert the render is NOT bit-identical. A live switch is what makes a null
+                       result mean anything.
+
     Verified PER REVISION — proving a flag live on one revision and drawing a null conclusion about
-    another is L-009 wearing a different hat."""
+    another is L-009 wearing a different hat (the --rail-v* defect did exactly that)."""
     if not extra_args:
         return
+    d = depth_of(extra_args)
     base = render(parsed, (), os_factor)
     cand = render(parsed, extra_args, os_factor)
-    if np.array_equal(base, cand):
+    same = np.array_equal(base, cand)
+
+    if d == 0.0:
+        if not same:
+            raise SystemExit(
+                f"ABLATION ABORT: --gapd-depth 0 did NOT render bit-identical to the uncorrected "
+                f"chain on {parsed['rev']} (max |delta| {np.max(np.abs(cand - base)):.6g}). The "
+                f"correction leaks when it is switched off, so nothing in this sweep is trustworthy.")
+        return
+    if same:
         raise SystemExit(
             f"L-009 ABORT: flags {' '.join(extra_args)} rendered BIT-IDENTICAL to baseline on "
             f"{parsed['rev']}. The switch does nothing, so any score from it is meaningless. "

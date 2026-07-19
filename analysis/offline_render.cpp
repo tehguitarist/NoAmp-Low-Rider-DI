@@ -36,6 +36,18 @@
 //                           linear scaler + a level-INDEPENDENT kink (see Gap I).
 //     --sat-offset <volts>  DC offset injected before tanh (0 = symmetric, H2 at floor; >0 produces H2).
 //                           Applied to ALL revisions after the recovery stage. OMIT = built-in default.
+//     --gapd-depth <0..1>   V1L/V2 ONLY. Gap D calibration layer (src/dsp/ClipDriveNormaliser.h):
+//                           envelope-driven normalisation of the level reaching the clip node.
+//                           0 = OFF and BIT-IDENTICAL to the uncorrected chain (the shipping
+//                           default); 1 = fully normalise the envelope to --gapd-target. OMIT the
+//                           flag entirely to keep the DSP's own default. Rejected on V1E, which has
+//                           no zener module and no anomaly — it is this investigation's control.
+//     --gapd-target <volts> level the clip-node drive is pulled toward (fit parameter)
+//     --gapd-tau-ms <ms>    envelope time constant (tens of ms => generates no harmonics)
+//     --gapd-sc-hz <Hz>     sidechain lowpass corner — this, NOT tau, gives the LF selectivity
+//     --gapd-makeup <0..1>  0 = keep the gain change at the output (compression) .. 1 = undo it
+//                           after the clip (pure clip-drive normalisation, level preserved)
+//                           The four above are ERRORS without --gapd-depth (they would be no-ops).
 //     --rail-vneg <volts>   negative stage-A rail voltage (default -4.2)
 //     --rail-vpos <volts>   positive stage-A rail voltage (default +4.2)
 //                           Applied to ALL revisions (V1E, V1L, V2) when set.
@@ -216,6 +228,44 @@ int main(int argc, char** argv)
     const double satGain   = argVal(argc, argv, "--sat-gain", -1.0);
     const double satKnee   = argVal(argc, argv, "--sat-knee", -1.0);
     const double satOffset = argVal(argc, argv, "--sat-offset", -1.0);
+    // --- Gap D calibration layer (src/dsp/ClipDriveNormaliser.h) --------------------------------
+    // -1 sentinel on DEPTH = "flag not specified, keep the DSP default". 0 is a LEGAL value meaning
+    // OFF (and bit-identical to the uncorrected chain), so it cannot double as "unspecified" — that
+    // is the exact L-009 defect that made `--sat-gain 0` and `--rail-vneg -4.2` unfalsifiable. The
+    // other four only take effect when depth is given; passing one WITHOUT depth is an error rather
+    // than a silent no-op, because "I set the target and nothing changed" is how a null result gets
+    // manufactured from a switch that was never live.
+    const double gapdDepth  = argVal(argc, argv, "--gapd-depth", -1.0);
+    const double gapdTarget = argVal(argc, argv, "--gapd-target", kUnset);
+    const double gapdTauMs  = argVal(argc, argv, "--gapd-tau-ms", kUnset);
+    const double gapdScHz   = argVal(argc, argv, "--gapd-sc-hz", kUnset);
+    const double gapdMakeup = argVal(argc, argv, "--gapd-makeup", kUnset);
+    const bool gapdSubSpecified = (gapdTarget == gapdTarget) || (gapdTauMs == gapdTauMs)
+                                  || (gapdScHz == gapdScHz) || (gapdMakeup == gapdMakeup);
+    if (gapdSubSpecified && gapdDepth < 0.0)
+    {
+        std::fprintf(stderr, "error: --gapd-target/-tau-ms/-sc-hz/-makeup do nothing without "
+                             "--gapd-depth (0 = off). Refusing to render a silent no-op.\n");
+        return 2;
+    }
+    if (gapdDepth >= 0.0 && revIdx == 0)
+    {
+        std::fprintf(stderr, "error: --gapd-* is V1L/V2 only. V1E has no zener drive module and "
+                             "shows ZERO Gap D anomaly (0/3 at both anchors) — it is the control.\n");
+        return 2;
+    }
+    // Defaults mirror ClipDriveNormaliser's own, so an unspecified sub-parameter is explicit here
+    // rather than implicit in two places.
+    const double gapdTargetV = (gapdTarget == gapdTarget) ? gapdTarget : 1.0;
+    const double gapdTau     = (gapdTauMs == gapdTauMs) ? gapdTauMs : 30.0;
+    const double gapdSc      = (gapdScHz == gapdScHz) ? gapdScHz : 200.0;
+    const double gapdMk      = (gapdMakeup == gapdMakeup) ? gapdMakeup : 1.0;
+    auto applyGapD = [&](auto& d)
+    {
+        if (gapdDepth >= 0.0)
+            d.setClipDriveNormalisation(gapdDepth, gapdTargetV, gapdTau, gapdSc, gapdMk);
+    };
+
     // Use 0.0 as sentinel for "use per-revision default from kOutputMakeup[rev]". The caller can
     // override with --out-makeup <gain>; if not provided, each rev branch picks its own array element.
     const double outMakeupOverride = argVal(argc, argv, "--out-makeup", 0.0);
@@ -257,6 +307,7 @@ int main(int argc, char** argv)
                                    [&](auto& d) {
                                        d.setParams(drive, presence, blend, level, bass, treble);
                                        d.setDriveParams(zp);
+                                       applyGapD(d);
                                    });
     }
     else if (rev == "V2")
@@ -272,6 +323,7 @@ int main(int argc, char** argv)
                                    d.setParams(drive, presence, blend, level, mid, midShiftLow430, bass, treble,
                                                bassShift40);
                                    d.setDriveParams(zp);
+                                   applyGapD(d);
                                });
     }
     else

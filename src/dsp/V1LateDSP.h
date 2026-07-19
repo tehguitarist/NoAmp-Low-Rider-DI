@@ -104,6 +104,14 @@ public:
     void setRailVoltages(double vNeg, double vPos) noexcept { driveRegion.setRailVoltages(vNeg, vPos); }
     void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }
     void setSaturationOffset(double dcOffset) noexcept { driveRegion.setSaturationOffset(dcOffset); }
+    // Gap D calibration layer (src/dsp/ClipDriveNormaliser.h). depth 0 = OFF and BIT-IDENTICAL to
+    // the uncorrected chain — the shipping default until a joint fit across V1L AND V2 is committed
+    // (guardrail #6; analysis/gapd_fit_harness.py enforces the one-fit constraint).
+    void setClipDriveNormalisation(double depth, double targetV, double tauMs, double scHz,
+                                   double makeup) noexcept
+    {
+        driveRegion.setClipDriveNormalisation(depth, targetV, tauMs, scHz, makeup);
+    }
 
     // Override the zener DRIVE-module parameters (default = v1LateParams(), pushed in prepare()). Used
     // by the Phase-10 calibration harness (OfflineRender --zener-*) to scan the knee without a rebuild;

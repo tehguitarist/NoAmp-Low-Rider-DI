@@ -278,6 +278,10 @@ target_link_libraries(ZenerClipTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(ZenerClipTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME ZenerClipTest COMMAND ZenerClipTest)
 
+add_executable(ClipDriveNormaliserTest tests/ClipDriveNormaliserTest.cpp)
+target_compile_options(ClipDriveNormaliserTest PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME ClipDriveNormaliserTest COMMAND ClipDriveNormaliserTest)
+
 add_executable(ZenerCouplingCapTest tests/ZenerCouplingCapTest.cpp)
 target_link_libraries(ZenerCouplingCapTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(ZenerCouplingCapTest PRIVATE ${PEDAL_WARNING_FLAGS})

@@ -31,6 +31,7 @@
 #include <array>
 #include <memory>
 
+#include "ClipDriveNormaliser.h"
 #include "RecoverySaturator.h"
 #include "TopOctaveShelf.h"
 #include "ZenerDriveModule.h"
@@ -74,6 +75,7 @@ public:
     {
         drive.reset();
         recovery.reset();
+        normaliser.reset();
         shelf.reset();
         for (size_t i = 0; i < kNumOs; ++i)
             if (os[i] != nullptr)
@@ -117,9 +119,27 @@ public:
             data[i] = shelf.process(data[i]);
     }
 
+    // Gap D calibration layer (ClipDriveNormaliser.h — a labelled correction, NOT a component).
+    // depth 0 = OFF and BIT-IDENTICAL to the uncorrected chain, which is the shipping default.
+    void setClipDriveNormalisation(double depth, double targetV, double tauMs, double scHz,
+                                   double makeup) noexcept
+    {
+        normaliser.setParams(depth, targetV, tauMs, scHz, makeup);
+    }
+
     // Single-sample core at the CURRENT discretisation rate (drive+clip -> recovery). Used for the 1x
     // path and by base-rate probes (DC-step polarity test).
-    inline double processCoreSample(double x) noexcept { return saturator.process(recovery.process(drive.process(x))); }
+    //
+    // The normaliser wraps the DRIVE MODULE ONLY: it exists to change how hard the clip is driven, so
+    // it must sit inside the clip's own gain staging and outside nothing else. The recovery stages
+    // downstream see the corrected signal, as they would in the real pedal if the mechanism we are
+    // standing in for lived in the module.
+    inline double processCoreSample(double x) noexcept
+    {
+        const double gPre = normaliser.preGain(x);
+        const double clipped = drive.process(x * gPre) * normaliser.postGain(gPre);
+        return saturator.process(recovery.process(clipped));
+    }
 
     int getActiveFactor() const noexcept { return activeFactor; }
 
@@ -134,6 +154,10 @@ private:
         const double osRate = baseSampleRate * (double) factor;
         drive.prepare(osRate); // re-discretise the zener Cj at the oversampled rate
         recovery.prepare(osRate);
+        // The normaliser runs INSIDE the oversampled region, so its envelope/sidechain coefficients
+        // are recomputed at osRate — its tau and corner are then OS-factor-independent, and a fit
+        // made at OS=8 stays valid at the 4x live default. prepare() preserves the set parameters.
+        normaliser.prepare(osRate);
         shelf.setOSFactor(factor); // scale the top-octave restore for this factor (base rate)
         drive.reset();
         recovery.reset();
@@ -144,6 +168,7 @@ private:
     ZenerDriveModule drive;
     RecoveryStage recovery;
     RecoverySaturator saturator; // small-signal op-amp saturation (0 gain = disabled, production default)
+    ClipDriveNormaliser normaliser; // Gap D CALIBRATION layer (depth 0 = off = bit-identical default)
     TopOctaveShelf shelf; // base-rate low-OS top-octave restore (transparent at 4x/8x)
 
     std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};
