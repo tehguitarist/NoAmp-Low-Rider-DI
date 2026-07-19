@@ -542,11 +542,30 @@ without images.
 >   does not — Gap D's own partition. And it reproduces Gap D Finding 3's frequency structure: at
 >   D0.45 we **match at 110 Hz** (4.61 vs 4.24) and are cold at 440 ⇒ **PRE-DRIVE shaping, not the
 >   clip element.**
-> - **NEXT, ON PAPER FIRST (L-010):** the twin-T is the pre-drive element that sets 440 vs 110 Hz, and
->   Gap B already records our notch as **~11 dB too deep**. **Required authority is ~5 dB at 440 Hz**
->   (D0.45→D0.65 = +5.5 dB drive gain = 4.30→18.61 % THD). **Compute whether the twin-T discrepancy
->   delivers ~5 dB AT 440 Hz, or only at 800, BEFORE touching anything.** The notch is LINEAR ⇒ §1
->   arbitrates it capture-free (⚖ rule applies).
+> - **❌ THE TWIN-T IS REFUTED ON AUTHORITY (2026-07-19) — do not re-raise it.** Checked on paper
+>   before any modelling, per L-010. `tests/TwinTAuthorityProbe.cpp` (standalone, chowdsp only —
+>   build line in gap-audit §8) measures the shipped `TwinTNotch` against an **exact complex nodal
+>   solve of the netlists.md E2/L2/V2 network**, both in one file: they agree to **0.111 dB worst-case
+>   over 55 Hz–4 kHz**, and the quantity that matters — the **110→440 relationship — is wrong by
+>   −0.004 dB against the ~5 dB required** (three orders of magnitude short). **440 Hz is not even on
+>   the notch**: it sits only −7.37 dB below its own 110 Hz shoulder with the minimum at 716 Hz, so
+>   notch DEPTH has almost no leverage there. ⚠ **And the sign was against us:** `V2IntegrationTest`
+>   records the model's notch at **−26.7 dB vs §1's −35 dB** — too SHALLOW, i.e. passing MORE at 440.
+>   ⚠ **Gap B's "our notch is 11 dB too deep" is NOT a linear fact** — it is plugin-vs-capture *at
+>   drive*, where the audit itself says the pedal's notch fills in ⇒ a Gap G artefact. Do not carry it
+>   forward.
+> - **NEXT: PRESENCE AT 440 Hz — the last pre-drive element with the right SIGN, and §3 arbitrates it
+>   capture-free.** Pre-drive chain = buffer → twin-T → PRESENCE → drive module; buffer (~3.4 Hz) and
+>   the module coupling caps (~7 Hz) have no 440 Hz authority, twin-T is refuted. The twin-T
+>   *attenuates* 440 vs 110 by 7.37 dB, so for the pedal's 440 Hz clip node to hit threshold before its
+>   110 Hz one (which its drive-independence at 440-but-not-110 implies), something must BOOST 440 over
+>   110 pre-clip — PRESENCE is the only candidate, and **§3 records its peak migrating 864 → 4829 Hz**,
+>   so at the captures' P≈0.65–0.75 it sits near the bottom of that range, right where it weights
+>   440 Hz. ⚠ **Existing presence validation does NOT cover this** — `v1l_presence_s3_check.py` /
+>   `V1LateStagesTest` check **+27.5 dB @ 6–7 kHz at P=1.0** (HF, max knob). **440 Hz at mid-knob has
+>   never been checked against §3.** Linear + capture-free ⇒ ⚖ applies, matrix does not bind. And note
+>   sensitivity ≠ correctness: PRESENCE moving 440 Hz THD only 0.72 pp over the capture range says
+>   nothing about whether its absolute 440 Hz gain is right.
 > - ⚠ Minor: `analyze.thd()` has **no Nyquist guard** (orders 2..8, `argmin` clamps out-of-band
 >   harmonics onto the top bin ⇒ at 8 kHz, H4..H8 are five re-reads of the Nyquist bin). Measured
 >   inflation ≤ **0.32 pp** on all 11 captures, so nothing above depends on it — but fix it before

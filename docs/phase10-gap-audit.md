@@ -1051,15 +1051,55 @@ frequency structure on different hardware: at D0.45 the plugin **matches at 110 
 and is badly cold at 440 Hz, i.e. *"our clip node is 2–6 dB too cold from ~440 Hz up, correct at LF —
 a PRE-DRIVE shaping error, not a clip-element one."*
 
-**8. NEXT — and check the magnitude BEFORE building (L-010).** The pre-drive shaping suspect with the
-right frequency signature is the **twin-T**: it is the element that sets 440 Hz relative to 110 Hz
-ahead of the clip, and Gap B already records the plugin's notch as **~11 dB too deep**. A notch that
-is too deep on its low skirt under-drives the clip node at 440 Hz while leaving 110 Hz alone —
-exactly the measured shape. **Required authority is ~5 dB of extra drive at 440 Hz** (our own grid:
-D0.45→D0.65 is +5.5 dB of drive gain and moves 440 Hz THD 4.30 → 18.61 %). So the question to answer
-first, on paper: *does the twin-T discrepancy actually deliver ~5 dB at 440 Hz, or only at 800?*
-The notch is a **LINEAR** quantity, so §1/SPICE can arbitrate it capture-free and the ⚖ arbitration
-rule applies — this does not depend on the FINAL matrix.
+**8. ❌ THE TWIN-T IS REFUTED ON AUTHORITY — it is faithful to 0.004 dB where ~5 dB is needed.**
+The twin-T was the obvious suspect (it is the pre-drive element that sets 440 Hz relative to 110 Hz,
+and Gap B records the plugin's notch as "~11 dB too deep"). It was checked BEFORE any modelling, per
+L-010. Tool: **`tests/TwinTAuthorityProbe.cpp`** — standalone, chowdsp only, no JUCE:
+
+```
+c++ -std=c++17 -O2 -I libs/chowdsp_wdf/include -I src/dsp tests/TwinTAuthorityProbe.cpp -o build/TwinTAuthorityProbe
+```
+
+It measures the shipped `TwinTNotch` against an **exact complex nodal solve of the very network
+netlists.md E2/L2/V2 specifies**, in one file (the analytic is the schematic's own answer, so this is
+capture-free and needs no §-target at all):
+
+```
+    f (Hz)      WDF dB    analytic    err dB
+       110      -10.24      -10.24    -0.000
+       440      -17.61      -17.61    -0.004
+       716      -37.10      -37.10    (notch minimum)
+  worst |WDF - analytic| over 55 Hz - 4 kHz : 0.111 dB
+```
+
+- **The shipped twin-T reproduces its own schematic transfer function to 0.11 dB worst-case.**
+- **The quantity that matters — the 110→440 relationship — is wrong by −0.004 dB, against the ~5 dB
+  required.** Three orders of magnitude short. The twin-T cannot be the mechanism, at any tuning.
+- **440 Hz is not even on the notch.** The network at 440 Hz sits only −7.37 dB below its own 110 Hz
+  shoulder, with the minimum at 716 Hz; **notch depth has almost no leverage at 440 Hz**, so the
+  "11 dB too deep" figure would not have transferred there even if it were a linear error.
+- ⚠ **And its SIGN was against us anyway.** `V2IntegrationTest` records the model's full-path notch
+  at **−26.7 dB vs §1's −35 dB** — the model is too *shallow*, i.e. it passes MORE at 440, not less.
+  Gap B's "11 dB too deep" is plugin-vs-CAPTURE **at drive**, where the audit itself notes the pedal's
+  notch *fills in* — a Gap G artefact (the notch cuts the fundamental while downstream harmonics pass),
+  not a linear notch error. **Do not carry "our notch is 11 dB too deep" forward as a linear fact.**
+
+**9. NEXT: PRESENCE at 440 Hz — the one pre-drive element left with the right sign, and §3 can
+arbitrate it capture-free.** The pre-drive chain is input buffer → twin-T → PRESENCE → drive module.
+The buffer (~3.4 Hz HP) and the module's coupling caps (C28 2.2u into 10k ⇒ ~7 Hz) have no 440 Hz
+authority; the twin-T is now refuted. That leaves **PRESENCE**, and it has the right sign: the twin-T
+*attenuates* 440 relative to 110 by 7.37 dB, so for the pedal's 440 Hz clip node to reach threshold
+before its 110 Hz one (which is what the drive-independence at 440 but not 110 implies), something
+must boost 440 over 110 ahead of the clip. PRESENCE is the only candidate that does — and **§3 records
+its peak MIGRATING from 864 Hz to 4829 Hz across the knob**, so at the captures' P≈0.65–0.75 its peak
+sits near the bottom of its range, precisely where it would weight 440 Hz.
+
+⚠ **The existing presence validation does not cover this.** `v1l_presence_s3_check.py` and
+`V1LateStagesTest` confirm the isolated cell at **+27.5 dB @ 6–7 kHz at P=1.0** — a HF, max-knob
+check. **Its 440 Hz behaviour at mid-knob has never been validated against §3.** That is the gap, it
+is linear, and §3 is capture-free ⇒ the ⚖ rule applies and the FINAL matrix does not bind. Sensitivity
+is NOT the same question: §6 above shows PRESENCE moves 440 Hz THD only 0.72 pp over the *capture
+range*, but a systematic error in the cell's absolute 440 Hz gain is invisible to a sensitivity sweep.
 
 ---
 
