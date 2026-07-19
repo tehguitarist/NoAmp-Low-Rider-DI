@@ -238,7 +238,19 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-19, this session): GAP D's CORRECTION BUILT, FITTED, AND SPLIT — V1L's half
+> **Last change (2026-07-19, LATEST session): GAPS J AND E CLOSED — three real bugs, all found
+> capture-free.** (1) **Two POLARITY INVERSIONS**: chowdsp's `WDFSeriesT` returns a child's voltage
+> NEGATED, compounding once per nesting level, so the depth-1 reads in `TwinTNotch` (all three revs)
+> and V1L's L5d wet buffer were inverted — V1E/V2 wet legs were upside down; V1L carried both flips
+> and cancelled, so it was accidentally RIGHT (majority agreement is not correctness). Proven by
+> `tests/TwinTPhaseProbe` against the exact nodal solve: magnitude agrees to 0.111 dB while phase was
+> 180.0° out everywhere. (2) **GAP J = an OVERSAMPLER-LATENCY COMB** — the dry tap was never
+> delay-aligned with the oversampled wet path (`src/dsp/DryTapDelay.h`, gated). (3) **GAP E dissolved
+> with J.** V1L BL0.30 (J's own capture): fr_shape_rms **4.76 → 1.59 dB**, null **−4.1 → −11.5**;
+> V1L median **4.76 → 3.24**; V2 BL0.90 max|Δ| **15.84 → 7.25**. V1E median neutral (1.26 → 1.26).
+> **30/30 ctest green.** ⚠ **All three bugs were invisible to the entire existing suite** — every
+> per-stage gate compares MAGNITUDE (|−H| = |H|) and every blend gate runs at ONE OS factor.
+> Prior: **GAP D's CORRECTION BUILT, FITTED, AND SPLIT — V1L's half
 > SHIPPED (first audio change of this work), V2's half REFUTED for this mechanism.** New:
 > `src/dsp/ClipDriveNormaliser.h` (sanctioned calibration layer), `analysis/gapd_fit_harness.py`
 > (joint scorer enforcing guardrail #6 by regret, scoring THD *and* compression),
@@ -629,8 +641,10 @@ without images.
 > died in H err2). Low absolute energy + unarbitrable band ⇒ a sanctioned correction is legitimate
 > here IF the hunt is documented first (guardrail #2).
 >
-> **4. Gap J+E** — V1L 285 Hz phase notch + V2 BASS hump. ONE permanently-confounded item. J's
-> mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**.
+> **4. Gap J+E — ✅ DONE 2026-07-19. Do not re-open.** Both closed by ONE bug fix (dry-tap/wet-path
+> time alignment); E's evidence dissolved with J's comb. See the gap table row and gap-audit §J/§E.
+> Durable lesson: **when two gaps are called "permanently confounded", test whether they are the SAME
+> DEFECT** — the audit had the entanglement right and drew the wrong conclusion from it.
 >
 > **5. Gap F / Gap B** — F is likely the same phenomenon as H/J (don't split it until 2 lands).
 > **Gap B's V1L half is now WORKED AND PARKED (2026-07-19): keep the saturator as-is, do NOT
@@ -728,7 +742,7 @@ without images.
 > |---|---|---|
 > | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
-> | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
+> | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | ✅ **BOTH CLOSED 2026-07-19 — they were ONE defect, and it was ours.** J was an **oversampler-latency comb**: the dry tap was never delay-aligned with the oversampled wet path, so dry+wet summed misaligned by ~84 samples at 8x ⇒ first comb null at fs/(2·84) ≈ **285 Hz**. Fixed by `src/dsp/DryTapDelay.h` (no fitted constant — reads the oversampler's own latency; exact no-op at OS=1), gated by `DryTapAlignmentTest` (ablated: fails by 5.34/30.80/23.42 dB vs a 1.0 dB tol). **E then dissolved**: its BASS=0.50/0.35 captures ARE the only two V2 files with BLEND<1.00, so E's "~3 dB hump" was J's comb — after the fix those rows are the CLEANEST (+0.54/+0.64 dB) and the premise is inverted. Residual is a broad TILT uncorrelated with BASS or MID-SHIFT ⇒ ordinary V2 broadband residual, **not** a MID-stage error. See gap-audit §J/§E. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **DEMOTED 2026-07-19 — the saturator is NOT V1L's main THD error, and the planned fix is REFUTED.** The joint LF+HF score §5 asked for was built (`v1l_sat_joint_score.py`) and it killed the fix it was built to gate: the error is **NON-MONOTONIC in frequency** (2k **+4.6/+0.2/+5.3**, 4k **+1.1/+2.2/+1.9** too HOT, but 8k **−6.2/−0.1/−0.6** too COLD), so **no band-limit/pre-emphasis can work** — a lowpass on the nonlinear drive cuts 2k, 4k AND 8k, and 8k needs MORE. **Do not implement it.** Saturator is a net JOINT win (rms **3.81 shipped vs 4.88 disabled**) ⇒ **KEEP, unchanged**; but Gap F's "9×" was an LF-only score, worth ~22% on a joint one. ⭐ **The real V1L THD error is 440 Hz** (see Gap D row). Prior state: V1L half root-caused to the Gap F saturator (`v1l_sat_hf_ablate.py`), 2.9 of 3.19 pp of 4 kHz THD. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
 > | **I** | THD-vs-LEVEL slope wrong (V1E flat) | 🔄 **H2 remnant CHARACTERISED 2026-07-19 and confirmed NOT closable by the rail** (`analysis/h2_asym_perdrive.py`). Required asymmetry is **0.05 V at D0.50/0.60 but 0.60 V at D1.00 (12×)** ⇒ **guardrail #6 FAILS, do not ship a fixed OR drive-dependent asymmetry.** The mechanism is wrong in KIND: a real rail asymmetry is a fixed voltage, and the only drive-dependent candidate (CMOS output Ron) lacks authority — the stage drives 330k, so output current is ~µA (L-010). Shipped −4.10 STAYS (best single value, plausible magnitude). ⚠ **A SECOND L-009 DEFECT WAS FOUND AND FIXED HERE** — `--rail-vneg/--rail-vpos` treated ±4.2 as "unspecified", so the symmetric baseline silently rendered V1E's −4.10 default; every scan grid containing −4.2 duplicated the −4.10 column, incl. the fit that chose the shipped value. Now NaN-sentinel, verified per revision. Prior state: **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
@@ -1154,6 +1168,31 @@ the gate FAILS when you delete the feature it guards.
   is an artefact); L-010 asks whether the *mechanism* has the authority to produce the measured
   size — the same authority argument that correctly killed C42 and PRESENCE in Gap H, simply not
   applied here.
+- **L-011: A MAGNITUDE-only gate cannot detect a model that does the right thing BACKWARDS — and
+  when several revisions share a stage, "the odd one out is the broken one" is a fallacy.** Two
+  shipped stages were polarity-inverted for the whole project (`TwinTNotch` on all three revisions;
+  V1L's L5d wet buffer). Every per-stage gate here compares dB, and **|−H| = |H|** — including
+  `TwinTAuthorityProbe`, written *specifically* to audit the twin-T, which reported 0.111 dB
+  agreement while the phase was 180.0° out at every frequency. **Cheap fix, general: when a stage has
+  an analytic reference, compare the COMPLEX transfer, not its magnitude.** The reference already
+  existed; only `abs()` stood in the way. Second half of the lesson: the cross-revision comparison
+  said V1L was ~190° from V1E and V2, so V1L looked guilty — but V1L carried BOTH flips and therefore
+  CANCELLED, i.e. it was the only correct one. **A shared upstream stage moves the majority together,
+  so agreement between revisions is not evidence of correctness; only an ABSOLUTE reference decides.**
+  Sibling of L-003 (which asks whether the gate can fail); L-011 asks whether the gate can even SEE
+  the quantity that is wrong.
+- **L-012: To separate "circuit error" from "numerics error", SWEEP THE OVERSAMPLING FACTOR. It is
+  free and it is decisive.** Gap J (a deep, narrow, blend-tracking 285 Hz notch, open since
+  2026-07-17 and written up as a wet-path group-delay fault) was the dry tap never being time-aligned
+  with the oversampled wet path: dry + wet summed ~84 samples apart at 8x is a COMB, first null at
+  `fs/(2·84)` ≈ 285 Hz. **Oversampling is a numerical choice and MUST NOT change the modelled
+  circuit** — so anything that moves with the OS factor is ours, and anything that does not is the
+  model. One sweep (OS 1/2/4/8) showed the null absent at 1x, deepening with the factor, and its
+  FREQUENCY tracking the latency (359 → 320 → 285 Hz). **Make that invariant a GATE**
+  (`DryTapAlignmentTest`): every blend/FR gate in this project ran at ONE OS factor, so a defect
+  whose entire signature is "changes with the OS factor" was invisible to all of them. Corollary for
+  any dry/wet or parallel-path architecture: **a latency-bearing region in ONE leg needs an explicit
+  delay in the other**, and the symptom is a comb, which reads convincingly as a filter/phase bug.
 - **L-003: A gate that checks only a RATIO cannot detect a model that does nothing.** T-001's gate
   passed identically at 0.12% and 0.71% THD (pedal: 9.79%) because it only compared THD(200)/THD(100).
   Gate on **magnitude against a capture**, across **≥3 knob settings**, with neighbouring stages ON —

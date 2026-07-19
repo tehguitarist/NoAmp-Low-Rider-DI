@@ -1152,7 +1152,59 @@ frequency-dependent, and it is not any linear element in or around that module (
 
 ---
 
-## J: V1L 285 Hz blend-tracking notch (NEW 2026-07-17) — a PHASE fault, not a level one
+## J: V1L 285 Hz blend-tracking notch — ✅ CLOSED 2026-07-19. IT WAS AN OVERSAMPLER-LATENCY COMB.
+
+**ROOT CAUSE: the dry tap was never delay-aligned with the oversampled wet path.** All three DSP
+classes wrote `dryTap[i]` in stage 1 and read it back at index `i` in stage 3, with
+`driveRegion.processBlock()` in between adding juce::dsp::Oversampling FIR latency to the WET path
+only (0 at 1x; ~67/75/84 base-rate samples at 2x/4x/8x). Dry and wet were therefore summed
+MISALIGNED at the BLEND node. A signal summed with a delayed copy of itself is a **comb filter**,
+first null at `f = fs/(2*D)` = 48000/(2*84) ≈ **285 Hz**. That is Gap J, exactly.
+
+**It explains every property §J logged, with nothing fitted:** narrow and deep (a comb notch is);
+monotonic in BLEND (combing needs both legs, so it vanishes at BL=1.00); absent from the pedal (a
+wire has no latency); and "V1L only" as a pure matrix artefact — V1L is the only revision with
+blend swept. §J's own instinct ("assume it affects all three") was right.
+
+**PROOF — capture-free, and PREDICTED BEFORE MEASURING** (`analysis/gapj_os_latency_test.py`).
+Oversampler latency is ZERO at 1x, so a latency comb MUST vanish at OS=1 and deepen with the
+factor, whereas a genuine filter-phase error is OS-INDEPENDENT (the modelled circuit does not
+change with oversampling). Null depth at BLEND=0.30, 285 Hz re its own 202 Hz:
+
+| | OS=1 | OS=2 | OS=4 | OS=8 |
+|---|---|---|---|---|
+| V1L | −1.88 | −8.17 | −13.25 | −14.18 |
+| V2 | −0.55 | −6.41 | −12.98 | −18.22 |
+
+and the null FREQUENCY tracked the latency as a comb must: deepest at **359 Hz (2x), 320 (4x),
+285 (8x)** — falling as D grows. After the fix all three revisions are OS-independent to 0.01 dB.
+
+**HOW IT WAS LOCALISED.** `tests/V1LateWetPhaseBudget.cpp` measured every shipped wet stage at
+285 Hz: they sum to **−50.7°** (matching a hand pole-count), while the full chain measures
+**−172.4°**. The **−121.7° left over** could not be produced by any modelled filter. *Phase with no
+filter behind it is a delay.*
+
+**FIX:** `src/dsp/DryTapDelay.h`, wired into all three DSP classes. **No fitted constant** — it
+reads the oversampler's own reported latency per block and is an exact no-op at OS=1. This is a bug
+fix, NOT a sanctioned artificial correction.
+**GATE:** `tests/DryTapAlignmentTest` gates the invariant that oversampling must not change the
+modelled circuit. Ablated it fails by **5.34 / 30.80 / 23.42 dB** (V1E/V1L/V2) vs a 1.0 dB tolerance.
+
+**CAPTURE RESULT — V1L BL0.30, Gap J's own capture:** fr_shape_rms **4.76 → 1.59 dB**, max|Δ|
+**14.84 → 6.19**, null_clean **−4.1 → −11.5**, null_driven **−3.5 → −9.3**. It was the second-worst
+capture in the matrix and now meets the 1.5 dB acceptance target. V1L median rms **4.76 → 3.24**.
+
+**⚠ WHY NO GATE CAUGHT IT, and the durable lesson: every blend/FR gate in this project runs at ONE
+oversampling factor.** A defect whose entire signature is "changes with the OS factor" was invisible
+to all of them — and invisible at BLEND=1.00, where 5 of the 11 captures sit. **When a fault is
+suspected in a dry/wet SUM, sweep the OS factor: it is free, and it separates "circuit" from
+"numerics" in one run.**
+
+---
+
+## J (historical): the pre-fix analysis that led here
+
+### original write-up — a PHASE fault, not a level one (2026-07-17)
 
 **FR shape (plugin − pedal, median offset removed) around 285 Hz:**
 
@@ -2757,7 +2809,49 @@ with the saturator **on**. If the gate cannot fail when the correction is delete
 
 ---
 
-## E: BASS 250–430 Hz hump (ex-P2)
+## E: BASS 250–430 Hz hump (ex-P2) — ✅ CLOSED 2026-07-19. IT WAS LARGELY GAP J.
+
+**E's own evidence no longer supports E.** Re-measured after the Gap J fix
+(`analysis/gape_v2_band.py`), the 250–430 Hz SHAPE error on V2 is now:
+
+| BASS / MID-SHIFT | BLEND | 120–200 | **250–430** | 500–700 |
+|---|---|---|---|---|
+| 0.35 / 500 | 0.95 | −1.02 | **+0.54** | −0.24 |
+| 0.50 / 500 | 0.90 | −0.75 | **+0.64** | −0.17 |
+| 0.65 / 500 | 1.00 | +3.01 | **+3.28** | −1.92 |
+| 0.65 / 1000 | 1.00 | −0.44 | **+1.17** | +0.49 |
+| 0.65 / 1000 | 1.00 | −2.18 | **+1.59** | +2.36 |
+
+**The premise is INVERTED.** §E recorded "BASS=0.65 clean; BASS=0.50/0.35 show ~3 dB". After the J
+fix the BASS=0.50/0.35 captures are the CLEANEST rows in the table (+0.54 / +0.64 dB) and the
+largest residual sits on a BASS=0.65 file. **The confound was never hypothetical:** on this matrix
+BASS=0.50 and 0.35 are *the only two V2 captures with BLEND<1.00*, i.e. the only two Gap J could
+touch, and J's comb null sat at 285 Hz — inside E's band. The ~3 dB was the comb.
+
+**The residual is a TILT, not a hump, so it is not E.** The fine curve on the worst row
+(BASS 0.65/500) runs +3.01 @150 → +4.33 @250 → −4.19 @700: a broad monotone slide across 150–700 Hz
+shared with the 120–200 control band, not a localised 250–430 feature. The other BASS=0.65 row runs
+−2.23 @150 → +2.56 @600, i.e. a tilt of the OPPOSITE sign. And the residual does **not** track the
+MID-SHIFT throw (MS500 rows read +0.54/+0.64/+3.28; MS1000 rows +1.17/+1.59), which was §E's stated
+mechanism.
+
+⇒ **No V2 MID-stage or BASS-rail change is warranted. Do NOT fit C27, the MID cell, or the BASS
+shift leg against this.** What remains is ordinary broadband V2 FR residual (median rms 2.85 dB) and
+belongs to that ledger, not to a named 250–430 Hz gap.
+
+⚠ **Every pre-2026-07-19 number in §E is void** — measured with the J comb live on exactly the two
+captures that defined the gap.
+
+**Durable lesson (L-007's sibling): when two gaps are declared "permanently confounded", check
+whether they are confounded because they are THE SAME DEFECT.** J and E were entangled on this
+matrix because E's non-default-BASS captures *are* J's only dry-bearing V2 captures. Fixing J
+dissolved E. The audit had recorded the entanglement correctly and drawn the wrong conclusion from
+it — that neither could ever be resolved, rather than that one might be the other.
+
+---
+
+## E (historical): the pre-J write-up
+
 
 BASS=0.65 (the primary calibration capture) is clean at RMS 1.02 dB; BASS=0.50/0.35 show ~3 dB at
 250–430 Hz.
