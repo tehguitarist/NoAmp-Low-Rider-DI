@@ -134,9 +134,25 @@ public:
     // it must sit inside the clip's own gain staging and outside nothing else. The recovery stages
     // downstream see the corrected signal, as they would in the real pedal if the mechanism we are
     // standing in for lived in the module.
+    //
+    // ⚠ THE SIDECHAIN IS FED x * clipDriveGain(), NOT x — AND THAT DISTINCTION IS THE WHOLE THING.
+    // Measured 2026-07-19: with the sidechain on the raw region input (the PRESENCE output) the
+    // correction fixed V2's LEVEL axis almost perfectly (spread error +2.13 -> +0.07 dB) and made
+    // V1L's DRIVE axis WORSE (+9.84 -> +10.51 dB). The cause is structural, not tuning: the DRIVE pot
+    // lives INSIDE ZenerDriveModule (it is the coupled pot whose wiper is stage A's output), so the
+    // module's input carries no drive information whatsoever. V1L's three captures also differ in
+    // BLEND and BASS, both DOWNSTREAM — so the raw-input sidechain saw essentially the same signal at
+    // all three points, applied essentially the same gain, and shifted them together instead of
+    // flattening them. A correction can only flatten an axis its sidechain can OBSERVE.
+    //
+    // Scaling by the module's own small-signal gain makes the sidechain read the predicted CLIP-NODE
+    // drive rather than the module input, so it tracks the DRIVE knob across the full 35.7 dB range.
+    // It is feedforward (clipDriveGain() is a function of the pot alone), so there is no detector
+    // feedback loop and no extra state. It also makes `target` mean something physical — volts at the
+    // clip node, comparable with the zener's own ~3.9 V threshold — instead of an arbitrary scalar.
     inline double processCoreSample(double x) noexcept
     {
-        const double gPre = normaliser.preGain(x);
+        const double gPre = normaliser.preGain(x * drive.clipDriveGain());
         const double clipped = drive.process(x * gPre) * normaliser.postGain(gPre);
         return saturator.process(recovery.process(clipped));
     }

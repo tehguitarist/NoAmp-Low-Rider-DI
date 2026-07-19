@@ -210,6 +210,21 @@ public:
     double thresholdVolts() const noexcept { return clipB.thresholdVolts(); }
     double stageAGain() const noexcept { return gainAmag; }
 
+    // The module's SMALL-SIGNAL gain, |G_A|*Rf/RinB — i.e. what the clip node would swing to for a
+    // given input if nothing clipped. Read-only; changes only with the DRIVE pot.
+    //
+    // WHY THIS EXISTS: the Gap D calibration layer (ClipDriveNormaliser) needs a sidechain that
+    // tracks how hard the CLIP is being driven, and the DRIVE pot lives INSIDE this module, so the
+    // module's own input carries no drive information at all. Multiplying by this makes the
+    // sidechain drive-aware without a feedback path or any extra state.
+    //
+    // It must include BOTH halves of the coupled pot, which is why it is not stageAGain(): rotating
+    // DRIVE raises stage-A gain AND lowers stage-B's input attenuation together. Cross-check against
+    // the FR §4 numbers that validate the whole L4/V4 reading — at drive=0, 2.2*220/110 = 4.4x
+    // (+12.9 dB); at drive=1, 12.2*220/10 = 268x (+48.6 dB). Using stageAGain() alone would span
+    // only 14.9 dB of the real 35.7 dB range and would under-read the drive axis by more than half.
+    double clipDriveGain() const noexcept { return gainAmag * prm.Rf / RinB; }
+
     // The canonical CH34-9 (V1 Late) constants. Cj/zener-knee are Phase-4 fits, refined in Phase 10.
     static ZenerDriveParams v1LateParams()
     {

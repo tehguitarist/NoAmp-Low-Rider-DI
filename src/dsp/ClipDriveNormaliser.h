@@ -92,6 +92,16 @@
 //    is a fitted parameter and `depth` interpolates toward full normalisation rather than scaling a
 //    one-way cut.
 //
+// ⚠ THE SIDECHAIN MUST BE FED THE PREDICTED CLIP-NODE DRIVE, NOT THE MODULE INPUT. The caller
+// multiplies by ZenerDriveModule::clipDriveGain() before calling preGain(); see the note in
+// ZenerDriveClipRecovery::processCoreSample for the measurement that forced this. Short version: the
+// DRIVE pot is INSIDE the module, so a sidechain on the module's input cannot see DRIVE at all, and
+// a correction can only flatten an axis its sidechain can OBSERVE — with the raw-input tap the V2
+// LEVEL axis was fixed (spread error +2.13 -> +0.07 dB) while the V1L DRIVE axis got WORSE (+9.84 ->
+// +10.51). Consequence for fitting: `targetV` is in VOLTS AT THE CLIP NODE, so it is directly
+// comparable with the zener's own ~3.9 V threshold — a sane fit sits at the same order, and a fitted
+// target orders of magnitude away from it is a sign the sidechain scaling has been broken again.
+//
 // `makeup` spans the two sub-signatures with one knob: at 1.0 the post-gain exactly undoes the
 // pre-gain, so the clip-node DRIVE is normalised while the through-level is preserved (pure THD
 // sensitivity fix); at 0.0 nothing is undone, so the gain change survives to the output as real
