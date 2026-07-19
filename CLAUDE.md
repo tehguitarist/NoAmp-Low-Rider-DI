@@ -134,6 +134,82 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
+> **🆕 QUEUED ACTION ITEMS FROM A VISUAL SWEEP (2026-07-20, NOT yet investigated or fixed).** User
+> visually read `analysis/dashboard_gen.py`'s dashboard against a fresh 11/11-capture
+> `comprehensive_report.py` run and flagged four candidates; all four were verified against
+> `analysis/reports/comprehensive_data.json` before logging (magnitude + sign checked per project
+> discipline) — none have been root-caused yet, this is only the confirmation pass.
+>
+> 1. **Bass-hump frequency is shifted on ALL THREE revisions, but in OPPOSITE directions** (peak-bin
+>    read of `fr.sweep_clean`, raw dB): **V1L** pedal peaks ~80–100 Hz, plugin ~127 Hz, all 3 captures
+>    (plugin HIGH). **V2** pedal ~63.5–80 Hz, plugin ~100–127 Hz, all 5 captures (plugin HIGH). **V1E**
+>    pedal ~63.5–100.8 Hz, plugin ~40–80 Hz, all 3 captures — **plugin LOW, the opposite sign from
+>    V1L/V2**. V1E shares the input buffer/twin-T with the other two but has no clip module, so the
+>    sign flip argues against one shared cause (L-010: shared-topology agreement is weak evidence) —
+>    likely each revision's own LF-shaping corner is separately mistuned. Cheapest thing to check
+>    first: each revision's own LF coupling-cap corners already tabulated in `netlists.md` (E1/L1/V1
+>    input HP, E8/L8/V8 output HP, V1L's L5d 159 Hz HP) against where the bump actually sits, before
+>    reaching for a new mechanism. Flagged by the user as probably simple taper/pole tuning.
+> 2. **V2 THD is frequency-shaped: hot 40–200 Hz, light 300 Hz–1.5 kHz**, not flat. Verified via
+>    `gap_audit.py --mode thd --rev V2` (e.g. D0.90 sweep_drv_-18: 403 Hz plugin 9.9% vs pedal 32.9%,
+>    plugin well under pedal; below ~200 Hz plugin runs 2×+ pedal). **Very likely the same
+>    already-tracked Gap D V2 half** (main Gap-D block above, "V2 needs fewer harmonics at unchanged
+>    compression") seen from a frequency-shape angle rather than level-vs-drive — treat as
+>    corroborating Gap D, not a new gap, unless it turns out not to reduce to that mechanism.
+> 3. **V1E is ~2.5–3 dB light 1–6 kHz** (user read ~4 dB off the heatmap; measured mean is a bit
+>    smaller but same sign/ballpark — confirmed real). Verified via `gap_audit.py`'s per-revision
+>    CLEAN-sweep band table: 1016 Hz −3.13, 1280 −2.82, 1613 −2.54, 2032 −2.34, 2560 −2.41,
+>    3225 −2.53, 4064 −2.26 dB, tapering to −0.76 by 6451 Hz. Not attributed to a stage yet — no
+>    existing gap in the status table currently covers this band for V1E specifically.
+> 4. **V1L BL0.30's FR shape looks very different from the other two V1L captures — confirmed, but
+>    it's expected physics, not a defect.** Its `fr.sweep_clean` curve is much flatter across the LF
+>    region (pedal swings only −11.8..+0.5 dB vs BL1.00's −8.9..+14.2 dB) because BL0.30 is 70% dry —
+>    exactly the dry-dominated shape BLEND should produce. It's also the best-scoring V1L capture
+>    (rms 1.59 dB — this is the Gap J evidence file). Logged only so a future session doesn't
+>    re-discover this as if it were new. **Also checked and refuted as an action item**: the plugin's
+>    20–25 Hz V1L THD looked elevated on the dashboard, but it's non-monotonic band-to-band (one
+>    capture: 18.1% → 41.8% → 13.8% across 20/25/32 Hz) — this is the N-004 measurement-noise
+>    signature (least-supported sweep bins), not a verified circuit effect. Don't action without an
+>    independent low-frequency estimator to bracket it first.
+>
+> #2 should fold into Gap D's existing V2 work. #4 needs no action beyond the notes above.
+>
+> **▶ PRIORITY ORDER across ALL outstanding items (2026-07-20), ranked by impact tempered by
+> flow-on effects** — does leaving this unfixed corrupt or bias measurements other open items are
+> already reading? Fix upstream-of-everything-else items first so downstream work is measured
+> against a trustworthy baseline instead of needing to be re-validated later (the same logic that
+> made L-006's Farina-estimator fix a prerequisite for trusting any THD-vs-frequency conclusion).
+>
+> 1. **Bass-hump frequency retune, all 3 revisions** (item 1 above). WIDEST blast radius of
+>    anything outstanding: virtually every FR check, null check, and THD-at-anchor read in this
+>    project samples ~60–150 Hz, so an uncorrected corner there is baked into Gap D's own V2/V1L
+>    100–110 Hz characterisation, the LF `<== HUGE` band flags in `gap_audit.py`, and every
+>    capture's null depth. Also likely CHEAP (a per-revision corner/pole retune against
+>    `netlists.md`'s already-tabulated LF caps, not a new mechanism) — do this first so nothing
+>    downstream has to be re-baselined.
+> 2. **Validate the flat/level-independent HF THD reading** (existing item 6, "▶ NEXT STEPS" —
+>    "do NOT fit yet"). This is a suspected MEASUREMENT artifact, not a circuit finding — same
+>    category as the L-006 Farina edge-spike bug, which once found invalidated prior THD-vs-frequency
+>    conclusions built on it. Until validated (independent low/discrete-tone cross-check, L-006-style
+>    bracket), every HF-THD-based conclusion (Gap D's ~11 dB HF shortfall, any Gap F revisit) is
+>    provisional. Narrower blast radius than #1 (only HF-THD work depends on it) but same
+>    fix-the-ruler-first logic.
+> 3. **Gap D V2 half** (main Gap-D block above). The single biggest audible defect left (10+ dB THD
+>    error), but SELF-CONTAINED — doesn't bias other open items' measurements — and currently a stuck
+>    research problem with no untried mechanism (every drive-normaliser-class idea is refuted). High
+>    impact, low flow-on, low tractability right now; keep pursuing but don't expect #1/#2 to unblock
+>    it. Do #1 first anyway, since Gap D's own characterisation data is 100/110 Hz-anchored.
+> 4. **V1E ~2.5–3 dB light 1–6 kHz** (item 3 above). Real and confirmed, narrower blast radius than
+>    #1/#2 (doesn't touch the 100 Hz-ish anchors nearly everything else reads), not yet attributed.
+> 5. **Gap F.** Cheap re-check now that H err2 and Gap J (its suspected siblings) are both closed —
+>    may just dissolve for free. Low impact in isolation either way.
+> 6. **Gap D's ~11 dB intrinsic HF shortfall** (item 3, "▶ NEXT STEPS"). Sequence AFTER #2 — its
+>    premise depends on trusting HF THD numbers. Already flagged low-audibility by the project's own
+>    prior "work the midband before the HF residual" note; this ranking agrees with that.
+> 7. **V1L Gap D polish** (tau/scHz never swept, item 0(b) above) — explicitly low value, park.
+> 8. **Housekeeping** (delete dead `src/dsp/GbwCorrection.h`, stale `analysis/reports/*` predating
+>    2026-07-19/20 — already regenerated fresh this session) — trivial, whenever convenient.
+>
 > **⭐ START HERE — THE CORRECTION IS BUILT. GAP D SPLIT IN TWO: V1L's HALF IS SHIPPED, V2's HALF IS
 > REFUTED FOR THIS MECHANISM (2026-07-19, end of session).** The dynamic correction described below
 > was designed, built (`src/dsp/ClipDriveNormaliser.h`), fitted (`analysis/gapd_fit_harness.py`) and
