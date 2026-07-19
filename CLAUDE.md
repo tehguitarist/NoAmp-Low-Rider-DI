@@ -521,8 +521,36 @@ without images.
 > **4. Gap J+E** — V1L 285 Hz phase notch + V2 BASS hump. ONE permanently-confounded item. J's
 > mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**.
 >
-> **5. Gap F / Gap B** — F is likely the same phenomenon as H/J (don't split it until 2 lands);
-> B is drive-dependent band saturation, shares a root with D.
+> **5. Gap F / Gap B** — F is likely the same phenomenon as H/J (don't split it until 2 lands).
+> **Gap B's V1L half is now WORKED AND PARKED (2026-07-19): keep the saturator as-is, do NOT
+> band-limit it** (refuted — see the Gap B row and gap-audit "THE BAND-LIMITED SATURATOR PLAN IS
+> REFUTED"). Its residual is ~2 pp; the 440 Hz item below is 6× larger.
+>
+> **⭐ 1b. V1L 440 Hz — THE LARGEST SINGLE V1L THD ERROR IN THE MATRIX, AND IT IS GAP D's TWIN.
+> Work this with item 1.** (2026-07-19, `v1l_sat_joint_score.py` + `v1l_440_blend_drive.py` +
+> `v1l_440_confound_check.py`.) Pedal **16.75/15.83/5.85 %** vs plugin **16.56/3.57/1.86** across the
+> three captures ⇒ **−12.26 pp at D0.45 BL0.65**, exceeding every HF anchor error combined.
+> - **The pedal's 440 Hz THD is nearly DRIVE-INDEPENDENT** (16.75→15.83 over D0.65→D0.45); ours
+>   collapses. Attribution is clean and capture-free: **BLEND alone +0.48 pp, DRIVE alone −14.31 pp.**
+>   (My own "dry/wet fault" hypothesis was refuted by my own probe — blend is ~flat, which is
+>   physically correct: the pot scales wet fundamental and harmonics together.)
+> - **Confounds CLOSED** — over their capture ranges: PRESENCE 0.72 pp, TREBLE 0.66, BASS 0.43,
+>   LEVEL 0.00, vs DRIVE's +14. PRESENCE was the one that could have mattered (upstream of the clip)
+>   and is ~20× too small.
+> - **⇒ SAME SIGNATURE AS GAP D, on a 2nd revision and a different axis** (V2: level-flat pedal,
+>   climbing plugin; V1L: drive-flat pedal, collapsing plugin). V1L/V2 share the zener module, V1E
+>   does not — Gap D's own partition. And it reproduces Gap D Finding 3's frequency structure: at
+>   D0.45 we **match at 110 Hz** (4.61 vs 4.24) and are cold at 440 ⇒ **PRE-DRIVE shaping, not the
+>   clip element.**
+> - **NEXT, ON PAPER FIRST (L-010):** the twin-T is the pre-drive element that sets 440 vs 110 Hz, and
+>   Gap B already records our notch as **~11 dB too deep**. **Required authority is ~5 dB at 440 Hz**
+>   (D0.45→D0.65 = +5.5 dB drive gain = 4.30→18.61 % THD). **Compute whether the twin-T discrepancy
+>   delivers ~5 dB AT 440 Hz, or only at 800, BEFORE touching anything.** The notch is LINEAR ⇒ §1
+>   arbitrates it capture-free (⚖ rule applies).
+> - ⚠ Minor: `analyze.thd()` has **no Nyquist guard** (orders 2..8, `argmin` clamps out-of-band
+>   harmonics onto the top bin ⇒ at 8 kHz, H4..H8 are five re-reads of the Nyquist bin). Measured
+>   inflation ≤ **0.32 pp** on all 11 captures, so nothing above depends on it — but fix it before
+>   using `A.thd` above ~8 kHz in anger. Tool: `analysis/tone_thd_nyquist_check.py`.
 >
 > **6. V1L harmonics — ✅ SCOPED AND UNCONFOUNDED 2026-07-19; the target is now NARROW.
 > See gap-audit "V1L HARMONICS".** Still worst on harmonics (median |H-delta| **11.2 dB** on fresh
@@ -561,7 +589,7 @@ without images.
 > | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | **OPEN, ONE item — permanently confounded** (the BLEND-only pair that split them can't exist). J's mechanism from SHAPE (capture-free wet-path group delay); fit **E on V2 only**. |
-> | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **V1L's half ROOT-CAUSED 2026-07-19: it is the Gap F RECOVERY SATURATOR** (`v1l_sat_hf_ablate.py`, ablation L-009-verified live). It supplies **2.9 of 3.19 pp** of V1L's 4 kHz THD; mean \|err\| over 6 HF rows **ON 2.55 → OFF 1.61 pp**. A floor that ignores DRIVE can't come from the drive stage — the saturator sits DOWNSTREAM of the clamping zener, so its input is drive-independent. ⚠ **DO NOT DELETE IT** — Gap F measured it as a 9× LF improvement; it helps at LF and over-contributes at HF. **STRUCTURAL mismatch, not a bad parameter:** a broadband memoryless saturator standing in for frequency-weighted distortion (same shape as Gap D Finding 4). Next: a band-limited/pre-emphasised saturator scored on **LF and HF anchors together** — Gap F scored LF only, which is how this was missed. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |
+> | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **DEMOTED 2026-07-19 — the saturator is NOT V1L's main THD error, and the planned fix is REFUTED.** The joint LF+HF score §5 asked for was built (`v1l_sat_joint_score.py`) and it killed the fix it was built to gate: the error is **NON-MONOTONIC in frequency** (2k **+4.6/+0.2/+5.3**, 4k **+1.1/+2.2/+1.9** too HOT, but 8k **−6.2/−0.1/−0.6** too COLD), so **no band-limit/pre-emphasis can work** — a lowpass on the nonlinear drive cuts 2k, 4k AND 8k, and 8k needs MORE. **Do not implement it.** Saturator is a net JOINT win (rms **3.81 shipped vs 4.88 disabled**) ⇒ **KEEP, unchanged**; but Gap F's "9×" was an LF-only score, worth ~22% on a joint one. ⭐ **The real V1L THD error is 440 Hz** (see Gap D row). Prior state: V1L half root-caused to the Gap F saturator (`v1l_sat_hf_ablate.py`), 2.9 of 3.19 pp of 4 kHz THD. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
 > | **I** | THD-vs-LEVEL slope wrong (V1E flat) | 🔄 **H2 remnant CHARACTERISED 2026-07-19 and confirmed NOT closable by the rail** (`analysis/h2_asym_perdrive.py`). Required asymmetry is **0.05 V at D0.50/0.60 but 0.60 V at D1.00 (12×)** ⇒ **guardrail #6 FAILS, do not ship a fixed OR drive-dependent asymmetry.** The mechanism is wrong in KIND: a real rail asymmetry is a fixed voltage, and the only drive-dependent candidate (CMOS output Ron) lacks authority — the stage drives 330k, so output current is ~µA (L-010). Shipped −4.10 STAYS (best single value, plausible magnitude). ⚠ **A SECOND L-009 DEFECT WAS FOUND AND FIXED HERE** — `--rail-vneg/--rail-vpos` treated ±4.2 as "unspecified", so the symmetric baseline silently rendered V1E's −4.10 default; every scan grid containing −4.2 duplicated the −4.10 column, incl. the fit that chose the shipped value. Now NaN-sentinel, verified per revision. Prior state: **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
 > | **D** | V2 zener drive tracking (+ V1L) | 🔄 **OPEN. Coupling-cap mechanism REFUTED 2026-07-19** (implemented, ablation-measured at 0.11 dB of ~5 needed; caps KEPT as schematic fidelity + a real DC-blocking fix, `ZenerCouplingCapTest`). See the ⭐ block at the top + L-010. Anomaly characterisation (matched compression, ~5 dB fewer harmonics at LF on V1L/V2, absent on V1E) STANDS; mechanism unknown; must be nonlinear or level-dependent — no linear element can do it. Prior state: **IN PROGRESS 2026-07-18. Zener knee params EXONERATED on the clean metric (Vzt/Cj/m — do not re-scan); D0.25 discarded as estimator noise (L-006 bracket, pedal AND plugin); residual is MAGNITUDE + FREQUENCY-DEPENDENT (sign flips 100 vs 200 Hz), not slope ⇒ needs a new hypothesis in the wet path, not the clip element.** Original framing follows: ⭐ **UNPARKED 2026-07-18 — NEXT THD TASK.** Both park reasons expired: Gap I's V1E half is DONE, and the clean **THD-vs-LEVEL @101 Hz** metric is unconfounded (the old Vzt/Cj/m rule-outs used the Gap-G-confounded THD-vs-*freq* — **re-check them**). Target: V2 D0.90 pedal is level-FLAT 10.7/11.5/11.9 but plugin CLIMBS 16.5/21.3/23.3 — the zener under-clamps. NOT a level issue (kInputRef=1.3 worsens above) and NOT the V1E fix (rail vs zener). **V1L is now worst on harmonics (12.1 dB, erratic H2)** — same family, but its captures are drive+blend+bass confounded, so do V2 first. |

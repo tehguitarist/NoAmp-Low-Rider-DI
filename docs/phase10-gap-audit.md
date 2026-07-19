@@ -956,6 +956,113 @@ confound was removed).
 
 ---
 
+### V1L / Gap B — ❌ THE BAND-LIMITED SATURATOR PLAN IS REFUTED BEFORE IMPLEMENTATION (2026-07-19)
+
+**Tools: `analysis/v1l_sat_joint_score.py` (the joint LF+HF score §5 asked for),
+`analysis/tone_thd_nyquist_check.py`, `analysis/v1l_440_blend_drive.py`,
+`analysis/v1l_440_confound_check.py`.**
+
+§5 above named the next step as "a band-limited or pre-emphasised saturator, scored on LF and HF
+anchors TOGETHER". The score was built first. **It kills the fix it was built to gate**, and it
+demotes this whole item from the top of the V1L queue.
+
+**1. The joint score (discrete tones, all three V1L captures, OS=8).** Aggregate mean |err|, pp:
+
+| setting | LF (110/220/440) | HF (2k/4k/8k) | JOINT rms |
+|---|---|---|---|
+| **shipped** (0.400/0.500/0.100) | **2.50** | 2.50 | **3.81** |
+| disabled | 5.29 | **2.06** | 4.88 |
+
+⇒ **the saturator is a NET WIN and stays.** But note the LF-only "9× improvement" from Gap F does not
+survive contact with a joint metric: on this score it is 3.81 vs 4.88, a **22% improvement**, not 9×.
+Gap F's RMS-of-harmonic-dB score and this THD-pp score are different quantities — the 9× is not
+wrong, it is just not a claim about overall fidelity.
+
+**2. ⛔ THE ERROR IS NON-MONOTONIC IN FREQUENCY, SO NO BAND-LIMIT CAN FIX IT.** Per-anchor plugin−pedal
+with the saturator ON, across the three captures:
+
+```
+2000 Hz:  +4.56  +0.23  +5.30    too HOT
+4000 Hz:  +1.12  +2.20  +1.88    too HOT
+8000 Hz:  -6.19  -0.06  -0.62    too COLD   (D0.65: pedal 7.10 % vs plugin 0.91 %)
+```
+
+The proposed fix — lowpass or pre-emphasise the signal driving the nonlinearity — reduces the
+generated harmonics at 2 k, 4 k **and** 8 k together. **8 kHz needs MORE, not less**, on all three
+captures. A single-corner band-limit therefore buys the 2–4 kHz excess by deepening the 8 kHz
+deficit, at every corner frequency. **Do not implement it.** (This is L-010 applied one step earlier
+than last time: the mechanism's *shape* was checked against the error's *shape* before any code was
+written, rather than its magnitude after.)
+
+**3. A real defect in `analyze.thd()` — found, measured, and NOT load-bearing.** `A.thd` sums orders
+k=2..8 with **no Nyquist guard**, and its `amp()` helper locates bins by `argmin`, which does not
+fail out of band — it **clamps to the top bin**. At f0=8 kHz only H2 is real; H4..H8 are five
+re-reads of the same near-Nyquist bin, all added to the rss. Measured inflation across all 11
+captures (`tone_thd_nyquist_check.py`): **worst 0.32 pp** (V1L D0.65 @8 kHz, 7.42 → 7.10), typically
+0.00. ⇒ the structural defect is genuine and worth knowing — `A.thd` is the *independent* estimator
+L-006 used to convict Farina, so it had to be validated itself — but **every finding above survives
+it**, and the 8 kHz deficit survives on the guarded number. Fix if `A.thd` is ever used above ~8 kHz
+in anger; not urgent.
+
+**4. ⭐ THE SATURATOR IS NOT V1L's BIGGEST THD ERROR — 440 Hz IS, AND IT IS A DRIVE-TRACKING FAULT.**
+The joint score surfaced a much larger error than anything at HF:
+
+```
+              pedal   plugin    err
+D0.65 BL1.00  16.75    16.56   -0.19   <- essentially perfect
+D0.45 BL0.65  15.83     3.57  -12.26   <- LARGEST single V1L THD error in the matrix
+D0.40 BL0.30   5.85     1.86   -3.99
+```
+
+−12.26 pp exceeds every HF anchor error combined. The tell is in the **pedal's** column: it drops only
+16.75 → 15.83 % while drive falls 0.65 → 0.45. **The pedal's 440 Hz THD is nearly drive-INDEPENDENT
+over that range; ours falls off a cliff.**
+
+**5. It is DRIVE, not BLEND — and the first hypothesis (mine) was refuted by its own probe.** The
+obvious reading of "collapses on the low-blend captures" is a dry/wet fault (Gap F/J family). A
+plugin-only sweep (`v1l_440_blend_drive.py`, capture-free, so the FINAL matrix does not bind) says
+otherwise:
+
+```
+BLEND alone  BL1.00 -> BL0.65 at D0.65 :  18.61 -> 19.09 %   (+0.48 pp)   ~nothing
+DRIVE alone  D0.65  -> D0.45  at BL1.00:  18.61 ->  4.30 %  (-14.31 pp)   all of it
+```
+
+**Blend is ~flat and that is physically correct** — the blend pot scales the wet path's fundamental
+and its harmonics together, so a wet-dominated mix keeps its THD ratio. ⚠ **That script's
+"dilution-predicted" column is a BAD BASELINE and must not be quoted**: it assumed the wet
+harmonics stay fixed in absolute terms while the fundamental changes, which is not what a blend pot
+does. Its large negative "excess" measures the flaw in the baseline, not a fault in the model. The
+BLEND-vs-DRIVE split above does not depend on it.
+
+**6. The confounds are closed** (`v1l_440_confound_check.py`) — V1L's captures move four knobs at
+once, so this was mandatory (ISS-009 / L-007). At the D0.45 corner, span of 440 Hz THD over each
+knob's **capture range**: PRESENCE **0.72 pp**, TREBLE 0.66, BASS 0.43, LEVEL **0.00**. Against
+DRIVE's **+14 pp**. PRESENCE was the one that mattered (it is upstream of the drive stage, so it is a
+genuine THD lever) and it is ~20× too small to explain the collapse; even forced to 1.00 it reaches
+only +3.77 pp. LEVEL reading exactly 0.00 is a useful control — it is post-blend and linear, so a THD
+*ratio* must ignore it, and it does.
+
+**7. ⇒ THIS IS GAP D's SIGNATURE, ON A SECOND REVISION AND A DIFFERENT AXIS.** Gap D on V2 reads
+"pedal is level-FLAT, plugin CLIMBS — the zener under-clamps"; this is the same statement on V1L
+along **DRIVE** instead of LEVEL. V1L and V2 share the zener drive module and V1E does not — the same
+partition Gap D's own cross-revision table found. It also independently reproduces Gap D Finding 3's
+frequency structure on different hardware: at D0.45 the plugin **matches at 110 Hz** (4.61 vs 4.24)
+and is badly cold at 440 Hz, i.e. *"our clip node is 2–6 dB too cold from ~440 Hz up, correct at LF —
+a PRE-DRIVE shaping error, not a clip-element one."*
+
+**8. NEXT — and check the magnitude BEFORE building (L-010).** The pre-drive shaping suspect with the
+right frequency signature is the **twin-T**: it is the element that sets 440 Hz relative to 110 Hz
+ahead of the clip, and Gap B already records the plugin's notch as **~11 dB too deep**. A notch that
+is too deep on its low skirt under-drives the clip node at 440 Hz while leaving 110 Hz alone —
+exactly the measured shape. **Required authority is ~5 dB of extra drive at 440 Hz** (our own grid:
+D0.45→D0.65 is +5.5 dB of drive gain and moves 440 Hz THD 4.30 → 18.61 %). So the question to answer
+first, on paper: *does the twin-T discrepancy actually deliver ~5 dB at 440 Hz, or only at 800?*
+The notch is a **LINEAR** quantity, so §1/SPICE can arbitrate it capture-free and the ⚖ arbitration
+rule applies — this does not depend on the FINAL matrix.
+
+---
+
 ## J: V1L 285 Hz blend-tracking notch (NEW 2026-07-17) — a PHASE fault, not a level one
 
 **FR shape (plugin − pedal, median offset removed) around 285 Hz:**
