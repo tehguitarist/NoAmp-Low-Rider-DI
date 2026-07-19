@@ -87,6 +87,8 @@ without images.
   - `gen_test_signal.py` — comprehensive A/B reference signal
   - `inref_scan.py` — kInputRef THD-vs-level fit
   - `gapd_memoryless_impossibility.py` — ⭐ **the proof that memory is required** (no renders, no model)
+  - `gapd_fit_harness.py` — ⭐ **the Gap D JOINT scorer** (V2 level axis + V1L drive axis pooled;
+    enforces guardrail #6 by REGRET, scores THD *and* compression, L-009 + clamp guards wired in)
   - `gapd_module_tau_screen.py` — time-constant screen of the whole zener-module element set (paper only)
   - `zener_model_vs_datasheet.py` — zener knee r_dif vs the DZ23C3V3 datasheet (paper only)
   - `gapd_vzt_authority.py` — knee-softness ablation sweep with liveness + V1E controls
@@ -132,10 +134,31 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
-> **⭐ START HERE — GAP D AND V1L-440 ARE ONE MECHANISM, MEMORY IS *PROVEN* REQUIRED, AND THE NEXT
-> STEP IS TO BUILD THE CORRECTION (2026-07-19).** The hunt for a physical cause is COMPLETE and it
-> came up empty; that is a finding, and it satisfies sanctioned-correction guardrail #2. **Do not
-> re-open the search. Build the dynamic correction described at the bottom of this block.**
+> **⭐ START HERE — THE CORRECTION IS BUILT. GAP D SPLIT IN TWO: V1L's HALF IS SHIPPED, V2's HALF IS
+> REFUTED FOR THIS MECHANISM (2026-07-19, end of session).** The dynamic correction described below
+> was designed, built (`src/dsp/ClipDriveNormaliser.h`), fitted (`analysis/gapd_fit_harness.py`) and
+> the two symptoms CAME APART. Read this table first; the rest of this block is the design record
+> that led here and is still accurate as history.
+>
+> | half | state |
+> |---|---|
+> | **V1L DRIVE axis (440 Hz)** | ✅ **CORRECTED AND SHIPPED** — resid rms 9.42 → 3.01 dB, SPREAD error +9.84 → **+1.58 dB**. Live in `V1LateDSP::prepare()`, gated by `tests/V1LateGapDTest` (proven to FAIL on revert). ⚠ `makeup`/`tau`/`scHz` are PLACEHOLDERS, not fitted — a `makeup` re-fit was in flight at session end. |
+> | **V2 LEVEL axis (110 Hz)** | ⛔ **NOT CLOSED; THIS MECHANISM IS REFUTED FOR IT.** Spread error +2.13 → **+2.79 dB (worse)** at every `makeup`. V2 stays `depth 0`. |
+>
+> **⛔ DO NOT RE-ATTEMPT A DRIVE NORMALISER ON V2. Two measured reasons:** (1) **V2's COMPRESSION IS
+> ALREADY CORRECT** — `dGain` pedal **−10.43** vs plugin **−10.68 dB**, residual **0.25 dB**. That is
+> the memoryless-impossibility proof as a direct measurement: compression matches while THD is
+> +3.1/+4.6/+5.2 dB too hot ⇒ **V2 needs FEWER HARMONICS AT UNCHANGED COMPRESSION**, and a drive
+> normaliser moves both together by construction. The Finding-4 lever is already spent on V2.
+> (2) Pulling the clip node toward `target` moves it OFF the clamp into the steep part of the
+> THD-vs-level curve, making it MORE level-sensitive. Deep clamp is flat but hot, shallow is cold but
+> sensitive, **the pedal is flat AND cold.**
+>
+> **⚠ GUARDRAIL #6 IS NOT SATISFIED AND GAP D IS NOT CLOSED.** V1L-only is a per-revision value, which
+> #6 forbids. Shipping it is a deliberate, user-authorised judgement call — ship the half measured to
+> work rather than withhold it while V2 stays open. If V2 is later closed by a different mechanism,
+> **revisit whether these were ever one deficit at all**; the split is itself evidence they may not be.
+> Full record: `docs/phase10-gap-audit.md` §D head-of-section.
 >
 > **The one deficit, seen on two axes.** V2 (LEVEL axis, D0.90): pedal THD level-FLAT 10.7/11.5/11.9
 > while ours climbs 16.5/21.3/23.3. V1L (DRIVE axis, 440 Hz): pedal drive-INDEPENDENT 16.75→15.83 %
@@ -442,7 +465,12 @@ without images.
 >
 > ## ▶ NEXT STEPS (revised 2026-07-19 end-of-session) — START HERE
 >
-> **0. ⭐ BUILD GAP D's DYNAMIC CORRECTION.** This is the single live task. The physical-cause hunt is
+> **0. ⭐ GAP D — THE CORRECTION IS BUILT; V1L SHIPPED, V2 STILL OPEN.** ⚠ This item is DONE as
+> written; what remains is narrower. **(a)** Re-fit V1L's `makeup` against the COMPRESSION metric now
+> in `gapd_fit_harness.py` (the shipped 1.0 is a placeholder; V1L compresses 2.17 dB less than the
+> pedal) and consider sweeping `tau`/`scHz`, which were never swept. **(b)** V2's half needs a
+> mechanism that removes harmonics WITHOUT changing gain — a drive normaliser is refuted for it, see
+> the ⭐ block. Do not re-run a drive normaliser on V2. Historical framing of the original task: The physical-cause hunt is
 > CLOSED (memory proven required; see the ⭐ block at the top for the proof, the constraints and the
 > guardrails). Everything numbered below was written BEFORE that proof and is superseded wherever it
 > proposes hunting for a physical mechanism for Gap D — the characterisations remain valid and useful
@@ -692,7 +720,7 @@ without images.
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **DEMOTED 2026-07-19 — the saturator is NOT V1L's main THD error, and the planned fix is REFUTED.** The joint LF+HF score §5 asked for was built (`v1l_sat_joint_score.py`) and it killed the fix it was built to gate: the error is **NON-MONOTONIC in frequency** (2k **+4.6/+0.2/+5.3**, 4k **+1.1/+2.2/+1.9** too HOT, but 8k **−6.2/−0.1/−0.6** too COLD), so **no band-limit/pre-emphasis can work** — a lowpass on the nonlinear drive cuts 2k, 4k AND 8k, and 8k needs MORE. **Do not implement it.** Saturator is a net JOINT win (rms **3.81 shipped vs 4.88 disabled**) ⇒ **KEEP, unchanged**; but Gap F's "9×" was an LF-only score, worth ~22% on a joint one. ⭐ **The real V1L THD error is 440 Hz** (see Gap D row). Prior state: V1L half root-caused to the Gap F saturator (`v1l_sat_hf_ablate.py`), 2.9 of 3.19 pp of 4 kHz THD. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
 > | **I** | THD-vs-LEVEL slope wrong (V1E flat) | 🔄 **H2 remnant CHARACTERISED 2026-07-19 and confirmed NOT closable by the rail** (`analysis/h2_asym_perdrive.py`). Required asymmetry is **0.05 V at D0.50/0.60 but 0.60 V at D1.00 (12×)** ⇒ **guardrail #6 FAILS, do not ship a fixed OR drive-dependent asymmetry.** The mechanism is wrong in KIND: a real rail asymmetry is a fixed voltage, and the only drive-dependent candidate (CMOS output Ron) lacks authority — the stage drives 330k, so output current is ~µA (L-010). Shipped −4.10 STAYS (best single value, plausible magnitude). ⚠ **A SECOND L-009 DEFECT WAS FOUND AND FIXED HERE** — `--rail-vneg/--rail-vpos` treated ±4.2 as "unspecified", so the symmetric baseline silently rendered V1E's −4.10 default; every scan grid containing −4.2 duplicated the −4.10 column, incl. the fit that chose the shipped value. Now NaN-sentinel, verified per revision. Prior state: **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
-> | **D** | V2 zener drive tracking (+ V1L) — ONE item with V1L-440 | 🔄 **PHYSICAL-CAUSE HUNT CLOSED 2026-07-19; CORRECTION NOT YET BUILT.** **MEMORY IS PROVEN REQUIRED, knee-shape-independently** (`gapd_memoryless_impossibility.py`: V2 D0.90 is compressed within **0.17 dB** at 110 vs 440 Hz while THD differs by **10.12 dB**, vs a measured 0.74 dB post-clip allowance ⇒ 9.4 dB unexplainable by ANY memoryless element). ⇒ no knee shape / clip element / Vzt-Vth-Cj-m refit can ever close it. Nine rule-outs on computed magnitude + one on measured authority; the whole chain (pre-drive, module, post-clip) is excluded. **NEXT: build the dynamic correction — envelope-driven gain reduction, τ tens of ms, LF selectivity from a FILTERED SIDECHAIN, own calibration layer, guardrail #6 load-bearing (one fit across V1L AND V2; per-capture values ⇒ curve fit ⇒ stop).** ⚠ Only V2 can carry a two-frequency THD argument — V1E/V1L's ~430 Hz bridged-T sits DOWNSTREAM of the clip and cuts 110 Hz's harmonics but not 440 Hz's (Gap G in a new hat). ⚠ Known model limitation recorded, not fixed: the zener knee is **2.4–3× harder than its datasheet**; cause is the single-exponential model form; Werner DAFx-15's two-Lambert-W generalisation is the proper fix, NOT built (authority measured at +2.19 dB of ~5, and the impossibility proof says it would not close Gap D anyway). **Vzt stays 0.20.** See the ⭐ block at the top + gap-audit §D. |
+> | **D** | V2 zener drive tracking (+ V1L) — **SPLIT 2026-07-19, no longer one item** | 🔄 **V1L HALF SHIPPED / V2 HALF REFUTED FOR THIS MECHANISM.** The sanctioned calibration layer `src/dsp/ClipDriveNormaliser.h` (envelope-driven clip-drive normalisation, τ tens of ms, LF selectivity from a filtered sidechain fed `x*clipDriveGain()`) CLOSES V1L's drive axis (spread err +9.84 → **+1.58 dB**, resid 9.42 → 3.01) and is shipped + gated (`V1LateGapDTest`, fails on revert). It does NOT close V2 (spread err +2.13 → +2.79, worse at every makeup) and **cannot**: V2's compression already matches the pedal to **0.25 dB**, so V2 needs fewer harmonics at UNCHANGED compression, which no drive normaliser can do. **Guardrail #6 unsatisfied ⇒ Gap D NOT closed.** ⚠ Shipped `makeup`/`tau`/`scHz` are placeholders — `makeup` is invisible to a THD-only metric (a ratio cancels a scalar); the compression metric finds V1L compresses **2.17 dB less** than the pedal, so re-fit before trusting 1.0. ⚠ Only V2 can carry a two-frequency THD argument (V1E/V1L bridged-T downstream of the clip). ⚠ Zener knee still 2.4–3× harder than its datasheet, NOT fixed, **Vzt stays 0.20**. See gap-audit §D head-of-section. |
 > | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
 > | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
 > | **A/A′, P3–P7** | (various) | ✅ DONE/VOID — see table below. |

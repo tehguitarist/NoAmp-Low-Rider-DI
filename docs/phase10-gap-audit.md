@@ -1624,7 +1624,104 @@ interaction effect into fixed component values that are individually schematic-f
 
 ---
 
-## D: V2 zener drive tracking — STILL OPEN; the coupling-cap mechanism was REFUTED 2026-07-19
+## D: SPLIT 2026-07-19 — V1L's half CORRECTED (shipped), V2's half REFUTED for this mechanism
+
+> **⭐ HEAD OF SECTION — READ THIS BEFORE ANYTHING BELOW IT (2026-07-19, end of session).**
+> Gap D was treated as ONE deficit with two symptoms (V2's level axis, V1L's drive axis) on the
+> argument that both say "the pedal's distortion is less sensitive to drive than ours". A sanctioned
+> calibration layer (`src/dsp/ClipDriveNormaliser.h`) was built, fitted with
+> `analysis/gapd_fit_harness.py`, and the two halves came apart:
+>
+> | half | outcome |
+> |---|---|
+> | **V1L DRIVE axis (440 Hz)** | **CORRECTED AND SHIPPED.** resid rms 9.42 → 3.01 dB, SPREAD error +9.84 → **+1.58 dB**. Enabled in `V1LateDSP::prepare()`, gated by `tests/V1LateGapDTest` (verified to FAIL on revert). ⚠ `makeup`/`tau`/`scHz` are NOT fitted — see below. |
+> | **V2 LEVEL axis (110 Hz)** | **NOT CLOSED, AND THIS MECHANISM IS REFUTED FOR IT.** Spread error +2.13 → **+2.79 dB (WORSE)** at every `makeup` tested. V2 keeps `depth 0`. |
+>
+> **⚠ GUARDRAIL #6 IS NOT SATISFIED, AND THAT IS RECORDED RATHER THAN GLOSSED.** Shipping V1L-only is
+> a per-revision value, which #6 forbids. It is a deliberate, user-authorised judgement call: ship the
+> half that is measured to work rather than withhold a large well-evidenced V1L improvement while
+> V2's half stays open. **Gap D is NOT closed.** If V2 is later closed by a different mechanism,
+> revisit whether these were ever one deficit at all — the split is itself evidence they may not be.
+>
+> ### ⛔ WHY V2 CANNOT BE FIXED BY A DRIVE NORMALISER — DO NOT RE-ATTEMPT THIS
+>
+> Two independent reasons, both measured, not argued:
+>
+> **1. V2's COMPRESSION IS ALREADY CORRECT.** The compression metric (`dGain = gain(−6) − gain(−18)`
+> at 110 Hz, read WITHIN one file so it is Gap-G-immune and immune to the captures' arbitrary
+> normalisation) reads **pedal −10.43 dB vs plugin −10.68 dB — a residual of 0.25 dB.** We already
+> compress exactly as much as the pedal does. This is the memoryless-impossibility proof reappearing
+> as a direct measurement instead of an inference: compression matches while THD is +3.1/+4.6/+5.2 dB
+> too hot. ⇒ **V2 needs FEWER HARMONICS AT UNCHANGED COMPRESSION.** A drive normaliser moves both
+> together by construction, so no setting of `depth`/`target`/`makeup` can produce that combination.
+> The Finding-4 lever (add compression without harmonics) **does not exist on V2 — it is already
+> spent.**
+>
+> **2. PULLING THE CLIP NODE TOWARD `target` MAKES V2 MORE LEVEL-SENSITIVE, NOT LESS.** It moves the
+> node OFF the zener clamp into the steep part of the THD-vs-level curve. Deep clamp is flat but hot;
+> shallow is cold but sensitive; **the pedal is flat AND cold.** Our chain cannot be both — again the
+> memoryless-impossibility signature restated, not a new problem.
+>
+> ⇒ The V2 half needs a mechanism that removes harmonics while leaving gain alone. Nothing in the
+> current model does that, and it is NOT the same mechanism V1L needed.
+>
+> ### ⚠ WHAT IS SHIPPED ON V1L IS ONLY PARTLY FITTED
+>
+> `depth 0.5` / `target 2.0 V` have a clean interior optimum from the sweep. **`makeup 1.0`,
+> `tau 30 ms` and `scHz 200 Hz` are PLACEHOLDERS, not measured values**, and the code says so:
+> - **`makeup` is structurally invisible to a THD-only objective.** THD is a RATIO, so the post-clip
+>   scalar cancels EXACTLY; the first makeup sweep moved the THD score by 0.06 dB across `makeup`
+>   0→1, which was the downstream saturator, not the parameter. This was a DEFECT IN THE HARNESS
+>   reported as a result until it was caught.
+> - The compression metric added afterwards finds V1L compresses **2.17 dB LESS than the pedal**
+>   (−6.11 vs −8.28), which `makeup` acts on directly. **A makeup re-fit was in flight at the end of
+>   this session — the shipped 1.0 may well be wrong. Re-run the sweep before trusting it.**
+> - `tau`/`scHz` were never swept at all.
+>
+> ### TOOLING BUILT THIS SESSION (and the defects each one caught)
+>
+> `analysis/gapd_fit_harness.py` — the joint scorer. Written BEFORE the DSP deliberately, so the
+> metric could not be tuned until the model looked good. It enforces guardrail #6 structurally rather
+> than leaving it to judgement. Things it caught that would otherwise have shipped:
+> - **The specified mechanism was wrong on its first run.** CLAUDE.md called for "envelope-driven gain
+>   REDUCTION"; the baseline showed the two axes have OPPOSITE residual signs (V2 too hot, V1L too
+>   cold), so a one-way compressor cannot serve both. The design became level-NORMALISING.
+> - **The sidechain was tapping the wrong node.** With it on the module input, V2's axis was fixed
+>   (+2.13 → +0.07 dB) and V1L's got WORSE (+9.84 → +10.51). Cause: **the DRIVE pot lives INSIDE
+>   `ZenerDriveModule`**, so the module's input carries no drive information; V1L's captures also move
+>   BLEND and BASS, both downstream. **A correction can only flatten an axis its sidechain can
+>   OBSERVE.** Fixed by feeding `x * ZenerDriveModule::clipDriveGain()` — the module's own
+>   small-signal gain, which includes BOTH halves of the coupled pot (stage A alone spans only 14.9 dB
+>   of the real 35.7 dB range). Joint 7.34 → 2.85 dB.
+> - **A clamp-limited grid point.** The `depth=1/target=1` blow-up (25.20 dB) was **27.6% of samples
+>   sitting on a gain guard**. Now instrumented end-to-end (`--gapd-min-gain/--gapd-max-gain`,
+>   `gapd-clamped-fraction:` reported by OfflineRender) so the rule "a fit that lives on a clamp is not
+>   a fit" is enforceable instead of rhetorical. ⚠ The FRACTION is a crude proxy — it counts clamping
+>   in silence, outside the analysed segments. **The real test is proof-by-widening:** widening the
+>   guards 6× moved the best point's score by **0.000 dB**, which is what proves it mechanism-limited.
+>
+> **GUARDRAIL CRITERION CHANGED MID-SESSION — flagged here because it is a motivated-reasoning risk.**
+> The original test was argmin-equality across the two axes; it was replaced with REGRET (does the
+> joint optimum cost either axis more than 1.0 dB vs its own best?) **after** it failed on data.
+> The defence is that argmin-equality measures the WRONG QUANTITY in both directions: it fires on a
+> perfect correction whenever the optimum is shallow (two adjacent points 0.19 dB apart read as
+> "disagreement" — a statement about grid spacing), and it PASSES a bad correction whenever the grid
+> is coarse enough to collapse both argmins into one cell. Regret gets STRICTER as the grid refines.
+> A second, independent condition was added at the same time and it is the one that now fails V2:
+> **the SPREAD error must come down**, so a residual win bought by worsening sensitivity cannot pass.
+>
+> **TWO LESSONS WORTH KEEPING (both cost time this session):**
+> - **A metric that is a RATIO cannot constrain a SCALAR parameter.** Obvious in hindsight; it was
+>   reported as "makeup barely matters" for a full sweep before the algebra was checked. Ask what the
+>   metric reads when the parameter changes and the model is otherwise perfect. (Sibling of L-005/L-006.)
+> - **WHEN A DEFAULT CHANGES, EVERY CHECK WRITTEN AGAINST "THE DEFAULT" CHANGES MEANING WITH IT.**
+>   The harness's ablation guard used a no-flag render as its "uncorrected" reference. The moment V1L
+>   shipped the layer enabled, "no flags" became a MIXED state (V1L corrected, V2 not) and the guard
+>   accused a correct layer of leaking (0.43 max delta). **A guard whose reference has drifted is
+>   worse than no guard, because it points at the wrong thing.** The reference is now an explicit
+>   `--gapd-depth 0` render.
+
+## D (historical): V2 zener drive tracking — the coupling-cap mechanism was REFUTED 2026-07-19
 
 > **⚠ HEAD OF SECTION, READ FIRST (2026-07-19).** This section's investigation converged on
 > "the CH34-9/CH40 module's inter-stage coupling caps are the unmodelled memory element" and marked

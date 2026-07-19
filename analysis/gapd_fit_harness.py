@@ -177,38 +177,52 @@ def depth_of(extra_args):
     return None
 
 
-def assert_flags_live(parsed, extra_args, os_factor):
-    """L-009, in BOTH directions — the check is on the correction's SIGN OF LIFE, not on each grid
-    point, because depth=0 is the deliberate OFF value and must be identical.
+def uncorrected(parsed, os_factor):
+    """The genuinely UNCORRECTED chain, on any revision.
 
-        depth == 0  -> assert the render IS bit-identical to baseline. This is the ablation control
-                       (guardrail #3 / L-003): if the "off" setting is not exactly the uncorrected
-                       chain, the layer is leaking and every score in the sweep is contaminated.
-        depth  > 0  -> assert the render is NOT bit-identical. A live switch is what makes a null
-                       result mean anything.
+    ⚠ THIS IS AN EXPLICIT `--gapd-depth 0` RENDER, NOT A NO-FLAG ONE, AND THE DIFFERENCE MATTERS.
+    Until V1L shipped the layer enabled (2026-07-19) a no-flag render WAS the uncorrected chain, and
+    this function did not exist. The moment V1L's prepare() turned the layer on, "no flags" started
+    meaning "V1L corrected, V2 not" — so the old reference silently became a MIXED state and the
+    ablation check fired a false positive (0.43 max delta) reading a correct layer as a leaking one.
+    Recorded because the failure is instructive: when a default changes, every check written against
+    "the default" changes meaning with it, and a guard whose reference has drifted is worse than no
+    guard because it accuses the wrong thing."""
+    return render(parsed, ("--gapd-depth", "0"), os_factor)
+
+
+def assert_flags_live(parsed, extra_args, os_factor):
+    """L-009, in both directions, against an explicitly uncorrected reference.
+
+        depth == 0  -> IS the reference; additionally assert (on a revision whose DSP default is OFF)
+                       that an explicit depth-0 matches a no-flag render, which is the surviving form
+                       of the ablation-exactness check.
+        depth  > 0  -> must CHANGE the output. A live switch is what makes a null result mean
+                       anything (the --sat-gain / --rail-v* defects).
 
     Verified PER REVISION — proving a flag live on one revision and drawing a null conclusion about
-    another is L-009 wearing a different hat (the --rail-v* defect did exactly that)."""
+    another is L-009 wearing a different hat."""
     if not extra_args:
         return
     d = depth_of(extra_args)
-    base = render(parsed, (), os_factor)
+    ref = uncorrected(parsed, os_factor)
     cand = render(parsed, extra_args, os_factor)
-    same = np.array_equal(base, cand)
 
     if d == 0.0:
-        if not same:
-            raise SystemExit(
-                f"ABLATION ABORT: --gapd-depth 0 did NOT render bit-identical to the uncorrected "
-                f"chain on {parsed['rev']} (max |delta| {np.max(np.abs(cand - base)):.6g}). The "
-                f"correction leaks when it is switched off, so nothing in this sweep is trustworthy.")
+        # Only meaningful where the shipping default is OFF; on V1L the two are expected to differ.
+        if parsed["rev"] == "V2":
+            plain = render(parsed, (), os_factor)
+            if not np.array_equal(plain, cand):
+                raise SystemExit(
+                    f"ABLATION ABORT: on V2 (layer OFF by default) an explicit --gapd-depth 0 did not "
+                    f"match a no-flag render (max |delta| {np.max(np.abs(cand - plain)):.6g}). The "
+                    f"'off' path is not exactly off, so no sweep row is trustworthy.")
         return
-    if same:
+
+    if np.array_equal(ref, cand):
         raise SystemExit(
-            f"L-009 ABORT: flags {' '.join(extra_args)} rendered BIT-IDENTICAL to baseline on "
-            f"{parsed['rev']}. The switch does nothing, so any score from it is meaningless. "
-            f"Check the flag is parsed, reaches the DSP, and that its 'unspecified' sentinel is not "
-            f"a legal value (the --rail-v* defect).")
+            f"L-009 ABORT: flags {' '.join(extra_args)} rendered BIT-IDENTICAL to the uncorrected "
+            f"chain on {parsed['rev']}. The switch does nothing, so any score from it is meaningless.")
 
 
 # --- THD readers --------------------------------------------------------------------------------
@@ -229,6 +243,24 @@ def db(pct):
     return 20.0 * np.log10(max(pct, 1e-6) / 100.0)
 
 
+def gain_db_at(sig, seg, f_hz):
+    """Transfer-function magnitude at one frequency on one driven sweep segment, referenced to the
+    ORIGINAL signal's own copy of that segment — so it is a true gain, independent of the file's
+    absolute level."""
+    f, mag = A.transfer(A.seg_of(sig, seg), A.seg_of(ORIG_SIG, seg))
+    return float(A.gain_at(f, mag, f_hz))
+
+
+def compression_db(sig, f_hz, seg_lo="sweep_drv_-18", seg_hi="sweep_drv_-6"):
+    """dGain = gain(hot) - gain(quiet), in dB, at one frequency. 0 = perfectly linear, negative =
+    compressing. Both terms come from the SAME file, so any global level normalisation (these
+    captures are NAM output, so absolute level is arbitrary) cancels exactly — and so does any
+    frequency-domain notch, since it attenuates both sweeps equally. That Gap-G immunity is why
+    gapd_compression_fr.py uses this form, and it is the only reason the 110 Hz anchor is safe here.
+    """
+    return gain_db_at(sig, seg_hi, f_hz) - gain_db_at(sig, seg_lo, f_hz)
+
+
 # --- The two axis scorers -----------------------------------------------------------------------
 def axis_v2_level(caps, extra_args, os_factor):
     """V2 D0.90: THD at 110 Hz across the three DRIVEN input levels. Pedal is flat, we climb."""
@@ -241,8 +273,10 @@ def axis_v2_level(caps, extra_args, os_factor):
         p = thd_sweep_at(cap, seg, V2_LEVEL_ANCHOR_HZ)
         r = thd_sweep_at(ren, seg, V2_LEVEL_ANCHOR_HZ)
         pts.append((seg.replace("sweep_drv_", ""), p, r))
+    comp = [("dGain -18->-6", compression_db(cap, V2_LEVEL_ANCHOR_HZ),
+             compression_db(ren, V2_LEVEL_ANCHOR_HZ))]
     return dict(name="V2-LEVEL", unit="dBFS in", anchor=f"{V2_LEVEL_ANCHOR_HZ:g} Hz sweep", pts=pts,
-                setting=os.path.basename(path))
+                comp=comp, setting=os.path.basename(path))
 
 
 def axis_v1l_drive(caps, extra_args, os_factor):
@@ -260,12 +294,26 @@ def axis_v1l_drive(caps, extra_args, os_factor):
         p = thd_tone_at(cap, V1L_DRIVE_ANCHOR_HZ)
         r = thd_tone_at(ren, V1L_DRIVE_ANCHOR_HZ)
         pts.append((f"D{parsed['drive']:.2f}/BL{parsed['blend']:.2f}", p, r))
+    # V1L's compression is read on the full-wet capture only: the other two move BLEND, and a dry
+    # blend dilutes the wet path's compression by an amount that is not the pedal's doing.
+    cap0 = load_cap(sel[0][0])
+    ren0 = render(sel[0][1], extra_args, os_factor)
+    comp = [("dGain -18->-6 @BL1.00", compression_db(cap0, float(V1L_DRIVE_ANCHOR_HZ)),
+             compression_db(ren0, float(V1L_DRIVE_ANCHOR_HZ)))]
     return dict(name="V1L-DRIVE", unit="drive", anchor=f"{V1L_DRIVE_ANCHOR_HZ:g} Hz tone", pts=pts,
-                setting="3 captures")
+                comp=comp, setting="3 captures")
 
 
 def score_axis(ax):
-    """-> residual rms (dB), pedal/plugin spread (dB), spread error (dB)."""
+    """-> residual rms (dB), pedal/plugin spread (dB), spread error (dB), compression residual (dB).
+
+    COMPRESSION IS SCORED ALONGSIDE THD, and that is a correction to the objective, not a
+    convenience. THD is a RATIO, so the post-clip `makeup` scalar cancels out of it EXACTLY — the
+    first makeup sweep moved the THD score by 0.06 dB across makeup 0..1, which is the downstream
+    saturator, not the parameter. A THD-only objective therefore cannot constrain makeup at all,
+    while makeup is precisely the knob that spans Gap D's Finding-4 signature: the pedal compresses
+    ~5 dB MORE than its own harmonic content justifies. That signature lives in the LEVEL domain and
+    is invisible to THD by construction. Both terms are in dB and are pooled unweighted."""
     resid = [db(r) - db(p) for _, p, r in ax["pts"]]
     ped_db = [db(p) for _, p, _ in ax["pts"]]
     ren_db = [db(r) for _, _, r in ax["pts"]]
@@ -274,13 +322,16 @@ def score_axis(ax):
     ax["spread_pedal"] = max(ped_db) - min(ped_db)
     ax["spread_plugin"] = max(ren_db) - min(ren_db)
     ax["spread_err"] = ax["spread_plugin"] - ax["spread_pedal"]
+    ax["comp_resid"] = [r - p for _, p, r in ax.get("comp", [])]
+    ax["comp_rms"] = (float(np.sqrt(np.mean(np.square(ax["comp_resid"]))))
+                      if ax["comp_resid"] else 0.0)
     return ax
 
 
 def evaluate(caps, extra_args, os_factor):
     axes = [score_axis(axis_v2_level(caps, extra_args, os_factor)),
             score_axis(axis_v1l_drive(caps, extra_args, os_factor))]
-    pooled = [r for ax in axes for r in ax["resid"]]
+    pooled = [r for ax in axes for r in ax["resid"]] + [r for ax in axes for r in ax["comp_resid"]]
     return axes, float(np.sqrt(np.mean(np.square(pooled))))
 
 
@@ -290,8 +341,11 @@ def print_axes(axes, joint):
         print(f"      {'point':>16} {'pedal %':>9} {'plugin %':>9} {'resid dB':>9}")
         for (label, p, r), res in zip(ax["pts"], ax["resid"]):
             print(f"      {label:>16} {p:>9.2f} {r:>9.2f} {res:>+9.2f}")
+        for (label, p, r), res in zip(ax.get("comp", []), ax["comp_resid"]):
+            print(f"      {label:>16} {p:>9.2f} {r:>9.2f} {res:>+9.2f}   (COMPRESSION, dB)")
         print(f"      spread: pedal {ax['spread_pedal']:.2f} dB | plugin {ax['spread_plugin']:.2f} dB"
-              f" | err {ax['spread_err']:+.2f} dB     resid rms {ax['rms']:.2f} dB")
+              f" | err {ax['spread_err']:+.2f} dB     resid rms {ax['rms']:.2f} dB"
+              f" | comp rms {ax['comp_rms']:.2f} dB")
     print(f"\n  JOINT SCORE (pooled resid rms) = {joint:.3f} dB")
 
 
@@ -434,12 +488,16 @@ def main():
         return 0 if ok else 1
 
     extra = tuple(args.flags.split()) if args.flags.strip() else ()
-    label = "BASELINE (no correction)" if not extra else f"CANDIDATE: {' '.join(extra)}"
+    # ⚠ NOT "no correction" any more. Since 2026-07-19 V1L SHIPS the layer enabled in its prepare(),
+    # so a no-flag run renders V1L WITH the correction and V2 without it. Pass --gapd-depth 0 to get
+    # the genuinely uncorrected chain on both.
+    label = ("SHIPPING DEFAULTS (V1L correction ON, V2 off)" if not extra
+             else f"CANDIDATE: {' '.join(extra)}")
     print(f"  {label}")
     axes, joint = evaluate(caps, extra, args.os)
     print_axes(axes, joint)
     if not extra:
-        print("\n  This is the number any candidate correction must beat. The correction must reduce")
+        print("\n  This is the SHIPPING state, not an uncorrected baseline. The correction must reduce")
         print("  BOTH the residual rms AND the spread error — flattening our drive/level sensitivity")
         print("  toward the pedal's is the whole mechanism requirement (envelope-driven gain")
         print("  reduction, tau tens of ms, so it makes no harmonics of its own).")
