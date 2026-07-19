@@ -173,7 +173,12 @@ int main()
     {
         nalr::V2RecoveryStage rec;
         rec.prepare(kFs);
-        for (double f : {100.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0})
+        // LF points 40/63/80 Hz are load-bearing: they sit on the C41(22n)/R46(100k) ~72 Hz
+        // coupling corner, which the old grid (lowest point 100 Hz) never probed. A C41 fudge to 15n
+        // (a real regression this test failed to catch, commit f3f81f9) shifts the corner to 106 Hz —
+        // a 2.2-2.8 dB error at 40-63 Hz, over the 2.0 dB tolerance. With the schematic 22n restored,
+        // WDF and analytic (both 22n) agree to well within tolerance here.
+        for (double f : {40.0, 63.0, 80.0, 100.0, 500.0, 1000.0, 2000.0, 4000.0, 8000.0, 12000.0})
         {
             nalr::V2RecoveryStage fresh;
             fresh.prepare(kFs);
