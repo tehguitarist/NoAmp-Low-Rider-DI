@@ -287,7 +287,7 @@ private:
         // nodes: va6=0 vb6=1 vw6=2(=VR4 top) vw4=3 vb4=4 IC4Aout=5 IC4Bminus=6 IC4Bout=7.
         net.setNumNodes(8);
         net.addCapacitor(NC::kInput, 0, 2.2e-6);   // C1 dry coupling
-        net.addCapacitor(NC::kInput2, 1, 220.0e-9); // C12 wet coupling
+        net.addCapacitor(NC::kInput2, 1, 47.0e-9);  // C12 wet coupling (schematic; netlists.md E5c, circuit.md)
         rBlendA = net.addResistor(0, 2, 50.0e3);   // VR6 a->wiper (set by setBlendLevel)
         rBlendB = net.addResistor(2, 1, 50.0e3);   // VR6 wiper->b
         rLevelA = net.addResistor(2, 3, 50.0e3);   // VR4 top->wiper
