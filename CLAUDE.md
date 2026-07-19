@@ -554,18 +554,27 @@ without images.
 >   ⚠ **Gap B's "our notch is 11 dB too deep" is NOT a linear fact** — it is plugin-vs-capture *at
 >   drive*, where the audit itself says the pedal's notch fills in ⇒ a Gap G artefact. Do not carry it
 >   forward.
-> - **NEXT: PRESENCE AT 440 Hz — the last pre-drive element with the right SIGN, and §3 arbitrates it
->   capture-free.** Pre-drive chain = buffer → twin-T → PRESENCE → drive module; buffer (~3.4 Hz) and
->   the module coupling caps (~7 Hz) have no 440 Hz authority, twin-T is refuted. The twin-T
->   *attenuates* 440 vs 110 by 7.37 dB, so for the pedal's 440 Hz clip node to hit threshold before its
->   110 Hz one (which its drive-independence at 440-but-not-110 implies), something must BOOST 440 over
->   110 pre-clip — PRESENCE is the only candidate, and **§3 records its peak migrating 864 → 4829 Hz**,
->   so at the captures' P≈0.65–0.75 it sits near the bottom of that range, right where it weights
->   440 Hz. ⚠ **Existing presence validation does NOT cover this** — `v1l_presence_s3_check.py` /
->   `V1LateStagesTest` check **+27.5 dB @ 6–7 kHz at P=1.0** (HF, max knob). **440 Hz at mid-knob has
->   never been checked against §3.** Linear + capture-free ⇒ ⚖ applies, matrix does not bind. And note
->   sensitivity ≠ correctness: PRESENCE moving 440 Hz THD only 0.72 pp over the capture range says
->   nothing about whether its absolute 440 Hz gain is right.
+> - **❌ PRESENCE IS ALSO REFUTED ON AUTHORITY (2026-07-19) — and with it the WHOLE pre-drive
+>   hypothesis.** `tests/PresenceAuthorityProbe.cpp` (standalone): the cell is faithful to **0.003 dB**
+>   at P=0.65/0.70/0.75 and passes §3's max-knob gate (**+27.70 dB @ ~8 kHz** vs §3 +27.5 @ 6–7 kHz).
+>   It boosts 440 over 110 (+5.41 dB at P=0.70 — right sign) but its **entire remaining ceiling is
+>   +2.67 dB** (P=1.00) against the **~5 dB required**, and using it would mean pinning the knob to
+>   1.00 in captures taken at 0.65–0.75. ⚠ **CORRECTION — "§3 records the presence peak migrating
+>   864 → 4829 Hz" is WRONG for V1L**: that row is §3's **V1 EARLY** column. §3 pins only TWO points
+>   for V1L (min ~0 dB, max +27.5 dB @ 6–7 kHz); mid-knob is blank, so the NETLIST is the arbiter
+>   there. Do not re-quote the migration figure for V1L/V2.
+> - **⇒ THE ENTIRE LINEAR CHAIN AHEAD OF THE CLIP IS NOW EXONERATED** — buffer (~3.4 Hz, no authority),
+>   twin-T (0.004 dB), PRESENCE (0.003 dB, ceiling too small), module coupling caps (~7 Hz).
+>   **No linear element ahead of the zener can produce this gap. Stop looking for one.**
+> - **⇒ THE PUZZLE SHARPENS:** net pre-drive shaping at P=0.70 is **−1.97 dB at 440 vs 110**, i.e. 440
+>   arrives at the clip node **COLDER** — yet the pedal's 440 Hz THD saturates at a LOWER drive than
+>   its own 110 Hz. Nothing linear does that.
+> - **⇒ CONVERGES WITH GAP D, REACHED INDEPENDENTLY ON V2** ("must be nonlinear or level-dependent";
+>   Finding 4: "frequency-dependent MEMORY we do not model"). **Treat V1L-440 and Gap D as ONE
+>   mechanism from here.** Constraints the pair now imposes: inside the shared **zener drive module**,
+>   frequency-dependent, and NOT any linear element in or around it (coupling caps refuted; Vzt/Cj/m
+>   exonerated at LF and re-tested at HF). Next candidate must be genuinely nonlinear with memory —
+>   and per L-010, **compute its magnitude and check its SIGN before writing any code.**
 > - ⚠ Minor: `analyze.thd()` has **no Nyquist guard** (orders 2..8, `argmin` clamps out-of-band
 >   harmonics onto the top bin ⇒ at 8 kHz, H4..H8 are five re-reads of the Nyquist bin). Measured
 >   inflation ≤ **0.32 pp** on all 11 captures, so nothing above depends on it — but fix it before

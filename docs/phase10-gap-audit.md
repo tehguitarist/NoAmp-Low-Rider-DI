@@ -1101,6 +1101,55 @@ is linear, and §3 is capture-free ⇒ the ⚖ rule applies and the FINAL matrix
 is NOT the same question: §6 above shows PRESENCE moves 440 Hz THD only 0.72 pp over the *capture
 range*, but a systematic error in the cell's absolute 440 Hz gain is invisible to a sensitivity sweep.
 
+**10. ❌ PRESENCE IS ALSO REFUTED ON AUTHORITY — AND WITH IT THE ENTIRE PRE-DRIVE HYPOTHESIS.**
+Tool: **`tests/PresenceAuthorityProbe.cpp`** (standalone, chowdsp only, same build line pattern as §8).
+
+⚠ **First, a correction to §9's own framing:** §3 tabulates only **two** points for V1L — min ~0 dB
+and max +27.5 dB @ 6–7 kHz. The intermediate-peak row (*"~+21/+16.5/+14/+12 dB, peak ~1–2 kHz"*, the
+source of the widely-quoted **"peak migrates 864 → 4829 Hz"**) is the **V1 EARLY** column and says
+nothing about V1L. **Do not quote that migration figure for V1L/V2.** So §3 serves only as a max-knob
+gate here and the netlist is the mid-knob arbiter — the same capture-free move that settled the twin-T.
+
+```
+1. §3 max-knob gate (P=1.00):  measured +27.70 dB @ 7999 Hz   [§3: +27.5 dB @ 6-7 kHz]  PASS
+2. WDF vs analytic at P = 0.65 / 0.70 / 0.75, 110-1000 Hz:  worst 0.003 dB
+3. 110 -> 440 Hz relationship        presence only   twin-T+presence   twin-T alone
+                          P=0.65          +4.88           -2.50            -7.38
+                          P=0.70          +5.41           -1.97            -7.38
+                          P=0.75          +5.94           -1.43            -7.38
+4. Authority ceiling @440 Hz:  P=0.70 +6.99 dB | P=0.85 +8.68 | P=1.00 +9.65
+                               => even P=1.00 adds only +2.67 dB over the capture's P=0.70
+```
+
+- **The cell is faithful to 0.003 dB** at every capture knob setting, and passes §3's max-knob gate on
+  level (+27.70 vs +27.5 dB). ⚠ Its peak sits at ~8 kHz where §3's V1L column says 6–7 kHz; §3 lists
+  the *same cell* at 7–8 kHz in its V2 column while stating "V2 PRESENCE ≈ V1 Late", so the
+  transcription carries ~1 kHz of slop there and 8 kHz is within it. Not a defect; noted so nobody
+  re-derives it.
+- **PRESENCE has the right sign but not the authority.** It does boost 440 over 110 (+5.41 dB at
+  P=0.70) — but **its entire remaining ceiling is +2.67 dB**, against the ~5 dB required, and reaching
+  even that would mean pinning the knob to 1.00 in captures taken at 0.65–0.75. Refuted the same way
+  C42, the twin-T, and PRESENCE-in-Gap-H were: an authority argument, free and conclusive, no fitting.
+
+**⇒ THE PRE-DRIVE SHAPING HYPOTHESIS IS DEAD FOR V1L. The whole linear chain ahead of the clip is
+now exonerated:** input buffer (~3.4 Hz HP, no 440 Hz authority), twin-T (faithful to 0.004 dB in the
+110→440 relationship, §8), PRESENCE (faithful to 0.003 dB, ceiling 2.67 dB < 5 dB required), module
+coupling caps (~7 Hz corner). **No linear element ahead of the zener can produce the measured gap.**
+
+**⇒ AND THE PUZZLE SHARPENS RATHER THAN DISSOLVES.** Net pre-drive shaping at the capture's P=0.70 is
+**−1.97 dB at 440 vs 110** — 440 Hz arrives at the clip node *colder* than 110 Hz — yet the **pedal's**
+440 Hz THD saturates at a LOWER drive than its own 110 Hz THD (drive-independent 0.65→0.45 at 440,
+still falling at 110). Nothing linear does that.
+
+**⇒ THIS CONVERGES WITH GAP D's OWN CONCLUSION, REACHED INDEPENDENTLY ON V2.** Gap D ended at *"must
+be nonlinear or level-dependent — no linear element can do it"* and Finding 4 at *"the pedal's drive
+stage has frequency-dependent MEMORY we do not model"*. V1L's 440 Hz item has now walked a different
+road (drive axis, different revision, different anchors, linear elements eliminated one at a time by
+authority) to the same door. **Treat V1L-440 and Gap D as ONE mechanism from here**, and note the
+constraint the pair now imposes: it is inside the shared **zener drive module**, it is
+frequency-dependent, and it is not any linear element in or around that module (coupling caps refuted
+2026-07-19, knee params Vzt/Cj/m exonerated at LF and re-tested at HF).
+
 ---
 
 ## J: V1L 285 Hz blend-tracking notch (NEW 2026-07-17) — a PHASE fault, not a level one
