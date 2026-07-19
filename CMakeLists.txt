@@ -287,6 +287,23 @@ target_link_libraries(ZenerCouplingCapTest PRIVATE chowdsp::chowdsp_wdf)
 target_compile_options(ZenerCouplingCapTest PRIVATE ${PEDAL_WARNING_FLAGS})
 add_test(NAME ZenerCouplingCapTest COMMAND ZenerCouplingCapTest)
 
+# Gap J POLARITY GATES. Two shipped stages read a node voltage off a chowdsp WDFSeriesT child,
+# which returns it NEGATED (once per nesting level) — so TwinTNotch (all three revisions) and
+# V1 Late's L5d wet make-up buffer were both inverted. Neither was detectable by any existing
+# gate, because every per-stage FR gate in this project compares MAGNITUDE and |-H| == |H| —
+# including TwinTAuthorityProbe, which was written specifically to audit the twin-T. These two
+# compare PHASE against an absolute reference (an exact complex nodal solve / netlists.md's stated
+# stage polarities) and both were verified to FAIL on the pre-fix code (L-003).
+add_executable(TwinTPhaseProbe tests/TwinTPhaseProbe.cpp)
+target_link_libraries(TwinTPhaseProbe PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(TwinTPhaseProbe PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME TwinTPhaseProbe COMMAND TwinTPhaseProbe)
+
+add_executable(V1LateWetPolarityProbe tests/V1LateWetPolarityProbe.cpp)
+target_link_libraries(V1LateWetPolarityProbe PRIVATE chowdsp::chowdsp_wdf)
+target_compile_options(V1LateWetPolarityProbe PRIVATE ${PEDAL_WARNING_FLAGS})
+add_test(NAME V1LateWetPolarityProbe COMMAND V1LateWetPolarityProbe)
+
 # ToneWarpShelf — base-rate tone-stack top-octave warp correction (Gap C, V1L/V2). Header-only,
 # <cmath> only (no chowdsp/JUCE). Gates the 48k correction curve, fs-scaling, and (L-003) non-no-op.
 add_executable(ToneWarpShelfTest tests/ToneWarpShelfTest.cpp)

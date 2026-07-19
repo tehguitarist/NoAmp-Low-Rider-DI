@@ -133,7 +133,13 @@ public:
         inSrc.setVoltage(vin);
         inSrc.incident(inChain.reflected());
         inChain.incident(inSrc.reflected());
-        const double vPlus = wdft::voltage<double>(R14);
+        // ⚠ SIGN: same depth-1 WDFSeriesT trap as TwinTNotch (see the long note there). `inChain`
+        // is Series{C10, R14}, so voltage<double>(R14) returns the node voltage INVERTED and must
+        // be negated. netlists.md L5d is unambiguous that IC3B is a NON-inverting +10.1 dB buffer
+        // (signal into (+), R12 gain-set leg (-)->VCOM, R27||C42 feedback (-)->OUT); measured
+        // un-negated it read mag 2.92 at phase -174.6 deg -- the right gain, backwards.
+        // Gated by tests/V1LateWetPolarityProbe.cpp.
+        const double vPlus = -wdft::voltage<double>(R14);
         return processNonInvOpAmp(vPlus, wetZgSrc, wetZg, wetZfSrc, wetZf);
     }
 

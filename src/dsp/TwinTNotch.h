@@ -42,7 +42,23 @@ public:
         src.setVoltage(vIn);
         src.incident(bridge.reflected());
         bridge.incident(src.reflected());
-        return wdft::voltage<double>(R22);
+        // ⚠ SIGN: chowdsp's WDFSeriesT reports each CHILD's voltage negated w.r.t. the source's
+        // reference, and the flip compounds once per nesting level. `outBranch` is a depth-1
+        // series (C26, R22), so voltage<double>(R22) comes back INVERTED and must be negated here.
+        // (V1EarlyInputBuffer reads its shunt through a depth-2 nest, Series{C4, Series{R10, R2}},
+        // so it flips twice and is correct as written -- which is why this convention went
+        // unnoticed: correctness here is depth-dependent, not uniform.)
+        //
+        // This is not a guess. tests/TwinTPhaseProbe.cpp compares this stage against the EXACT
+        // complex nodal solve of netlists.md E2/L2/V2: magnitude agrees to 0.111 dB while phase was
+        // 180.0 deg out at EVERY frequency -- and this network is passive, with no inverting
+        // element anywhere in it. tests/V1LateWetPolarityProbe.cpp gates the convention itself.
+        //
+        // Why it survived to Phase 10: tests/TwinTAuthorityProbe.cpp was built specifically to audit
+        // this stage and compares 20*log10(abs(...)) on both sides. |-H| == |H|, so a polarity error
+        // is invisible to it by construction (L-003's "a gate that checks only a magnitude cannot
+        // detect a model that does the right thing backwards").
+        return -wdft::voltage<double>(R22);
     }
 
 private:
