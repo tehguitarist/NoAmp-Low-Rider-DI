@@ -129,7 +129,7 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-19).** All work is on **`main`**.
+> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-20).** All work is on **`main`**.
 > **Read the "📋 GAP STATUS AT A GLANCE" table and the "⛔ CAPTURE MATRIX IS FINAL" block below FIRST**
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
@@ -139,6 +139,33 @@ without images.
 > `comprehensive_report.py` run and flagged four candidates; all four were verified against
 > `analysis/reports/comprehensive_data.json` before logging (magnitude + sign checked per project
 > discipline) — none have been root-caused yet, this is only the confirmation pass.
+>
+> **✅ ITEM 1 (bass hump) — ROOT-CAUSED AND SUBSTANTIALLY FIXED 2026-07-20. Two schematic values had
+> been FUDGED to chase LF/hump captures, and each corrupted the bass-hump FREQUENCY (L-013).**
+> Confirmed the error is LINEAR (plugin LF peak is level-INDEPENDENT: V1L 123-126 Hz flat across
+> −30..−6 dBFS; V2 113 Hz flat) ⇒ captures are authoritative, no arbitration. Then found the caps:
+> - **V2: C41 15n → restored to schematic 22n** (commit a3eae69). f3f81f9 had changed it 22n→15n to
+>   chase a "200-630 Hz hump" (which barely moved, ~0.3 dB), raising the coupling corner 72→106 Hz and
+>   pushing the hump up. `V2RecoveryTest` already used 22n as its analytic ref but its lowest probe was
+>   100 Hz where the mismatch is only 1.46 dB (under its 2.0 dB tol) — added 40/63/80 Hz probes, proven
+>   to FAIL on 15n (L-003). §1 bump peak 93.8→85 Hz; a capture now matches (78 vs ped 76).
+> - **V1E: C12 220n → restored to schematic 47n** (commit 168ed57). 6427d0a had changed it 47n→220n as
+>   a "sub-100 Hz" fix, dropping the hump peak ~⅓ oct (the OPPOSITE sign from V1L/V2). `V1EarlyBlendLevelTest`
+>   had ALSO been updated to 220n (validated the fudge against itself, L-001) — reference restored to 47n.
+>   **§1 bump peak 70→94 Hz (dead-on §1's 90); ALL V1E captures now match (plug 100 vs ped 98).** V1E CLOSED.
+> - **V1L: NO fudged cap — this half is genuine and stays open, best-effort.** Its LF caps are all
+>   schematic (C10 10n/R14 100k = the ISS-009-confirmed 159 Hz wet-buffer HP; C12 47n; C42 4.7n). Isolated
+>   §1 peaks 100 (pure) / 114 (with dry-leak) vs §1's ~70-90. TWO contributors, both best-effort: (a) the
+>   159 Hz HP is schematic (§1's "70" may itself be a low graph read — §1 calls V1E/V1L "broadly similar"
+>   and V1E is 90); (b) a **V1L-only ~40 Hz dry/wet cancellation null** (−24 dB at drive=0, filling to
+>   ~1 dB at capture drives — the flat dry leaking through the BLEND pot vs the phase-shifted wet). The
+>   null is **UNARBITRABLE**: pedal is smooth AT CAPTURE DRIVE but there is NO V1L low-drive capture, and
+>   the topology (100k pot, C12 47n, direct dry wire) is schematic-faithful. Do NOT retune V1L's schematic
+>   caps or the blend model to chase it. New keeper tool: `analysis/bass_hump_localise.py` (isolated §1
+>   wet-path bump-peak localiser vs the SPICE targets). Reports regenerated 2026-07-20 (post-fix).
+> - ⚠ **What I first chased and REFUTED:** (1) "compression moves the peak" — no, plugin peak is
+>   level-independent; (2) "drive-knob moves the peak" — no, isolated peak is FLAT across drive (V1L 114,
+>   V2 85 at every drive); an earlier "drive-dependent" read was a PRESENCE-setting confound.
 >
 > 1. **Bass-hump frequency is shifted on ALL THREE revisions, but in OPPOSITE directions** (peak-bin
 >    read of `fr.sweep_clean`, raw dB): **V1L** pedal peaks ~80–100 Hz, plugin ~127 Hz, all 3 captures
@@ -180,13 +207,13 @@ without images.
 > against a trustworthy baseline instead of needing to be re-validated later (the same logic that
 > made L-006's Farina-estimator fix a prerequisite for trusting any THD-vs-frequency conclusion).
 >
-> 1. **Bass-hump frequency retune, all 3 revisions** (item 1 above). WIDEST blast radius of
->    anything outstanding: virtually every FR check, null check, and THD-at-anchor read in this
->    project samples ~60–150 Hz, so an uncorrected corner there is baked into Gap D's own V2/V1L
->    100–110 Hz characterisation, the LF `<== HUGE` band flags in `gap_audit.py`, and every
->    capture's null depth. Also likely CHEAP (a per-revision corner/pole retune against
->    `netlists.md`'s already-tabulated LF caps, not a new mechanism) — do this first so nothing
->    downstream has to be re-baselined.
+> 1. **Bass-hump frequency retune — ✅ MOSTLY DONE 2026-07-20 (see the ITEM 1 block above).** The
+>    "cheap per-revision corner retune" guess was RIGHT for two of three revs, and cheaper than
+>    expected: **two schematic values had been fudged** (V2 C41, V1E C12) and restoring them fixed V1E
+>    outright and improved V2. V1L's half has no fudge (schematic caps + an unarbitrable dry-leak null)
+>    and is best-effort. The WIDEST-blast-radius concern still applies to V1L's residual, so downstream
+>    LF-anchored reads (Gap D's 100-110 Hz characterisation, null depth) are now trustworthy for V1E/V2
+>    but keep the V1L caveat. Reports regenerated post-fix.
 > 2. **Validate the flat/level-independent HF THD reading** (existing item 6, "▶ NEXT STEPS" —
 >    "do NOT fit yet"). This is a suspected MEASUREMENT artifact, not a circuit finding — same
 >    category as the L-006 Farina edge-spike bug, which once found invalidated prior THD-vs-frequency
@@ -314,7 +341,11 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-19, LATEST session): GAPS J AND E CLOSED — three real bugs, all found
+> **Last change (2026-07-20, LATEST session): ITEM 1 (bass hump) root-caused — TWO FUDGED SCHEMATIC
+> CAPS restored (V2 C41 22n, V1E C12 47n); V1E CLOSED, V2 improved, V1L best-effort. See the ✅ ITEM 1
+> block near the top and L-013. Commits a3eae69, 168ed57. Reports regenerated. 30/30 ctest green.**
+>
+> **Prior (2026-07-19): GAPS J AND E CLOSED — three real bugs, all found
 > capture-free.** (1) **Two POLARITY INVERSIONS**: chowdsp's `WDFSeriesT` returns a child's voltage
 > NEGATED, compounding once per nesting level, so the depth-1 reads in `TwinTNotch` (all three revs)
 > and V1L's L5d wet buffer were inverted — V1E/V2 wet legs were upside down; V1L carried both flips
@@ -1220,6 +1251,24 @@ the gate FAILS when you delete the feature it guards.
 
 ### Lessons (hard-won, do not re-learn)
 
+- **L-013: A LINEAR schematic value altered to flatten one FR band silently moves a POLE/CORNER
+  everywhere else — audit for it by comparing each shipped component value to the schematic, not by
+  re-measuring.** The bass-hump-frequency error (item 1) was TWO independent instances of the same
+  bug: V2's C41 was changed 22n→15n (f3f81f9) to shave a ~0.3 dB "200-630 Hz hump", and V1E's C12 was
+  changed 47n→220n (6427d0a) to lift "sub-100 Hz". Each is a coupling cap; each move relocated the
+  HP corner and dragged the LF bump PEAK by ~⅓ octave — in OPPOSITE directions (C41 smaller→corner
+  up→peak up; C12 bigger→corner down→peak down), which is exactly why item 1 saw V2/V1L reading HIGH
+  and V1E reading LOW and (per L-010) wrongly doubted a shared cause. The tells, all present: (1) the
+  commit messages themselves say "adjust C41 from 22n" / "increased from 47n to 220n" — a schematic
+  designator with a non-schematic value is the receipt (L-008); (2) BOTH self-validation gates had
+  been neutered — `V2RecoveryTest` kept the 22n analytic ref but never probed below 100 Hz where the
+  corner has authority (L-003), and `V1EarlyBlendLevelTest`'s analytic ref was edited to 220n to
+  match the fudge (L-001); (3) the "fix" each bought was marginal (0.3 dB / a couple dB) versus the
+  ⅓-oct peak error it created. **Do NOT flatten an FR band by nudging a schematic cap — a coupling
+  cap owns a corner, and a corner owns the shape of the whole bump. Fix the real cause or use a named
+  calibration layer (guardrail #1).** Restoring both schematic values fixed V1E outright and improved
+  V2, with the gates re-armed to fail on the fudge. Sibling of L-008 (unphysical value = receipt) and
+  L-001 (suspect the fit, `git log -L` the value/gate).
 - **L-001: When a fit fails a gate, suspect the fit — `git log -L` the gate line.** If a calibration
   fit makes an existing test fail, do NOT widen the test. The commit that added the constant may also
   have loosened the gate to accommodate it. One `git log -L` command found this in ISS-008 (kDryGain
