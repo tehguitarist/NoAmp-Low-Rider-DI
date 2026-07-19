@@ -127,6 +127,12 @@ public:
         normaliser.setParams(depth, targetV, tauMs, scHz, makeup);
     }
 
+    // Widen/narrow the normaliser's gain guards, and read back how often they engaged. Used by the
+    // fitting sweep to prove a grid point measures the MECHANISM and not the clamp.
+    void setClipDriveGainLimits(double minG, double maxG) noexcept { normaliser.setGainLimits(minG, maxG); }
+    double getClipDriveClampedFraction() const noexcept { return normaliser.clampedFraction(); }
+    void resetClipDriveClampStats() noexcept { normaliser.resetClampStats(); }
+
     // Single-sample core at the CURRENT discretisation rate (drive+clip -> recovery). Used for the 1x
     // path and by base-rate probes (DC-step polarity test).
     //

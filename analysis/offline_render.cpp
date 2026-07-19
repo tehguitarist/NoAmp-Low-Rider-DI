@@ -124,11 +124,11 @@ nalr::ZenerDriveParams zenerParamsFromArgs(int argc, char** argv, nalr::ZenerDri
 
 // Shared render loop. `applyParams` sets the revision-specific pot/switch values on the constructed
 // DSP object; everything else (OS, prepare, gain staging, block loop, WAV write) is identical.
-template <typename DSP, typename SetFn>
+template <typename DSP, typename SetFn, typename ReadFn>
 int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor, int block,
               double inTrimDb, double outTrimDb, double inRef, double outMakeup,
               double railKnee, double railVNeg, double railVPos,
-              double satGain, double satKnee, double satOffset, SetFn applyParams)
+              double satGain, double satKnee, double satOffset, SetFn applyParams, ReadFn readBack)
 {
     DSP dsp;
     dsp.setOversamplingFactor(osFactor);
@@ -183,6 +183,7 @@ int runRender(juce::AudioBuffer<float>& fileBuf, int n, double fs, int osFactor,
         for (int i = 0; i < len; ++i)
             data[start + i] = (float) volts[(size_t) i] * outGain;
     }
+    readBack(dsp);
     return 0;
 }
 } // namespace
@@ -260,10 +261,27 @@ int main(int argc, char** argv)
     const double gapdTau     = (gapdTauMs == gapdTauMs) ? gapdTauMs : 30.0;
     const double gapdSc      = (gapdScHz == gapdScHz) ? gapdScHz : 200.0;
     const double gapdMk      = (gapdMakeup == gapdMakeup) ? gapdMakeup : 1.0;
+    // Gain-guard overrides + clamp telemetry. The guards exist so silence cannot demand infinite
+    // boost, but a grid point that spends its time ON a guard is measuring the guard, not the
+    // correction — so the engaged fraction is REPORTED and the bounds are overridable, letting a
+    // sweep prove a point is mechanism-limited rather than clamp-limited.
+    const double gapdMinG = argVal(argc, argv, "--gapd-min-gain", -1.0);
+    const double gapdMaxG = argVal(argc, argv, "--gapd-max-gain", -1.0);
     auto applyGapD = [&](auto& d)
     {
         if (gapdDepth >= 0.0)
+        {
+            if (gapdMinG > 0.0 || gapdMaxG > 0.0)
+                d.setClipDriveGainLimits(gapdMinG, gapdMaxG);
             d.setClipDriveNormalisation(gapdDepth, gapdTargetV, gapdTau, gapdSc, gapdMk);
+        }
+    };
+    // Read back after the render; -1 when the layer was not engaged at all.
+    double gapdClamped = -1.0;
+    auto readGapD = [&](auto& d)
+    {
+        if (gapdDepth > 0.0)
+            gapdClamped = d.getClipDriveClampedFraction();
     };
 
     // Use 0.0 as sentinel for "use per-revision default from kOutputMakeup[rev]". The caller can
@@ -297,7 +315,8 @@ int main(int argc, char** argv)
                                         d.setParams(drive, presence, blend, level, bass, treble);
                                         if (driveEndR >= 0.0)
                                             d.setDriveEndResistance(driveEndR);
-                                    });
+                                    },
+                                    [](auto&) {});
     }
     else if (rev == "V1L")
     {
@@ -308,7 +327,8 @@ int main(int argc, char** argv)
                                        d.setParams(drive, presence, blend, level, bass, treble);
                                        d.setDriveParams(zp);
                                        applyGapD(d);
-                                   });
+                                   },
+                                   readGapD);
     }
     else if (rev == "V2")
     {
@@ -324,7 +344,8 @@ int main(int argc, char** argv)
                                                bassShift40);
                                    d.setDriveParams(zp);
                                    applyGapD(d);
-                               });
+                               },
+                               readGapD);
     }
     else
     {
@@ -362,5 +383,8 @@ int main(int argc, char** argv)
 
     std::printf("offline_render: %s  %d samples @ %.0f Hz, os=%dx, drive=%.2f -> %s\n", rev.c_str(), n, fs,
                 osFactor, drive, outFile.getFileName().toRawUTF8());
+    // Machine-readable so the fitting sweep can flag clamp-limited grid points automatically.
+    if (gapdClamped >= 0.0)
+        std::printf("gapd-clamped-fraction: %.6f\n", gapdClamped);
     return 0;
 }

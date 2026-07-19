@@ -113,6 +113,14 @@ public:
         driveRegion.setClipDriveNormalisation(depth, targetV, tauMs, scHz, makeup);
     }
 
+    // Gap D calibration-layer clamp diagnostics (see ClipDriveNormaliser.h).
+    void setClipDriveGainLimits(double minG, double maxG) noexcept
+    {
+        driveRegion.setClipDriveGainLimits(minG, maxG);
+    }
+    double getClipDriveClampedFraction() const noexcept { return driveRegion.getClipDriveClampedFraction(); }
+    void resetClipDriveClampStats() noexcept { driveRegion.resetClipDriveClampStats(); }
+
     // Override the zener DRIVE-module parameters (default = v1LateParams(), pushed in prepare()). Used
     // by the Phase-10 calibration harness (OfflineRender --zener-*) to scan the knee without a rebuild;
     // the production plugin never calls this.

@@ -177,11 +177,45 @@ public:
         // every render) would demand enormous boost and slam the clip; without a floor a transient
         // would mute the stage. These are guards, not tuning parameters — a fit that lives ON a
         // clamp is not a fit, and the harness should be told to widen them rather than accept it.
-        if (g > kMaxGain)
-            g = kMaxGain;
-        else if (g < kMinGain)
-            g = kMinGain;
+        //
+        // That rule was unenforceable while it was only a comment, so the clamp is INSTRUMENTED:
+        // every engagement is counted and the fraction is reported out through OfflineRender, so a
+        // grid point that is really measuring the clamp rather than the mechanism is visible in the
+        // sweep instead of being argued about afterwards. (This is what the depth=1/target=1 blow-up
+        // to 25.20 dB was suspected to be.) The counters are diagnostic only and never affect audio.
+        ++totalSamples;
+        if (g > maxGain)
+        {
+            g = maxGain;
+            ++clampedSamples;
+        }
+        else if (g < minGain)
+        {
+            g = minGain;
+            ++clampedSamples;
+        }
         return g;
+    }
+
+    // Widen or narrow the guards. Exposed so a sweep can PROVE a point is not clamp-limited by
+    // re-running it with wider guards and getting the same answer.
+    void setGainLimits(double minG, double maxG) noexcept
+    {
+        minGain = minG > 0.0 ? minG : kMinGainDefault;
+        maxGain = maxG > 0.0 ? maxG : kMaxGainDefault;
+    }
+
+    // Fraction of processed samples on which a clamp engaged. Anything materially above zero means
+    // the reported behaviour is partly the guard's, not the correction's.
+    double clampedFraction() const noexcept
+    {
+        return totalSamples == 0 ? 0.0 : (double) clampedSamples / (double) totalSamples;
+    }
+
+    void resetClampStats() noexcept
+    {
+        clampedSamples = 0;
+        totalSamples = 0;
     }
 
     // The matching POST-clip gain for the pre-gain just returned. Split into two calls (rather than
@@ -198,8 +232,8 @@ public:
 private:
     static constexpr double kMinEnv = 1.0e-6;   // volts; floors the divide during silence
     static constexpr double kMinTarget = 1.0e-6;
-    static constexpr double kMaxGain = 8.0;     // ~ +18 dB boost ceiling
-    static constexpr double kMinGain = 0.125;   // ~ -18 dB cut floor
+    static constexpr double kMaxGainDefault = 8.0;   // ~ +18 dB boost ceiling
+    static constexpr double kMinGainDefault = 0.125; // ~ -18 dB cut floor
 
     void updateCoeffs() noexcept
     {
@@ -217,7 +251,11 @@ private:
     double scHz = 200.0;
     double makeup = 1.0;
 
+    double minGain = kMinGainDefault, maxGain = kMaxGainDefault;
     double scCoef = 0.0, envCoef = 0.0;
     double scState = 0.0, env = 0.0;
+
+    // Diagnostic only — never read on the audio path, never affects output.
+    unsigned long long clampedSamples = 0, totalSamples = 0;
 };
 } // namespace nalr
