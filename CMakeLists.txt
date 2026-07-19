@@ -320,6 +320,17 @@ target_link_libraries(V1LateIntegrationTest
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1LateIntegrationTest COMMAND V1LateIntegrationTest)
 
+# Gap D calibration layer as shipped on V1L — L-003 gate (magnitude, 3 drive settings, proven to
+# fail when the layer is ablated). See tests/V1LateGapDTest.cpp.
+juce_add_console_app(V1LateGapDTest PRODUCT_NAME "V1LateGapDTest")
+target_sources(V1LateGapDTest PRIVATE tests/V1LateGapDTest.cpp)
+target_compile_definitions(V1LateGapDTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V1LateGapDTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME V1LateGapDTest COMMAND V1LateGapDTest)
+
 # 6.1 — V2 recovery stage: new R47/C42 input LP corner + retuned S-K coupling, no bridged-T
 # (src/dsp/V2Stages.h) vs an independent analytic nodal reference + FR §1 qualitative HF trend.
 add_executable(V2RecoveryTest tests/V2RecoveryTest.cpp)

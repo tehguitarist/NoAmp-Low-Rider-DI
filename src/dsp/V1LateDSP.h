@@ -51,6 +51,38 @@ public:
         // sat_refine.py --rev V1L --os 4: gain=0.400 knee=0.500 offset=0.100 => RMS 11.1 (disabled was 102.1).
         driveRegion.setRecoverySaturation(0.40, 0.50);
         driveRegion.setSaturationOffset(0.100);
+        // ⭐ GAP D CALIBRATION LAYER — ENABLED ON V1L ONLY (src/dsp/ClipDriveNormaliser.h).
+        //
+        // Fitted 2026-07-19 with analysis/gapd_fit_harness.py. On V1L's DRIVE axis (440 Hz, the
+        // largest single V1L THD error in the matrix) this takes the residual rms from 9.42 -> 3.01 dB
+        // and the SPREAD error — the sensitivity deficit that IS Gap D — from +9.84 -> +1.58 dB:
+        //     pedal   16.75 / 15.83 / 5.85 %   (drive-independent, as the real pedal is)
+        //     before  16.56 /  3.57 / 1.86 %   (collapses: -12.26 pp at D0.45)
+        //     after   27.60 / 17.51 / 8.04 %   (tracks, but now uniformly hot)
+        //
+        // ⚠ THIS IS A PER-REVISION VALUE AND THAT IS IN TENSION WITH GUARDRAIL #6. Recorded plainly
+        // rather than glossed: the SAME correction does NOT close V2's level axis (its spread error
+        // goes +2.13 -> +2.79 dB, i.e. slightly WORSE, at every makeup tested), so V2 keeps depth 0.
+        // Guardrail #6 says one correction per deficit, never per capture or per revision. The
+        // deliberate, user-authorised judgement here is to ship the half that is measured to work
+        // while V2's half stays open, rather than withhold a large, well-evidenced V1L improvement.
+        // It is scoped and documented, NOT a claim that Gap D is closed. If V2 is later closed by a
+        // different mechanism, revisit whether these are really one deficit at all.
+        //
+        // ⚠ WHY V2 RESISTS, so nobody re-runs this blind: pulling the clip node down toward `target`
+        // moves it OFF the zener clamp into the steep part of the THD-vs-level curve, which makes it
+        // MORE level-sensitive, not less. Deep clamp is flat but hot; shallow is cold but sensitive;
+        // the pedal is flat AND cold. That is the memoryless-impossibility signature restated, and no
+        // setting of this layer resolves it.
+        //
+        // ⚠ NOT ALL FIVE PARAMETERS ARE FITTED. depth and target were swept and have a clean interior
+        // optimum. `makeup` is UNCONSTRAINED by the harness's THD-only objective — THD is a ratio, so
+        // a post-clip scalar cancels exactly — and tau/scHz were never swept at all; both keep the
+        // ClipDriveNormaliser defaults. Fitting makeup requires a COMPRESSION metric alongside THD
+        // (the Finding-4 signature is a level phenomenon, not a harmonic one). Treat 1.0 / 30 ms /
+        // 200 Hz as placeholders pending that fit, not as measured values.
+        driveRegion.setClipDriveNormalisation(/*depth*/ 0.5, /*targetV*/ 2.0, /*tauMs*/ 30.0,
+                                              /*scHz*/ 200.0, /*makeup*/ 1.0);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         warpShelf.prepare(baseFs);
