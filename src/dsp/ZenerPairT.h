@@ -35,6 +35,24 @@
 // Vzt 0.20 V, Iref 5 mA (Is ~= 1.3e-11 A). Vzt/Vth/Iref stay per-revision FIT parameters (refine
 // against captures in Phase 10; V2's BZB984 junction/knee differs slightly).
 //
+// ⚠ KNOWN MODEL LIMITATION — QUANTIFIED 2026-07-19, DO NOT "FIX" BY CHANGING Vzt.
+// The trade-off described above was measured, not just argued (analysis/zener_model_vs_datasheet.py):
+//   r_dif = Vzt/I is a prediction with NO free parameters, so the datasheet arbitrates it directly.
+//   datasheet  95 ohm @5 mA / 600 @1 mA   vs   model (Vzt=0.20)  40 / 200
+//   => OUR KNEE IS 2.4-3x TOO HARD. The datasheet implies Vzt 0.475-0.60; we ship 0.20.
+// This is a defect of the MODEL FORM, not of the fitted value: one exponential welds knee softness
+// to sub-knee leakage through a single parameter, while the real device is two junctions in series
+// with different slopes and an INDEPENDENT reverse-leakage floor. At Vzt=0.475 the element passes
+// 677 uA at 3 V against the 220k feedback leg's 13.6 uA (50x over budget).
+// MEASURED CONSEQUENCE of softening anyway (analysis/gapd_vzt_authority.py, 44 renders, OS=8):
+//   small-signal gain -4.51 dB (V1L) / -6.20 dB (V2) at Vzt=0.475, up to -12.12 dB at 0.60.
+//   THD benefit vs the ~5 dB Gap D needs: at best +2.19 dB, non-monotonic, and V1L/V2 prefer
+//   DIFFERENT values with V2's two anchors moving in opposite directions => not a mechanism.
+// FIXING IT PROPERLY would mean a two-branch element (Werner et al., DAFx-15 generalizes the eqn-18
+// form used here to two Lambert W functions with independent per-orientation parameters, instead of
+// treating the reverse branch as an open circuit). That decouples softness from leakage. It was
+// NOT built: the authority measurement above does not justify the work. Revisit only with evidence.
+//
 // THE OMEGA PROVIDER: templated so we get AccurateOmega (machine precision), NOT chowdsp's omega4
 // (~-35 dB distortion floor, dsp.md). Note DiodePairT's `Best` path would have silently ignored the
 // provider and used omega4 — using the Good-form solve directly is what lets AccurateOmega bite.

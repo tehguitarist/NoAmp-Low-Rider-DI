@@ -151,6 +151,48 @@ without images.
 > | band-limited/pre-emphasised saturator | error is **non-monotonic** (2k/4k too hot, 8k too COLD) so no corner works. Saturator KEPT (net joint win) | `v1l_sat_joint_score.py` |
 > | zener knee params (Vzt/Cj/m) | exonerated at LF, re-tested at HF | `gapd_hf_zener_scan.py` |
 > | post-blend clipping | never reaches its rail (7.6–47.8 dB short) | `gapd_postblend_test.py` |
+> | **zener self-heating** | **~0.004 dB** of ~5. ⚠ frequency structure AND sign are both PERFECT (ms thermal τ tracks 110 Hz, averages out by 440; negative TC below 5 V ⇒ hotter clamps tighter) — it dies purely on power: ~420 µA × 3.9 V = **1.6 mW** ⇒ ΔT ~0.5–0.8 K ⇒ ΔVz 1–2 mV. **A perfect qualitative fit is not a magnitude** | paper (§D screen) |
+> | **module bias-node sag** (V1L C1 47u) | dead ×3: τ = **3.23 s**; the node feeds a (+) input so signal current is **zero**; and V2 ties pin 4 to main VCOM so it is **V1L-only** while the anomaly is on both | paper (§D screen) |
+> | **op-amp slew limiting** | dead ×3: **~50× margin** (needs 0.011 V/µs, part does 0.55), sign inverted, and it is an HF effect where the anomaly is LF | paper (§D screen) |
+>
+> | **coupled DRIVE pot** | already MODELLED (`ZenerDriveModule.h` stage-A rail clip), and the composite is memoryless: two memoryless nonlinearities separated by networks flat at both anchors | paper (§D screen) |
+> | **every LINEAR element in the module** | **element-set screen: the window is EMPTY.** A 110-vs-440 split needs τ ∈ [0.36, 1.45] ms; the module has 4 elements too SLOW (1.1–15.9 Hz) and 2 too FAST (3.3–72 kHz), nearest gaps **7× on each side**. Total splitting power **0.196 dB of ~5**. ⇒ **no parameterisation of any existing module element can do it** | `gapd_module_tau_screen.py` |
+>
+> **⭐ BUT THE ZENER ITSELF WAS NEVER CHECKED AGAINST ITS DATASHEET — AND IT IS WRONG (2026-07-19).**
+> `analysis/zener_model_vs_datasheet.py`. `r_dif = Vzt/I` is a free, no-free-parameter prediction and
+> the DZ23C3V3 datasheet gives two points: **95 Ω @5 mA (model 40) and 600 Ω @1 mA (model 200)** ⇒ our
+> knee is **2.4–3× TOO HARD**; the datasheet implies Vzt **0.475–0.60**, we ship **0.20**.
+> **The cause is the MODEL FORM, not a bad fit:** a single `2·Is·sinh(V/Vzt)` ties knee softness to
+> sub-knee leakage through one parameter (at Vzt=0.475 it leaks 677 µA at 3 V vs the 220k leg's 13.6 —
+> 50× over, which is why 0.20 was chosen, `ZenerPairT.h:26-34`). The real device is two junctions in
+> series with different slopes and an **independent** reverse-leakage floor.
+> **Sign and mechanism MATCH Finding 4** (a softer knee compresses earlier/gentler ⇒ fewer harmonics
+> per dB of compression) and it is **datasheet-faithful, not a calibration layer**. ⚠ It is
+> **MEMORYLESS**, so it is a MAGNITUDE candidate only — the 110-vs-440 split stays open.
+> **PRIOR ART: we are one paper behind.** Werner et al. DAFx-15 (the source of our eqn-18) generalises
+> to **two Lambert W functions** with independent per-orientation parameters instead of treating the
+> reverse branch as an open circuit — structurally the freedom we lack, validated vs SPICE. Take that
+> generalisation rather than inventing an element. No published WDF zener-*breakdown* element exists.
+> **⛔ THE AUTHORITY WAS MEASURED AND IT FAILED ITS OWN PRE-REGISTERED GATE (2026-07-19,
+> `analysis/gapd_vzt_authority.py`, 44 renders, all controls PASS incl. V1E bit-identical).**
+> Best reading **+2.19 dB of ~5** (V1L@110); **non-monotonic and revision-inconsistent** (V1L wants
+> 0.475, V2 wants 0.60, and V2's two anchors move in OPPOSITE directions); and the predicted leakage
+> cost is real — small-signal gain **−4.51 dB (V1L) / −6.20 dB (V2)** at Vzt=0.475, up to −12 dB at
+> 0.60. ⚠ **And the +2.19 is CONFOUNDED UPWARD by that very gain change** — in a single-exponential
+> model softening ALWAYS drags leakage with it, so the ablation cannot isolate the mechanism by
+> construction. **⇒ DO NOT ship a softened Vzt (settled), and DO NOT build the two-branch element on
+> this evidence** — substantial nonlinear WDF work justified only by an authority number this
+> experiment failed to produce. **Vzt stays 0.20.**
+> **What stands:** the knee IS 2.4–3× too hard vs datasheet — record as a KNOWN MODEL LIMITATION, not
+> a bug to fix. V1L shows an interior |dTHD| minimum AT the datasheet value (3.22→1.03→2.98 over
+> 0.20/0.475/0.60) — suggestive, confounded, do not act on it. V2's knee params are still documented
+> V1L placeholders, which may explain V2's incoherence here.
+> **⇒ Gap D is back where the element-set screen left it, minus one candidate — but with a stronger
+> guardrail-#2 record: seven rule-outs on computed magnitude plus one on measured authority. The
+> SANCTIONED CORRECTION is now the live option.**
+> ⚠ The earlier "stop hunting, take the sanctioned correction" recommendation is **WITHDRAWN** — the
+> element-set screen covered the module's LINEAR elements and I let it stand for the whole module.
+> Full record: gap-audit §D "PAPER SCREEN" + "THE ZENER KNEE IS ~2.4–3× TOO HARD".
 >
 > ⇒ **the whole linear chain ahead of V1L's clip is exonerated**: buffer (~3.4 Hz), twin-T, PRESENCE,
 > module coupling caps (~7 Hz). **And the puzzle SHARPENS:** net pre-drive shaping is **−1.97 dB at

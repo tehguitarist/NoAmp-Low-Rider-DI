@@ -1659,6 +1659,288 @@ interaction effect into fixed component values that are individually schematic-f
 > offset across 330–770 Hz cannot be a filter) and now by direct measurement of the specific linear
 > candidate. Everything below is the (still-valid) characterisation plus the (dead) conclusion.
 
+### D — PAPER SCREEN OF THE MEMORY-BEARING CANDIDATES (2026-07-19): THREE DEAD, NO CODE WRITTEN
+
+**Purpose: guardrail #2.** Before any correction can be sanctioned for Gap D, the physical cause must
+have been hunted and the hunt written down — including what was ruled out and by what argument. This
+is that record. Per **L-010**, each candidate is killed on **computed magnitude and sign**, on paper,
+before implementation. Required authority throughout is **~5 dB** (the like-for-like figure; not the
+inflated 8.4/9.0 dB from the two-estimator comparison — see "TWO CORRECTIONS" below).
+
+The mechanism requirement being screened against: **LF-specific, level-dependent gain reduction that
+is not clipping** — present at 110 Hz, gone by 440 Hz, on V1L and V2 but not V1E, ~5 dB, and it must
+compress the fundamental while generating *fewer* harmonics, not more.
+
+| candidate | frequency structure | sign | magnitude | verdict |
+|---|---|---|---|---|
+| zener self-heating | ✅ correct | ✅ correct | **~0.004 dB** of ~5 | **DEAD on magnitude** |
+| module bias-node sag (V1L C1 47u) | ❌ τ ≈ 3.2 s | n/a | **zero** (no signal current) | **DEAD ×3** |
+| op-amp slew limiting | ❌ inverted | ❌ inverted | ~50× margin, never engages | **DEAD ×3** |
+
+**1. Zener self-heating — the seductive one, and the reason to compute before coding.** Every
+qualitative box ticks. Die thermal time constants are ms-class, so the junction temperature *tracks
+the envelope* of a 110 Hz cycle (9.1 ms period) and *averages out* by 440 Hz (2.3 ms) — a memory with
+exactly the lowpass structure the anomaly demands, which no linear element in the chain could supply.
+It compresses the fundamental **without generating harmonics**, because the modulation is slow
+relative to the waveform — precisely the "matched compression, fewer harmonics" signature. And the
+sign is right: below ~5 V a zener's breakdown is Zener-effect-dominated and its TC is **negative**, so
+a hotter junction clamps *tighter* ⇒ more compression, which is the direction the pedal shows.
+
+It dies on magnitude, by three orders. Stage A's rail caps V_w at 4.2 V, so the leg passes only
+**~420 µA into the zener even at max drive** (already recorded under the Phase-9 zener OS/ADAA work).
+At a ~3.9 V clamp that is **P ≈ 1.6 mW**. A SOT-23/SOT-663 part is Rth(j-a) ≈ 300–500 K/W ⇒
+**ΔT ≈ 0.5–0.8 K**. At a TC of ≈ −1.5 to −2.5 mV/K that is **ΔVz ≈ 1–2 mV** on a Vth ≈ 3.95 V clamp
+= **0.03–0.05%**, i.e. **~0.004 dB**. Against ~5 dB required. Even three orders of error in Rth or
+TC would not rescue it. The pedal simply does not dissipate enough power in this device to modulate
+its own clamp audibly.
+
+⚠ **This is the L-010 pattern exactly, and worth naming: perfect frequency structure plus perfect
+sign is NOT evidence.** The coupling caps had a perfect cross-revision pattern; this has a perfect
+temporal one. Neither is a magnitude.
+
+**2. Module bias-node sag (V1L only) — dead three times over.** The picture is that stage A's
+self-bias node (netlists.md L4 `[○]`: R105 100k VCC→bias, R101 220k bias→GND, C1 47u, sitting at
+≈0.69·VCC) sags under asymmetric signal current, shifting the operating point level-dependently.
+
+- **Time constant:** Thevenin R = 100k ∥ 220k = 68.75k, so τ = 68.75k × 47u = **3.23 s**. Four orders
+  slower than a 9 ms cycle. It cannot modulate anything in-band.
+- **Drive current:** the node feeds IC100A's **(+) input**, which draws no current. There is no
+  signal-dependent load to sag it in the first place. The magnitude is not small, it is *zero*.
+- **Cross-revision:** V2's module pin 4 is tied to the **main VCOM rail** (netlists.md V4 `[○]`),
+  which is far stiffer and dominates — V2 has no such node. A V1L-only mechanism cannot explain an
+  anomaly that appears on **both** V1L and V2 (5/5 V2 rows at 110 Hz, 2/3 V1L rows at both anchors).
+
+**3. Op-amp slew limiting — killed by magnitude as well as sign.** The sign objection is already on
+record (it REMOVES HF harmonics where the pedal has MORE — how the S-K stopband-floor candidate died
+in H err2), but it does not even reach the starting line: at a datasheet-class 0.55 V/µs, a 4 V peak
+at 440 Hz demands 2π·440·4 = **0.011 V/µs**, a **~50× margin**. Even an order of magnitude of
+datasheet pessimism leaves ~5×. The TLC226x are never slew-limited anywhere in this band. And the
+frequency structure is inverted regardless — slew limiting is a *high*-frequency effect, while the
+anomaly is present at 110 Hz and **gone** by 440.
+
+**⇒ WHAT THIS LEAVES, AND A CAUTION ABOUT THE LOCALISATION ITSELF.** No memory-bearing candidate
+inside the zener module survives a paper screen. Before drawing further from that well, note that
+**L-010 already warns the localisation is weaker than it feels**: the inference "the mechanism is
+inside the shared module" rests on V1E being clean, but V1E lacks the module *entirely*, so that
+observation corroborates every hypothesis about anything in there **equally**. It does not
+discriminate between the zener, the two op-amp stages, or their interconnection.
+
+The one structure V1L and V2 share that **V1E also genuinely lacks** and that is *not* the clip
+element is the **coupled DRIVE pot spanning two inverting stages** (netlists.md L4/V4 — IC100A's
+output IS the wiper, so one knob sets stage-A gain and stage-B attenuation complementarily). Stage A
+rail-clips and thereby **current-limits the zener**, a documented DRIVE-dependent behaviour already
+recorded in CLAUDE.md's Phase-9 carry-forward ("the stage-A rail current-limits the zener … the clip
+is now DRIVE-DEPENDENT"). That interaction is level- and drive-coupled in a way no single memoryless
+element is, and it has not been screened. **Screen it next — magnitude and sign first, as here.**
+
+If that also fails on authority, Gap D's midband becomes a legitimate candidate for a **sanctioned
+correction** under the six guardrails (CLAUDE.md) — and this subsection is the guardrail-#2 record
+that the hunt happened.
+
+### D — THE COUPLED DRIVE POT IS DEAD TOO, AND SO IS THE WHOLE MODULE (2026-07-19). THE WINDOW IS EMPTY
+
+Tool: `analysis/gapd_module_tau_screen.py` (paper only, no rendering, runs in ms).
+
+**The coupled-pot candidate dies on two counts, the first of which is embarrassing and worth
+recording.** It is **already modelled**, and has been since the Phase-9 OS/ADAA pass:
+`ZenerDriveModule.h`'s "STAGE-A RAIL CLIP" block implements exactly the proposed mechanism — stage
+A's rail caps V_w, so `I_g = V_w/(R_wb+R17)` is capped, so how hard the zener is driven depends on
+the DRIVE pot — and spells out the drive-dependence (~420 µA at high drive vs tens of µA at low).
+So it cannot be an *unmodelled* mechanism. It could only explain the gap by being mis-parameterised.
+
+**It cannot be, because the composite is memoryless.** Stage A's rail clip and stage B's zener are
+both memoryless; the networks between and around them are linear. A cascade of memoryless
+nonlinearities separated by networks that are flat across 110–440 Hz is itself memoryless, and a
+memoryless element cannot put the pedal's 110 Hz point 5 dB off its own compression locus.
+
+**⇒ SO SCREEN THE ELEMENT SET, NOT THE CANDIDATES.** A first-order memory can only distinguish two
+frequencies if its corner lies **between** them. That converts the whole question into arithmetic:
+
+- **Required:** corner in [110, 440] Hz ⇒ **τ ∈ [0.36, 1.45] ms**.
+- **Present**, every memory element in the module, with its maximum 110-vs-440 splitting power:
+
+| element | corner | τ | split |
+|---|---|---|---|
+| V2 C22 1u / R12 10k (stage-A input) | 15.9 Hz | 10 ms | +0.084 dB |
+| V2 C4 1u / R_wb+R15 20k (D0.90, inter-stage) | 8.0 Hz | 20 ms | +0.021 dB |
+| V1L C28 2.2u / R23 10k (stage-A input) | 7.2 Hz | 22 ms | +0.018 dB |
+| V1L C8 2.2u / R_wb+R17 65k (D0.45, inter-stage) | 1.1 Hz | 143 ms | +0.000 dB |
+| V1L Cj 220p / Rf 220k (zener junction) | 3288 Hz | 0.048 ms | −0.072 dB |
+| V2 Cj 10p / Rf 220k (zener junction) | 72343 Hz | 0.002 ms | −0.000 dB |
+| **SUM \|split\|** | | | **0.196 dB** |
+| **REQUIRED** | | | **~5 dB** (26× short) |
+
+**Four elements are too SLOW and two are too FAST. The window contains NOTHING** — nearest
+neighbours are 15.9 Hz and 3288 Hz, gaps of **7× on each side**. Not marginal, and not a value that
+tolerance could close: moving C4 into the window means shrinking it ~10×, which would gut the
+module's DC blocking and is contradicted by the schematic.
+
+**⇒ NO PARAMETERISATION OF ANY EXISTING MODULE ELEMENT CAN SPLIT 110 FROM 440.** This is a
+structural result covering the entire element set at once, not another one-candidate rule-out. Every
+remaining "maybe the X is mis-valued inside the module" hypothesis is answered in advance by it.
+
+**Corroboration it was not fitted to:** summing only the in-loop coupling caps, the screen predicts
+**0.12 dB** of authority. The rendered ablation (`gapd_coupling_gate.py`) measured **0.11 dB**. The
+paper arithmetic reproduces the measurement — which is the L-010 point stated as sharply as it can
+be: **that number was available for free, before the implementation, from six divisions.**
+
+**⇒ WHERE THIS LEAVES GAP D.** The mechanism has a **millisecond-class time constant** (τ ≈ 0.4–1.5
+ms) and **it is not in the zener drive module**. Both of the pre-drive and post-clip chains are
+already exonerated by earlier work (twin-T 0.004 dB, PRESENCE 0.003 dB, buffer ~3.4 Hz, post-clip
+`R_post` flat to 0.74 dB, post-blend clipping 7.6–47.8 dB short). Taken together with this screen,
+**every stage of the modelled chain has now been excluded**, so the honest reading is that the
+mechanism is something the schematic does not contain — a device-level effect of the real zener or
+the real CMOS op-amps that no lumped element in our netlist represents.
+
+**⚠ THE "STOP HUNTING, TAKE THE CORRECTION" RECOMMENDATION THAT STOOD HERE IS WITHDRAWN — SAME DAY,
+BEFORE ACTING ON IT.** It read: *"§D now records six rule-outs on computed magnitude … 'we looked and
+could not find it' is a finding"*, and recommended going straight to a sanctioned correction. It was
+wrong, and the way it was wrong is instructive: **the screen above covers the module's LINEAR
+elements and its NETWORK, and I let that stand in for the whole module.** It never asked whether the
+*nonlinear element itself* — the zener — is modelled correctly. Within an hour a datasheet check
+found that it is not (next subsection). **A guardrail-#2 hunt is not complete while a first-class
+element of the circuit has never been checked against its own datasheet.**
+
+The element-set screen's own result is unaffected and still stands: no *linear* module element can
+split 110 from 440 Hz. What is withdrawn is the leap from that to "the hunt is exhausted".
+
+### D — THE ZENER KNEE IS ~2.4–3× TOO HARD vs ITS OWN DATASHEET (2026-07-19). A REAL, UNEXPLORED DEFECT
+
+Tool: `analysis/zener_model_vs_datasheet.py` (paper only, no rendering, no captures).
+Prompted by the user asking the obvious question nobody had asked: *is the zener actually modelled
+right, and has anyone done this before?*
+
+**The check nobody ran.** `ZenerPairT` implements `I(V) = 2·Is·sinh(V/Vzt)`. Above the knee this is
+`I ≈ Iref·exp((V−Vth)/Vzt)`, so `r_dif = dV/dI = Vzt/I` — a **hard prediction with no free
+parameters** once Vzt is fixed. And the DZ23C3V3 datasheet gives two `r_dif` points. `r_dif` is a
+pure *slope*, i.e. precisely the quantity a knee-softness parameter controls. The arbiter was sitting
+in the header comment for a year, quoted but never evaluated:
+
+| test current | datasheet r_dif | model (Vzt=0.20) | error | Vzt the point implies |
+|---|---|---|---|---|
+| 5 mA | 95 Ω | 40 Ω | **2.4× too stiff** | 0.475 V |
+| 1 mA | 600 Ω | 200 Ω | **3.0× too stiff** | 0.600 V |
+
+**Our zener knee is ~2.4–3× harder than the real device**, consistently, at both points.
+
+**Why it was set that way — the trade-off is real, and it is STRUCTURAL, not a bad choice.**
+`ZenerPairT.h:26-34` already records that `Vzt≈0.5` "is unusable — it leaks". Quantified: at
+Vzt=0.475 the element passes **677 µA at 3 V**, against the 220k feedback leg's own **13.6 µA** —
+**50× over budget**, shunting the feedback and destroying the stage's small-signal linear gain. So
+0.20 was the right call *given the model form*. **The defect is the form.** A single exponential
+ties knee softness and sub-knee leakage to ONE parameter. The real device has no such coupling: it
+is two junctions in series with very different slopes (sharp forward, ~26–50 mV; soft breakdown,
+~0.5 V) and its sub-breakdown blocking is set by **reverse leakage — an independent quantity**.
+We are forced to choose; the device is not.
+
+**⇒ WHY THIS MATTERS FOR GAP D, AND EXACTLY HOW FAR IT GOES.** A knee 2.4–3× too hard means our clip
+engages **too late and too abruptly**. A softer knee compresses the fundamental **earlier and more
+gradually**, generating **fewer high-order harmonics for the same compression** — which is Finding
+4's signature stated verbatim ("compresses ~10 dB while generating ~10 dB fewer harmonics"). This is
+the first candidate whose *sign and mechanism* match the anomaly and that has **not** been refuted on
+magnitude, and it is a **schematic/datasheet-faithful fix, not a calibration layer**.
+
+⚠ **Do not over-claim it, and do not conflate the two halves of Gap D.** The knee is **memoryless**,
+so it cannot by itself produce the 110-vs-440 split — the element-set screen above still holds
+against that. It is a **MAGNITUDE candidate**, not the frequency-dependence candidate. Per L-010 its
+authority must be computed before implementation: how many dB of THD-at-matched-compression does
+Vzt 0.20→0.475 actually buy? That is one ablation render away (`--zener-vzt` is a proven-live flag,
+L-009) and must be measured **before** any two-branch element is written.
+
+**PRIOR ART — the reference to build against exists, and we are already one paper behind it.**
+- **Werner et al., "An Improved and Generalized Diode Clipper Model for Wave Digital Filters"
+  (DAFx-15)** — the source of the eqn-18 form `ZenerPairT` already uses. But we use only its simple
+  antiparallel case. The paper's actual generalization handles **arbitrary diode counts per
+  orientation** and, critically, replaces the usual "approximate the reverse-biased diode as an open
+  circuit" step with a **correction term using two Lambert W functions** — i.e. a genuinely
+  two-branch model with independent per-orientation parameters. **That is structurally the thing our
+  single lumped exponential is missing**, and the paper validates it against SPICE. ⇒ the correct
+  move is not to invent a bespoke zener element but to **take the generalization we skipped**.
+- **`chowdsp_wdf` library paper (arXiv 2210.12554)** — our own library, for the API surface.
+- **"Emulating Diode Circuits with Differentiable Wave Digital Filters"** — offers a route to *fit*
+  knee parameters by gradient descent rather than by scan. Note under the FINAL matrix this must be
+  fit to the **datasheet/SPICE**, not to captures (⚖ arbitration rule + guardrail #5).
+- **No published WDF zener-*breakdown* element found.** circuit.md called this a research spike and
+  that assessment was correct — there is no off-the-shelf answer, but the Werner generalization is
+  the right scaffold. (Independent circuit corroboration exists — Toshi's blog traces the same V2
+  signal flow and confirms the 3.3 V opposed-zener pair — but circuit.md is already 4-pass verified,
+  so this adds nothing we need.)
+
+**⇒ REVISED NEXT STEP for Gap D.** Before any sanctioned correction: (1) measure the authority of
+Vzt 0.20→0.475 by ablation; (2) if it is material, implement the two-branch/two-Lambert-W element per
+Werner's generalization, which decouples knee softness from leakage and lets Vzt sit at its
+**datasheet-correct** value; (3) re-run the Finding-4 locus probe. Only if the LF magnitude gap
+survives that does the correction conversation restart — and the 110-vs-440 frequency split remains
+open regardless.
+
+#### D — THE Vzt AUTHORITY WAS MEASURED, AND IT DOES NOT CLEAR THE BAR (2026-07-19). DO NOT BUILD THE ELEMENT YET
+
+Tool: `analysis/gapd_vzt_authority.py` (44 renders, OS=8, all 11 captures × Vzt ∈ {0.20, 0.30,
+0.475, 0.60}). **This is step (1) above, executed before writing any element — and it says stop.**
+
+**Controls all PASS** (L-009, per revision): V1E is **bit-identical** across all four Vzt values (it
+has no zener), V1L and V2 each produce **4 distinct renders**. The null is trustworthy. The sweep is
+also confirmed clean: `Is = Iref·exp(−Vth/Vzt)` pins `V(5 mA) = 3.950 V` at every Vzt, so it varies
+knee **shape** only, not the clamp threshold.
+
+**Authority vs the ~5 dB required (mean |dTHD| improvement from shipped 0.20):**
+
+| rev | anchor | → 0.475 (datasheet) | → 0.60 |
+|---|---|---|---|
+| V1L | 110 Hz | **+2.19 dB** | +0.24 |
+| V1L | 440 Hz | **+1.37 dB** | −2.96 |
+| V2 | 110 Hz | +0.52 | **+2.87 dB** |
+| V2 | 440 Hz | −1.70 | −2.46 |
+| V1E | both | 0.00 (control) | 0.00 |
+
+**Three findings, and the first two are disqualifying:**
+
+1. **NOTHING REACHES THE BAR.** The best single reading is **+2.19 dB of ~5** — under half — and it
+   is a mean over three captures at one anchor of one revision.
+2. **IT IS NON-MONOTONIC AND REVISION-INCONSISTENT.** V1L's optimum is 0.475; V2's is 0.60; V2's two
+   anchors move in **opposite directions** at both candidate values (110 Hz improves, 440 Hz gets
+   worse). Guardrail #6's test — *"if it needs a different value per capture it is a curve fit"* —
+   is close to failing here. (Partial mitigation: the two revisions genuinely have **different zener
+   parts**, DZ23C3V3 vs BZB984-C3V3, so a per-revision Vzt is physically legitimate. The
+   within-V2 anchor disagreement is not covered by that excuse.)
+3. **THE PREDICTED LEAKAGE COST IS REAL AND LARGE.** Small-signal gain vs shipped:
+   **V1L −0.72 / −4.51 / −8.28 dB** and **V2 −0.85 / −6.20 / −12.12 dB** at Vzt 0.30 / 0.475 / 0.60.
+   Exactly the structural prediction. A 4–12 dB linear-gain loss would wreck the FR match outright.
+   ⇒ **Shipping a softened Vzt in the single-exponential model is off the table.** That question is
+   settled.
+
+**⚠ AND THE MEASUREMENT CANNOT ISOLATE THE MECHANISM — this is the part that matters most.** In the
+single-exponential form, softening the knee **always** drags leakage with it. So the +2.19 dB is the
+NET of (soft knee helps) **plus** (a −4.51 dB gain change moving the operating point). Those cannot
+be separated in this model form, and gain-compensating at the input does not decouple them either —
+raising the input restores output level but drives the zener harder, i.e. moves us to a different
+place on the very knee under test. **⇒ this ablation is inconclusive ABOUT THE MECHANISM by
+construction**, and its one clean verdict is the negative one in (3).
+
+**⇒ VERDICT: DO NOT BUILD THE TWO-BRANCH ELEMENT ON THIS EVIDENCE.** The pre-registered gate in step
+(2) above was "if it is material" — at ≤2.19 dB of 5, confounded upward by a gain change, it is not.
+Building a Werner two-Lambert-W element is a substantial piece of nonlinear WDF work whose only
+justification would be an authority number this experiment failed to produce. **The honest state is:
+the zener knee IS wrong vs its datasheet (that finding stands, and is worth recording as a known
+fidelity limitation), but it has not been shown to be worth ~5 dB on Gap D.**
+
+**What survives as genuinely useful:**
+- **A documented model limitation.** The knee is 2.4–3× too hard vs datasheet and the model form
+  cannot fix it. Note it in `ZenerPairT.h` as a known limitation with the leakage trade-off
+  quantified, so the next person does not re-derive it. **Do not change the shipped Vzt=0.20.**
+- **V1L shows an INTERIOR minimum at the datasheet value** (|dTHD| 3.22 → 1.03 → 2.98 across
+  0.20/0.475/0.60 at 110 Hz), i.e. the |dTHD|-minimising knee coincides with the real device's
+  r_dif. Suggestive, not sufficient, and confounded by (3). Record it; do not act on it.
+- **V2's knee params are still V1L placeholders** (CLAUDE.md: *"V2 knee params (Vzt, Vf, Vz, Iref)
+  are still placeholders from V1L and are the next fit target"*). V2's incoherence here may reflect
+  that rather than the mechanism — but note that fitting them now would be fitting to captures on a
+  **nonlinear** quantity, which is legitimate under the ⚖ rule but must not be confused with
+  grounding them in a datasheet we do not have for the BZB984.
+
+**⇒ Gap D returns to the state the element-set screen left it in**, minus one more candidate. The
+sanctioned-correction conversation is now the live option again — but with a better guardrail-#2
+record than before: **seven** rule-outs on computed magnitude plus one on measured authority.
+
 ### Original section (characterisation valid; the coupling-cap conclusion is superseded above)
 
 ### D — RULE-OUT RE-CHECK DONE 2026-07-18: all three SURVIVE, but the framing was wrong
