@@ -127,34 +127,40 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
-> **⭐ START HERE — THE COUPLING-CAP HYPOTHESIS WAS IMPLEMENTED AND IS REFUTED (2026-07-19).
-> DO NOT RE-ATTEMPT IT.** `ZenerDriveModule`'s inter-stage coupling caps (V2 `C22 1u` + `C4 1u`;
-> V1L `C28 2.2u` + `C8 2.2u`; netlists.md V4/L4) are now modelled as real WDF elements — **they are
-> KEPT as a schematic-fidelity fix, but they are NOT Gap D's mechanism.** Measured with an in-binary
-> ablation (`analysis/gapd_coupling_gate.py`, `--zener-cin 1e3` = AC short = the old model):
-> **V2 @110 Hz |dTHD| moved 6.87 → 6.76 dB (−0.11) across all five captures, where ~5 dB was
-> required; on the isolated module the effect is 0.00 dB.** The null is trustworthy — the ablation
-> demonstrably changes the render (L-009) and the V1E-bit-identical control PASSES.
+> **⭐ START HERE — GAP D AND V1L-440 ARE ONE MECHANISM, AND EVERY LINEAR CANDIDATE IS NOW DEAD
+> (2026-07-19).** Two investigations on different revisions, axes and anchors converged on the same
+> door. **The mechanism is inside the shared ZENER DRIVE MODULE, is frequency-dependent, and is NOT
+> linear.** Do not spend another session on a linear candidate ahead of or around the clip.
 >
-> **WHY THE PREDICTION FAILED — the error is instructive and is a new lesson (L-010).** The argument
-> was "a flat-topped wave through a series RC TILTS in-cycle, so the corner doesn't matter". The
-> tilt figure that makes that plausible (~60%/cycle at 110 Hz for 1u) is the **open-circuit droop of
-> a DISCONNECTED cap**. These caps are never disconnected: the op-amp (−) input is a **virtual
-> ground**, a permanent resistive return, so the network is a plain **LTI highpass — |H| = 0.990 at
-> 110 Hz** (corner 15.9 Hz), 0.999 at 440 Hz. An LTI highpass at 0.99 gain cannot shed 5 dB of
-> harmonics, and the harmonics sit even further above the corner than the fundamental. The
-> "three revisions, three predictions, three matches" was **pattern-matching on cap PRESENCE, never
-> on a computed magnitude** — and V1E's clean result is explained at least as well by V1E having no
-> zener at all, a far larger structural difference than a coupling cap.
+> **What each road found.** Gap D (V2, LEVEL axis): pedal level-FLAT, plugin climbs; "matched
+> compression, ~5 dB fewer harmonics at LF" — impossible for a memoryless element; Finding 4 →
+> *"the pedal's drive stage has frequency-dependent MEMORY we do not model."* V1L-440 (DRIVE axis,
+> new this session): pedal's 440 Hz THD is drive-INDEPENDENT (16.75→15.83 % over D0.65→D0.45) while
+> ours collapses (16.56→3.57), a **−12.26 pp** error — the largest single V1L THD error in the matrix.
+> Attribution is clean and capture-free: **BLEND +0.48 pp, DRIVE −14.31 pp**; confounds closed
+> (PRESENCE 0.72 pp, TREBLE 0.66, BASS 0.43, LEVEL 0.00 over their capture ranges).
 >
-> **Gap D's midband anomaly is therefore STILL OPEN and its mechanism is still unidentified.** What
-> the failed attempt did buy: the module now correctly BLOCKS DC (it previously passed DC through
-> both inverting stages), gated by `tests/ZenerCouplingCapTest` with a shorted-cap control that is
-> asserted to fail the same check. 25/25 green. **Next candidate must be something INSIDE the
-> clipping loop that is genuinely nonlinear or genuinely level-dependent** — a linear element
-> anywhere cannot produce "matched compression, fewer harmonics" (`gapd_finding4_orders.py` already
-> proved a uniform offset across 330–770 Hz cannot be a filter; this session proved the specific
-> linear candidate is 0.99-transparent as well).
+> **⛔ REFUTED — DO NOT RE-ATTEMPT ANY OF THESE.** Each died on **magnitude or sign**, checked on
+> paper. Required authority throughout is **~5 dB**:
+>
+> | candidate | verdict | tool |
+> |---|---|---|
+> | module coupling caps | 0.11 dB of ~5 — an LTI highpass at \|H\|=0.990. **Caps KEPT** (real DC-blocking fix). Full lesson: **L-010** | `gapd_coupling_gate.py`, `ZenerCouplingCapTest` |
+> | twin-T | faithful to **0.004 dB** in the 110→440 relationship; 440 Hz isn't even on the notch (−7.37 dB below its own shoulder, min at 716 Hz) | `tests/TwinTAuthorityProbe.cpp` |
+> | PRESENCE | faithful to **0.003 dB**; right sign but entire ceiling is **+2.67 dB** | `tests/PresenceAuthorityProbe.cpp` |
+> | band-limited/pre-emphasised saturator | error is **non-monotonic** (2k/4k too hot, 8k too COLD) so no corner works. Saturator KEPT (net joint win) | `v1l_sat_joint_score.py` |
+> | zener knee params (Vzt/Cj/m) | exonerated at LF, re-tested at HF | `gapd_hf_zener_scan.py` |
+> | post-blend clipping | never reaches its rail (7.6–47.8 dB short) | `gapd_postblend_test.py` |
+>
+> ⇒ **the whole linear chain ahead of V1L's clip is exonerated**: buffer (~3.4 Hz), twin-T, PRESENCE,
+> module coupling caps (~7 Hz). **And the puzzle SHARPENS:** net pre-drive shaping is **−1.97 dB at
+> 440 vs 110**, so 440 arrives at the clip node COLDER — yet the pedal saturates there at a lower
+> drive than at 110 Hz. Nothing linear does that.
+>
+> **NEXT: a genuinely nonlinear, frequency-dependent (memory-bearing) mechanism inside the zener
+> module.** Per **L-010**, before writing any code: **compute its magnitude AND check its sign.**
+> ⚠ Sign trap, already fatal twice (S-K stopband floor in H err2; the twin-T here): mechanisms that
+> REMOVE HF harmonics are the wrong direction where the pedal has MORE.
 >
 > **Last change: Gap H error 1 FIXED (R48/R49 33k→22k, §1-match override, commit 4eafd33), 23/23
 > green, reports regenerated.** ⚠ The prior "error 1 CLOSED with R48/R49=33k @ 9.16 kHz" reasoning
