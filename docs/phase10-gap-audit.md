@@ -3032,11 +3032,45 @@ and V1L's wet-path C10-deficit resolved (ISS-009 exonerated C10, T-002 re-anchor
 the residual is smaller but still present. The remaining error is **NodalCircuit impedance loading
 inside the BLEND stage** — a resistor-ratio fix in the stage itself, not a scalar.
 
-Fresh cascade_analysis data (2026-07-17):
+**✅ RE-CHECKED 2026-07-21 — PARTIALLY DISSOLVED, NOT FULLY CLOSED. Do not re-open expecting a free
+close; the residual is smaller but real and unchanged in the one band that matters.** Gap F was
+demoted 2026-07-19 pending Gap J/H err2 closure ("probably the same phenomenon"); both landed
+since (Gap J = oversampler-latency comb, fixed by `DryTapDelay.h`; the V1L/V2 bass hump + HF
+2-4 kHz darkness both got named wet-path bells). Re-ran `cascade_analysis.py` fresh against the
+current (2026-07-21) capture report:
+
+```
+                          LF <100Hz   low-mid   bridged-T   twin-T     mid    pres    cab-sim(5-13k)
+BL=0.65 excess  (was 2026-07-17: LF +5.9,                                      cab-sim +9.4)
+   now:            +3.0       +1.2      -3.1      -3.3    -3.6    -2.1        +7.8
+BL=0.30 excess  (was 2026-07-17: LF +9.4, mid -6.2,                            cab-sim +4.1)
+   now:            +2.5       +1.0      -4.8      -7.1    -3.1    +0.1        +3.0
+```
+
+- **The LF component genuinely shrank** (+5.9→+3.0 dB @BL0.65, +9.4→+2.5 dB @BL0.30) — a real,
+  free side-effect of this session's `DryTapDelay`/`WetLFCorrection` work, not noise.
+- **The cab-sim (5-13 kHz) component did NOT dissolve** — +9.4→+7.8 dB (BL0.65), +4.1→+3.0 dB
+  (BL0.30): a ~1-1.5 dB nudge, not a closure. This is the part of Gap F that actually matters (it's
+  the largest excess in both rows) and it survived every fix landed since 2026-07-17 untouched.
+  Plausible partial explanation, NOT verified: `WetHFCorrection`'s bell sits on the wet leg only
+  (deliberately, per its own calibration-match rationale — see netlists.md L5d note), so at partial
+  blend the dry leg dilutes its correction while the excess-vs-BL1.00 metric implicitly assumes a
+  flat blend law; this may be ordinary physics of a real (non-ideal) blend pot, not a defect. Not
+  chased further — same conclusion as before, just re-confirmed on fresh data.
+- **New in this pass, not in the original two-number characterisation:** twin-T (-3.3/-7.1) and mid
+  1-2k (-3.6/-3.1) bands now show a sizable NEGATIVE excess. **Do not over-read this** — V1L's only
+  three captures move DRIVE+PRESENCE+BASS+TREBLE together with BLEND (the FINAL-matrix confound
+  this gap has always carried), so `cascade_analysis`'s BL<1.00-vs-BL1.00 "excess" is not a clean
+  blend-only measurement here — it's confounded by the other knobs moving between captures, same
+  limitation as 2026-07-17, unresolved because no new capture is obtainable.
+- **Verdict: still open, but now bounded to the cab-sim band specifically, and the confound that
+  blocks a cleaner measurement is structural (matrix-final), not an oversight.** Given the "midband
+  before HF residual" priority and the confound, this is not worth further chasing without a new
+  idea — leave open/best-effort, same disposition as Gap H err2.
+
+(Historical, superseded by the above) Fresh cascade_analysis data (2026-07-17):
 - BL=0.65 excess vs BL=1.00 baseline: LF +5.9 dB, cab-sim +9.4 dB
 - BL=0.30 excess vs BL=1.00 baseline: LF +9.4 dB, mid -6.2 dB, cab-sim +4.1 dB
-
-Do not re-measure until after the V2 zener knee fit — V2 improvements may shift the priority.
 
 ---
 

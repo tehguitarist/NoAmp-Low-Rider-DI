@@ -411,14 +411,23 @@ without images.
 >    NOT a broadband 1–6 kHz deficit. Durable lesson: an FR delta read off a median-referenced SHAPE
 >    metric shifts across the WHOLE band when the reference (here the LF, changed by the bass-hump fix)
 >    moves — re-derive band deltas against the CURRENT report before actioning them (sibling of L-005).
-> 5. **Gap F.** Cheap re-check now that H err2 and Gap J (its suspected siblings) are both closed —
->    may just dissolve for free. Low impact in isolation either way.
+> 5. **Gap F — ✅ RE-CHECKED 2026-07-21: PARTIALLY DISSOLVED, NOT FULLY CLOSED.** Re-ran
+>    `analysis/cascade_analysis.py` fresh (docs/phase10-gap-audit.md §F has the full numbers). The
+>    LF component genuinely shrank for free (V1L BL0.65/BL0.30 excess +5.9/+9.4 dB → +3.0/+2.5 dB —
+>    a side-effect of this session's `DryTapDelay`/`WetLFCorrection` work). **The cab-sim (5-13 kHz)
+>    component did NOT dissolve** (+9.4/+4.1 → +7.8/+3.0 dB — only a ~1-1.5 dB nudge) — this is the
+>    larger of the two and it survived every fix landed since 2026-07-17 untouched. Still confounded
+>    by the FINAL-matrix limitation (V1L's 3 blend captures move drive/presence/bass/treble together
+>    with blend, so this was never a clean blend-only measurement). **Leave open/best-effort** — not
+>    worth chasing further without a new idea; same disposition as Gap H err2.
 > 6. **Gap D's ~11 dB intrinsic HF shortfall** (item 3, "▶ NEXT STEPS"). ✅ UNBLOCKED 2026-07-20 —
 >    #2 is done, so its premise (trusting HF THD numbers) now holds. Still flagged low-audibility by
 >    the project's own "work the midband before the HF residual" note; this ranking agrees with that.
 > 7. **V1L Gap D polish** (tau/scHz never swept, item 0(b) above) — explicitly low value, park.
-> 8. **Housekeeping** (delete dead `src/dsp/GbwCorrection.h`, stale `analysis/reports/*` predating
->    2026-07-19/20 — already regenerated fresh this session) — trivial, whenever convenient.
+> 8. **Housekeeping — ✅ DONE 2026-07-21.** `src/dsp/GbwCorrection.h` deleted (confirmed zero
+>    references first); `analysis/reports/*` predating 2026-07-19 removed (all gitignored scratch
+>    output, freely regenerable — kept everything 2026-07-19 onward, which is still-cited evidence
+>    for the Gap D HF work). Full rebuild + `ctest` re-run clean after: 30/30 green.
 >
 > **⭐ START HERE — THE CORRECTION IS BUILT. GAP D SPLIT IN TWO: V1L's HALF IS SHIPPED, V2's HALF IS
 > REFUTED FOR THIS MECHANISM (2026-07-19, end of session).** The dynamic correction described below
@@ -1088,9 +1097,9 @@ without images.
 >   to the nearest bound). It is a real CIRCUIT gap (plugin doesn't track drive at HF where the pedal
 >   does), NOT a ruler bug — small absolute energy, low priority per "midband before HF residual".
 >
-> **Housekeeping:** `src/dsp/GbwCorrection.h` is dead code (zero references since T-001's removal) —
-> delete or keep deliberately. `analysis/reports/*` predate the 2026-07-18/19 work; regenerate before
-> quoting any number from them.
+> **Housekeeping (✅ done 2026-07-21 — see the priority-order item 8 above):** `src/dsp/GbwCorrection.h`
+> was dead code (zero references since T-001's removal) — deleted. Stale pre-2026-07-19
+> `analysis/reports/*` deleted too (gitignored scratch output, regenerable).
 >
 > ## 📋 GAP STATUS AT A GLANCE (2026-07-18) — full detail in `docs/phase10-gap-audit.md`
 >
