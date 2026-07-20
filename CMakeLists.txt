@@ -167,6 +167,7 @@ target_link_libraries(StateRoundTrip
         juce::juce_recommended_config_flags
 )
 add_test(NAME StateRoundTrip COMMAND StateRoundTrip)
+set_tests_properties(StateRoundTrip PROPERTIES LABELS "CI")
 
 # Factory presets: applies every preset (FactoryPresets.h) through the real processor's program
 # interface and verifies clock->0..1 conversion, CSV column mapping, In/Out switch indices, the
@@ -196,6 +197,7 @@ target_link_libraries(FactoryPresetsTest
         juce::juce_recommended_config_flags
 )
 add_test(NAME FactoryPresetsTest COMMAND FactoryPresetsTest)
+set_tests_properties(FactoryPresetsTest PROPERTIES LABELS "CI")
 
 # 7 — Revision-switch crossfade: drives the real processor with a continuous tone, flipping
 # `revision` every few blocks (including mid-crossfade), asserting finite output, no click-sized
@@ -226,6 +228,7 @@ target_link_libraries(RevisionSwitchTest
         juce::juce_recommended_config_flags
 )
 add_test(NAME RevisionSwitchTest COMMAND RevisionSwitchTest)
+set_tests_properties(RevisionSwitchTest PROPERTIES LABELS "CI")
 
 # 8 — Headless UI render probe (build.md's pattern): constructs the real editor off-screen and
 # paints it to PNGs at 1.0x/1.5x/2.0x scale x 3 revisions (9 renders) under build/ui-renders/, so
@@ -349,6 +352,7 @@ target_link_libraries(V1LateIntegrationTest
     PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1LateIntegrationTest COMMAND V1LateIntegrationTest)
+set_tests_properties(V1LateIntegrationTest PROPERTIES LABELS "CI")
 
 # Gap D calibration layer as shipped on V1L — L-003 gate (magnitude, 3 drive settings, proven to
 # fail when the layer is ablated). See tests/V1LateGapDTest.cpp.
@@ -360,6 +364,7 @@ target_link_libraries(V1LateGapDTest
     PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1LateGapDTest COMMAND V1LateGapDTest)
+set_tests_properties(V1LateGapDTest PROPERTIES LABELS "CI")
 
 # 6.1 — V2 recovery stage: new R47/C42 input LP corner + retuned S-K coupling, no bridged-T
 # (src/dsp/V2Stages.h) vs an independent analytic nodal reference + FR §1 qualitative HF trend.
@@ -389,6 +394,7 @@ target_link_libraries(V2IntegrationTest
     PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V2IntegrationTest COMMAND V2IntegrationTest)
+set_tests_properties(V2IntegrationTest PROPERTIES LABELS "CI")
 
 # 2.1 — V1 Early nonlinearity: op-amp rail clip + 1st-order ADAA, DRIVE->recovery oversampling
 # region. Needs juce::dsp (Oversampling + FFT), so it's a JUCE console app.
@@ -420,6 +426,7 @@ target_link_libraries(V1EarlyIntegrationTest
     PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1EarlyIntegrationTest COMMAND V1EarlyIntegrationTest)
+set_tests_properties(V1EarlyIntegrationTest PROPERTIES LABELS "CI")
 
 # 3 — OfflineRender: runs the real V1 Early chain + processBlock gain staging for the analysis A/B
 # harness (docs/validation-and-capture.md §2). JUCE console app for WAV I/O + juce::dsp Oversampling.
