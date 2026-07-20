@@ -305,6 +305,23 @@ without images.
 >
 > #2 should fold into Gap D's existing V2 work. #4 needs no action beyond the notes above.
 >
+> **🆕 USER-FLAGGED TWEAKS (2026-07-20, later session) — LOGGED, NOT yet done except the bass items.**
+> From the user's visual/aural read of the dashboard. The BASS items are being fixed NOW (same
+> wet-path LF magnitude class as item 1's V1L bass hump — see the V1L SUB-INVESTIGATION); the notch
+> and HF items are queued for later:
+> - **V2 HF ~2–4 kHz is ~3 dB LOW.** (Related to but distinct from item 3's V1E 1–6 kHz; this is V2.)
+> - **V2 BASS peak too HIGH: plugin peaks ~90 Hz, should be ~70 Hz.** ✅ IN SCOPE NOW — this is the
+>   same defect as V1L's bass hump, milder (V2 pure-wet 79–85 Hz vs §1 70, +0.18 oct measured). The
+>   wet-path LF magnitude correction covers both V1L and V2 (per-rev tuned to each rev's §1).
+> - **V2 twin-T NOTCH ~3 dB too SHALLOW** (needs to be deeper).
+> - **V1E twin-T NOTCH center should be ~630 Hz, currently ~800 Hz** (user says V2 looks ~630 too;
+>   **V1L IS correctly ~800 Hz**). ⚠ TENSION TO RESOLVE BEFORE ACTING: netlists.md/circuit.md have the
+>   twin-T (C17/C18/C19 22n, R3 2.2k, R11 22k) IDENTICAL on all three revisions, so a per-rev notch
+>   frequency is not explained by the schematic as transcribed — investigate the mechanism (bridged-T
+>   interaction on V1E, MID/no-bridged-T on V2 shifting the COMPOSITE apparent notch) before any
+>   component change, else it risks the L-013 fudge pattern. LOG ONLY for now.
+> - **V1E + V2 twin-T NOTCH ~3 dB too SHALLOW** (V1E: also deeper, like V2). V1E FR otherwise close.
+>
 > **▶ PRIORITY ORDER across ALL outstanding items (2026-07-20), ranked by impact tempered by
 > flow-on effects** — does leaving this unfixed corrupt or bias measurements other open items are
 > already reading? Fix upstream-of-everything-else items first so downstream work is measured
@@ -650,6 +667,16 @@ without images.
 >    If it needs a different value per capture, it is not a correction, it is a curve fit, and the
 >    real cause is still upstream. Prefer the correction that closes several symptoms at once (the
 >    top-octave darkness is the live example: it feeds D, H err2 and C simultaneously).
+>
+> **⚠ AMENDMENT (2026-07-20): A component-value adjustment is NOT the preferred method, but if it is
+> the best available fix OR if it is cheap and easy to test, test it — it may expose the real cause
+> or get to a better result much quicker than a full physical-cause hunt.** The six guardrails above
+> protect against silent, undiagnosed fudges masquerading as physical constants (L-008's failure mode).
+> They do NOT forbid a deliberate, triaged value change that is labelled, gated, and understood. The
+> critical distinction: a value changed as a DIAGNOSTIC PROBE (fast feedback, may inform the real fix)
+> is valid; a value changed as a PERMANENT CORRECTION that erases the schematic gate (L-001) is not.
+> Tag the commit `[PROBE]` when provisional, keep the gate intact (guardrail #3), and revert if a
+> structural fix later closes the gap without it.
 >
 > **Say so in the release notes/docs** — a documented deliberate correction is honest; one that reads
 > like a measurement is the L-008 failure mode.
@@ -1409,8 +1436,14 @@ the gate FAILS when you delete the feature it guards.
   ⅓-oct peak error it created. **Do NOT flatten an FR band by nudging a schematic cap — a coupling
   cap owns a corner, and a corner owns the shape of the whole bump. Fix the real cause or use a named
   calibration layer (guardrail #1).** Restoring both schematic values fixed V1E outright and improved
-  V2, with the gates re-armed to fail on the fudge. Sibling of L-008 (unphysical value = receipt) and
-  L-001 (suspect the fit, `git log -L` the value/gate).
+   V2, with the gates re-armed to fail on the fudge. Sibling of L-008 (unphysical value = receipt) and
+   L-001 (suspect the fit, `git log -L` the value/gate).
+   **Qualification (2026-07-20):** The core warning stands — a coupling cap owns its corner, and
+   changing it silently pollutes the whole bump shape. HOWEVER, quickly testing a cap value as a
+   DIAGNOSTIC ("does this corner cause the deficit I see?") is cheap and can reveal the real cause in
+   minutes versus hours. The sin was not the value change itself — it was failing to revert or
+   document it, and neutering the gate to match. A value probe with a clean commit message, a `[PROBE]`
+   tag, and an intact gate that would catch a silent merge is fine and should not be discouraged.
 - **L-001: When a fit fails a gate, suspect the fit — `git log -L` the gate line.** If a calibration
   fit makes an existing test fail, do NOT widen the test. The commit that added the constant may also
   have loosened the gate to accommodate it. One `git log -L` command found this in ISS-008 (kDryGain
