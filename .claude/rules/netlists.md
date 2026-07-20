@@ -76,6 +76,17 @@ nB —C26 22n— nE → IC3B(+)        R22 100k : nE—VCOM    (coupling + bias)
 ```
 Passive; source = IN_B (buffer out, 0 Ω). Gate: full-wet FR §1 (notch ~−35 dB @ ~800 Hz).
 
+**⚠ MODEL NOTE (2026-07-21): V1e's three twin-T series caps (C19/C17/C18) ship at 1.05×22n ≈ 23.1n,
+NOT schematic 22n — a documented per-rev CALIBRATION, not a transcription.** The shared `TwinTNotch`
+class takes a `notchFreqScale` ctor arg; V1e passes `kV1eNotchFreqScale=1.05` (V1EarlyStages.h), V1L
+and V2 pass 1.0 (schematic). Reason: the twin-T is schematically identical on all three revs, but the
+plugin's COMPOSITE notch (twin-T × each rev's downstream chain) landed ~35 Hz HIGH on V1e vs its pedal
+capture (750 vs 715 Hz), while V1L/V2 already matched at 22n. The ~5% cap bump lowers V1e's isolated
+notch ~716→685 Hz (composite →715, dead-on). C26 (output coupling) stays 22n. So V1e's twin-T FR
+deliberately differs from a naive 22n read — do not "correct" it back. Gated by V1EarlyPresenceTest's
+calibrated notch-centre window (fails on revert to 1.0). Full rationale: TwinTNotch.h ctor header +
+CLAUDE.md USER-FLAGGED TWEAKS. (Sibling of the L5d WetLFCorrection note.)
+
 ## E3. PRESENCE stage (IC3B, non-inverting) [✓]
 
 ```

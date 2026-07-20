@@ -25,6 +25,13 @@ namespace nalr
 {
 using namespace chowdsp;
 
+// Per-rev twin-T notch-CENTRE calibration for V1 Early (JUDGEMENT CALL, 2026-07-21 — full rationale
+// in TwinTNotch.h's constructor header). At the shared schematic value V1e's COMPOSITE notch lands
+// ~35 Hz high (argmin 750 Hz vs its pedal capture's 715); 1.05 scales the three twin-T caps ~5% to
+// bring the composite to ~715 Hz. V1L/V2 keep 1.0 (they already match their captures). The revert
+// gate lives in V1EarlyPresenceTest (absolute notch-centre window, not tied to this constant).
+constexpr double kV1eNotchFreqScale = 1.05;
+
 // -------------------------------------------------------------------------------------------------
 // Input buffer: C4/R10 series into an R2 pulldown at the (high-Z) non-inverting input of IC1B, which
 // buffers unity. Electrically a ~3.4 Hz high-pass (R2 dominates) with ~0.09 dB passband loss (R10).
@@ -91,7 +98,9 @@ public:
     inline double process(double vB) noexcept { return processOpAmp(processNotch(vB)); }
 
 private:
-    TwinTNotch notch; // shared passive twin-T (identical on all three revisions — TwinTNotch.h)
+    // V1e-only twin-T notch-centre nudge — see kV1eNotchFreqScale above (JUDGEMENT CALL, 2026-07-21).
+    // Gated by V1EarlyPresenceTest's calibrated notch-centre window (fails if reverted to 1.0).
+    TwinTNotch notch{kV1eNotchFreqScale}; // shared passive twin-T (TwinTNotch.h); V1e centre nudge
 
     // --- IC3B op-amp gain legs ---
     // Zg = R24(3.3k) + C31(10n) + VR5 (series to VCOM). Zf = R26(330k) || C32(100p).

@@ -27,7 +27,11 @@ constexpr double kPi = 3.14159265358979323846;
 
 // Component values (V1 Early) — mirror V1EarlyStages.h for the analytic reference.
 constexpr double C4 = 47.0e-9, R10 = 10.0e3, R2 = 1.0e6;
-constexpr double R16 = 100.0e3, C19 = 22.0e-9, C17 = 22.0e-9, C18 = 22.0e-9;
+// The three twin-T series caps carry V1e's per-rev notch-centre nudge (kV1eNotchFreqScale) so this
+// analytic reference matches the SHIPPED stage — the WDF-vs-analytic compare below stays a pure
+// discretisation check at whatever value ships. C26 (output coupling) is UNSCALED, as in TwinTNotch.h.
+constexpr double R16 = 100.0e3, C19 = 22.0e-9 * nalr::kV1eNotchFreqScale,
+                 C17 = 22.0e-9 * nalr::kV1eNotchFreqScale, C18 = 22.0e-9 * nalr::kV1eNotchFreqScale;
 constexpr double R3 = 2.2e3, R11 = 22.0e3, C26 = 22.0e-9, R22c = 100.0e3;
 constexpr double R24 = 3.3e3, C31 = 10.0e-9, R26 = 330.0e3, C32 = 100.0e-12;
 
@@ -249,17 +253,25 @@ int main()
     // -------------------------------------------------------------------------------------------
     std::printf("FR targets (reference-fr-targets.md):\n");
     {
-        // Section 1 (deep ~800 Hz character notch): this stage OWNS the notch, but §1's -35 dB is the
-        // FULL wet path (notch + recovery), which is the stage-1.3 gate. Here we verify the twin-T
-        // null lands ~800 Hz (within 1/3 oct) and is a deep stage-level null (>20 dB below the local
-        // shoulder), with WDF tracking the analytic notch.
+        // Section 1 (deep character notch): this stage OWNS the notch, but §1's -35 dB is the FULL
+        // wet path (notch + recovery), which is the stage-1.3 gate. Here we verify the twin-T null is
+        // deep (>20 dB below the local shoulder) with WDF tracking the analytic notch, AND lands at
+        // V1e's CALIBRATED centre.
+        //
+        // ⚠ CALIBRATION GATE (guardrail #3, 2026-07-21): the shared schematic twin-T places this
+        // isolated null at ~716 Hz, which drives V1e's COMPOSITE (full-path) notch ~35 Hz HIGH vs its
+        // pedal capture. kV1eNotchFreqScale (=1.05) lowers the three twin-T caps ~5%, moving the
+        // isolated null to ~685 Hz (composite ~715, dead-on the capture). The window below is
+        // ABSOLUTE (not derived from the constant) and EXCLUDES the schematic ~716 Hz, so reverting
+        // kV1eNotchFreqScale to 1.0 FAILS here. Verified to fail on revert. Do NOT widen it back to a
+        // 1/3-oct-of-800 window — that passed at both 685 and 716 and gated nothing.
         double dA, dW;
         const double fA = findNotch(0.0, dA, true, fs);
         const double fW = findNotch(0.0, dW, false, fs);
         const double shoulder = analyticDb(200.0, 0.0); // op-amp gain is flat here, so this isolates notch depth
         std::printf("      notch: analytic %.1f Hz, depth %.1f dB below 200 Hz shoulder; wdf %.1f Hz\n", fA,
                     shoulder - dA, fW);
-        check(fA > 800.0 / 1.26 && fA < 800.0 * 1.26, "notch frequency within 1/3 oct of 800 Hz");
+        check(fW > 655.0 && fW < 705.0, "V1e notch at calibrated centre ~685 Hz (excludes schematic ~716)");
         check((shoulder - dA) > 20.0, "twin-T notch is a deep stage-level null (>20 dB)");
         check(std::abs(fW - fA) / fA < 0.05, "wdf notch frequency tracks analytic");
 

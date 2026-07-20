@@ -23,7 +23,31 @@ using namespace chowdsp;
 class TwinTNotch
 {
 public:
-    TwinTNotch() = default;
+    // notchFreqScale: multiplies the three twin-T series caps (C19/C18/C17) to shift the notch
+    // CENTRE. 1.0 = schematic (the shared, verified value — netlists.md E2/L2/V2). A value >1.0
+    // lowers the centre (bigger caps => lower 1/RC).
+    //
+    // ⚠ JUDGEMENT CALL / documented per-revision calibration (CLAUDE.md, 2026-07-21; guardrails
+    // #1/#4/#6 of the "artificial corrections" policy). The twin-T is schematically IDENTICAL on all
+    // three revisions, yet the plugin's COMPOSITE notch (twin-T convolved with each rev's downstream
+    // chain) lands ~35 Hz too HIGH on V1e (argmin 750 Hz vs its pedal capture's 715 Hz; the 800-900 Hz
+    // top shoulder runs 3-4 dB too deep), while V1L and V2 already match their captures at the
+    // schematic value. The residual is a V1e-SPECIFIC composite-interaction error (its ~430 Hz
+    // bridged-T sits closer under the notch than V1L's, and V2 has none), NOT a component
+    // mistranscription — so this is corrected per revision at the notch, NOT by changing the shared
+    // schematic value (which would break V2, currently dead-on). Measured, capture-arbitrated (notch
+    // centre is a LINEAR quantity and all 11 captures put it at 674-762 Hz, mean 721 Hz — there is NO
+    // 630 Hz notch; that dashboard read was the notch SHOULDER). V1L/V2 MUST stay 1.0. Not tuned to
+    // chase any single capture: one per-rev scale, gated by V1EarlyIntegrationTest's notch-centre check.
+    explicit TwinTNotch(double notchFreqScale = 1.0)
+    {
+        if (notchFreqScale != 1.0)
+        {
+            C19.setCapacitanceValue(22.0e-9 * notchFreqScale);
+            C17.setCapacitanceValue(22.0e-9 * notchFreqScale);
+            C18.setCapacitanceValue(22.0e-9 * notchFreqScale);
+        }
+    }
 
     void prepare(double fs)
     {

@@ -331,13 +331,29 @@ without images.
 >   wet-path bell as V1L, milder (V2 50 Hz/+4 dB/Q1.2, refined after ear-check; `WetLFCorrection.h`).
 >   Worst-case capture RMS 1.98→1.85. See the ✅✅ RESOLVED banner above.
 > - **V2 twin-T NOTCH ~3 dB too SHALLOW** (needs to be deeper).
-> - **V1E twin-T NOTCH center should be ~630 Hz, currently ~800 Hz** (user says V2 looks ~630 too;
->   **V1L IS correctly ~800 Hz**). ⚠ TENSION TO RESOLVE BEFORE ACTING: netlists.md/circuit.md have the
->   twin-T (C17/C18/C19 22n, R3 2.2k, R11 22k) IDENTICAL on all three revisions, so a per-rev notch
->   frequency is not explained by the schematic as transcribed — investigate the mechanism (bridged-T
->   interaction on V1E, MID/no-bridged-T on V2 shifting the COMPOSITE apparent notch) before any
->   component change, else it risks the L-013 fudge pattern. LOG ONLY for now.
+> - **V1E twin-T NOTCH center — ✅ DONE 2026-07-21. THE "~630 Hz" PREMISE WAS REFUTED; the real
+>   defect was a ~35 Hz composite shift, now corrected per-rev.** Measured (`analysis/notch_center_
+>   measure.py`, argmin of the clean-sweep transfer, all 11 captures): **every PEDAL notch centre is
+>   674-762 Hz, mean 721** — there is NO 630 Hz notch on any rev. The "630" read off the dashboard was
+>   the notch's LEFT SHOULDER (pedal already −17 dB there; V1E/V1L's ~430 Hz bridged-T stretches the
+>   left side, pulling the VISUAL centre down). **V2's notch is ~715 Hz, not 630** (verified per the
+>   user's ask). The genuine error: V1e's plugin COMPOSITE notch sat ~35 Hz HIGH (argmin 750 vs pedal
+>   715; 800-900 Hz top shoulder 3-4 dB too deep), while V1L/V2 already matched their captures. Fixed
+>   by scaling V1e's three twin-T caps ~5% (`kV1eNotchFreqScale = 1.05` in V1EarlyStages.h → the shared
+>   `TwinTNotch(notchFreqScale)` ctor; C26 output-coupling UNSCALED). Composite V1e notch 750→714.7
+>   (dead-on 714.7 capture); whole scoop 400-1000 Hz now overlays the pedal to a few tenths. V1L/V2
+>   bit-identical (they keep scale 1.0). Gated by V1EarlyPresenceTest's absolute calibrated-centre
+>   window [655,705] Hz (excludes schematic ~716; **verified to FAIL on revert to 1.0**, guardrail #3).
+>   The analytic reference in that test tracks the same scale so the WDF-vs-analytic discretisation
+>   check stays valid. **This is a deliberate, documented per-rev departure from schematic (guardrails
+>   #1/#4/#6) — NOT a mistranscription; the twin-T is genuinely identical on the schematic, the
+>   composite interaction differs per rev.** Durable: a broad notch's dashboard "centre" reads at its
+>   shoulder, not its argmin — measure argmin before chasing a visual centre (this is what stopped the
+>   L-013 trap of forcing V1e to 630, which would have pushed it 85 Hz below its own capture).
 > - **V1E + V2 twin-T NOTCH ~3 dB too SHALLOW** (V1E: also deeper, like V2). V1E FR otherwise close.
+>   ⚠ UPDATE 2026-07-21: after the V1e centre fix, V1e's notch is now ~2 dB too DEEP at the 714 Hz
+>   centre (flipped from shallow) while its shoulders match — so V1e's depth item is essentially
+>   closed/inverted; V2 remains ~1-3 dB shallow. Small, still queued.
 >
 > **▶ PRIORITY ORDER across ALL outstanding items (2026-07-20), ranked by impact tempered by
 > flow-on effects** — does leaving this unfixed corrupt or bias measurements other open items are
@@ -491,7 +507,15 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-20, LATEST session): ✅ HF-THD RULER VALIDATED (priority item #2 CLOSED).**
+> **Last change (2026-07-21, LATEST session): ✅ V1E TWIN-T NOTCH CENTRE FIXED (user-flagged tweak).**
+> The "~630 Hz" premise was REFUTED — all 11 pedal captures put the notch at 674-762 Hz (mean 721);
+> "630" was the notch's left SHOULDER on the dashboard. The real defect was V1e's plugin composite
+> notch sitting ~35 Hz HIGH (750 vs 715). Fixed with a per-rev cap scale `kV1eNotchFreqScale=1.05` on
+> the shared `TwinTNotch` (V1L/V2 keep 1.0, bit-identical). Composite V1e notch 750→714.7, whole
+> 400-1000 Hz scoop now overlays the pedal to a few tenths. Gated by V1EarlyPresenceTest's absolute
+> calibrated-centre window (verified to FAIL on revert). 30/30 ctest green; AU rebuilt. New keeper
+> diagnostic `analysis/notch_center_measure.py` + tuning probe `tests/TwinTScaleProbe.cpp`. See the
+> USER-FLAGGED TWEAKS block for full detail. **Prior (2026-07-20): ✅ HF-THD RULER VALIDATED (priority item #2 CLOSED).**
 > Re-ran `analysis/hf_thd_flatness_check.py` at OS=8 across all 11 captures × {2 kHz, 4 kHz}: the
 > plugin's flat/level- and drive-independent HF THD is confirmed REAL by an independent discrete-tone
 > estimator (matches the Farina sweep interpolated to −14 dBFS to ≤0.37 pp, almost all ≤0.10 pp) — NOT
