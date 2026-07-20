@@ -229,6 +229,10 @@ int main(int argc, char** argv)
     const double satGain   = argVal(argc, argv, "--sat-gain", -1.0);
     const double satKnee   = argVal(argc, argv, "--sat-knee", -1.0);
     const double satOffset = argVal(argc, argv, "--sat-offset", -1.0);
+    // V1E even-harmonic shaper (src/dsp/V1EEvenShaper.h). -1 = unspecified (keep DSP default);
+    // a=0 is LEGAL and means OFF (ablation), so it cannot double as the "unspecified" sentinel.
+    const double evenA = argVal(argc, argv, "--v1e-even-a", -1.0);
+    const double evenK = argVal(argc, argv, "--v1e-even-k", -1.0);
     // --- Gap D calibration layer (src/dsp/ClipDriveNormaliser.h) --------------------------------
     // -1 sentinel on DEPTH = "flag not specified, keep the DSP default". 0 is a LEGAL value meaning
     // OFF (and bit-identical to the uncorrected chain), so it cannot double as "unspecified" — that
@@ -315,6 +319,8 @@ int main(int argc, char** argv)
                                         d.setParams(drive, presence, blend, level, bass, treble);
                                         if (driveEndR >= 0.0)
                                             d.setDriveEndResistance(driveEndR);
+                                        if (evenA >= 0.0)
+                                            d.setEvenShaper(evenA, evenK >= 0.0 ? evenK : nalr::kV1eEvenK);
                                     },
                                     [](auto&) {});
     }

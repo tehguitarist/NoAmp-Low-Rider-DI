@@ -25,6 +25,7 @@
 
 #include "V1EarlyDriveClipRecovery.h"
 #include "V1EarlyStages.h"
+#include "V1EEvenShaper.h"
 #include "DryTapDelay.h"
 #include "DiagFlags.h"
 #include "../utils/ChangeGate.h"
@@ -73,6 +74,11 @@ public:
         // pin the DC bias independently); the alternative — a slightly different asymmetry source — is
         // not ruled out, but the H2 fit is unambiguous. V1E only; V1L/V2 keep symmetric ±4.2.
         driveRegion.setRailVoltages(-4.10, 4.20);
+        // Small-signal EVEN-harmonic restoration on the wet path (V1EEvenShaper.h). The asymmetric
+        // rail above only makes H2 AT the clip; the pedal's H2 is a level-flat floor present below it
+        // (op-amp/VCOM asymmetry). This even-only shaper supplies that floor across all levels without
+        // touching the already-matched ODD harmonics. Gap D granular map, 2026-07-21.
+        evenShaper.setParams(kV1eEvenA, kV1eEvenK);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         output.prepare(baseFs);
@@ -133,6 +139,7 @@ public:
     void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }
     void setDriveEndResistance(double ohms) noexcept { driveRegion.setDriveEndResistance(ohms); }
     void setSaturationOffset(double dcOffset) noexcept { driveRegion.setSaturationOffset(dcOffset); }
+    void setEvenShaper(double aWeight, double kneeVolts) noexcept { evenShaper.setParams(aWeight, kneeVolts); }
 
     // Base-rate samples of latency this chain reports (only the OS region contributes; 0 at 1x).
     int getLatencySamples() const noexcept { return driveRegion.getLatencySamples(); }
@@ -161,7 +168,10 @@ public:
         for (int i = 0; i < n; ++i)
         {
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
-            const double b = blendLevel.process(dry, data[i]);
+            // Even-harmonic restoration on the WET leg only (before BLEND), so it vanishes at
+            // BLEND=dry exactly as the pedal's wet-path asymmetry does.
+            const double wet = evenShaper.process(data[i]);
+            const double b = blendLevel.process(dry, wet);
             data[i] = output.process(tone.process(b));
         }
     }
@@ -170,6 +180,7 @@ private:
     V1EarlyInputBuffer input;
     V1EarlyPresenceStage presence;
     V1EarlyDriveClipRecovery driveRegion; // E4 DRIVE + rail clip + E5 recovery (oversampled)
+    V1EEvenShaper evenShaper;             // small-signal even-harmonic restoration (wet path)
     V1EarlyBlendLevelStage blendLevel;
     V1EarlyToneStackStage tone;
     V1EarlyOutputStage output;

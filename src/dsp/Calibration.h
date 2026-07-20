@@ -84,6 +84,19 @@ constexpr double kInputRef[3] = { 7.0, 1.3, 1.3 };
 //   V2:  0.123 — placeholder, awaiting V2-specific capture calibration
 constexpr double kOutputMakeup[3] = { 1.084, 1.121, 0.618 };
 
+// V1 Early EVEN-harmonic restoration (Gap D granular map, 2026-07-21) — see src/dsp/V1EEvenShaper.h.
+// Small-signal even-only shaper y = x + a*x*tanh(x/k) on the V1E WET path, restoring the pedal's
+// H2 floor (~-50..-42 dB re fund) that the rail clip cannot make below threshold. Fitted jointly
+// across all 3 V1E captures & levels (analysis/v1e_even_fit.py). k in VOLTS (recovery-node scale).
+// a=0 disables (bit-identical to pre-2026-07-21). V1E only.
+// Fitted a=0.01 / k=1.2 (analysis/v1e_even_fit.py + refine, 2026-07-21): pooled |H2Δ| over 3
+// captures × 3 levels × 14 non-notch anchors 18.0 → 8.9 dB, H2 bias +0.9 (unbiased), |H4Δ| 17.8 →
+// 8.4, while |H3Δ| (7.5→7.3) and clean-FR rms (0.83) are UNCHANGED — the even-only shaper touches no
+// odd harmonic or the linear FR. The ~9 dB residual is irreducible (one memoryless shaper vs the
+// pedal's freq/level-varying asymmetry) and is documented best-effort.
+constexpr double kV1eEvenA = 0.01;
+constexpr double kV1eEvenK = 1.2;
+
 // NO kDryGain — DO NOT REINTRODUCE A PER-PATH GAIN HERE (removed 2026-07-16, ISS-008).
 //
 // A `kDryGain[rev] = kInputRef / kOutputMakeup[rev]` scalar used to multiply the dry tap before it

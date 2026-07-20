@@ -1696,6 +1696,132 @@ interaction effect into fixed component values that are individually schematic-f
 
 ---
 
+## D: GRANULAR MAP REFRAME (2026-07-21) — read this FIRST, before the 07-19 split below
+
+> **⭐⭐ NEWEST HEAD OF SECTION.** A 24-anchor, per-order (H2-H7) harmonic map across ALL 11 captures
+> (`analysis/gapd_harmonic_map.py` + `gapd_harmonic_perband.py`, both keepers — see analysis/README.md)
+> was built to give Gap D (and any future revision-wide distortion work) a granular instrument instead
+> of the old 3-anchor (100/200/400 Hz) sampling in `comprehensive_report.py`. **Method, reusable for
+> V1L/V2 or any future revision-wide harmonic investigation:**
+> 1. Run `gapd_harmonic_map.py --json <per-rev-path>` (ALWAYS pass `--json` per revision — the default
+>    path is shared and a second run silently clobbers the first rev's data).
+> 2. Read it with `gapd_harmonic_perband.py --rev <rev>` — a PER-ANCHOR aggregate. Do not trust the
+>    map's own whole-band aggregate for a localised deficit; it averages a bad band against a good one
+>    and reads as "roughly fine" (this is exactly what happened to Gap D's whole-band framing below).
+> 3. **Fence off the twin-T notch region (~370-950 Hz, all revs) before reading anything.** THD/Hn
+>    ratios there are Gap-G-contaminated (near-zero fundamental inflates the ratio) — the script flags
+>    each anchor with `*`; exclude those from any "is this a real deficit" judgement. Cross-check with
+>    the CLEAN (undriven) FR at the same anchors: if the deficit only exists on the DRIVEN sweep and
+>    the CLEAN sweep is fine, it's likely the notch filling in under drive (Gap G), not a clip error.
+>
+> **What it found, reframing the picture:**
+> - **V2's "Gap D" clean-band residual is SMALL** — a ~1-2 pp LF odd-harmonic overshoot (40-180 Hz,
+>   H3/H5 hot +3 to +6 dB) plus the known ~11 dB HF shortfall (6-9 kHz, tiny absolute energy). The
+>   apparent huge 300-950 Hz "deficit" in the old 3-anchor view is dominated by the notch (see above) —
+>   NOT the big broadband deficit the pre-2026-07-21 framing implied. The genuine drive-tracking effect
+>   (pedal's notch fills in under drive, ours deepens — clean FR at the notch reads +2..+4 dB shallow
+>   at D0.25 vs -5 dB at D0.90) is real but permanently fused to the notch by Gap G on the FINAL matrix.
+>   **Gap D's V2 half is still open** (the ⛔ refutations below still stand — this only shrinks and
+>   relocates the target, it doesn't close it) but is smaller/more entangled than previously stated.
+> - **The LARGEST clean (non-notch) harmonic-magnitude error in the WHOLE 11-capture matrix turned out
+>   to be V1E's even harmonics**, not V2's — H2/H4/H6 were -10 to -40 dB LOW across the ENTIRE band at
+>   EVERY level (whole-band mean H2 delta -18.8/-18.7/-28.5 dB at -18/-12/-6 dBFS). This was invisible
+>   to the project's THD-only metrics because odd harmonics dominate THD and V1E's odds already
+>   matched — a per-order magnitude view was required to see it. **FIXED, see the new section below.**
+> - **Checked V1L and V2 for the same "chronic low evens" signature — NEITHER has it.** V1L's clean
+>   whole-band even-harmonic deltas are small (H2 +4.3/-2.4/-11.8 dB, H4 +7.4/+6.6/-4.1 dB across the
+>   three driven levels — mixed sign, not a systematic floor); V2's are similarly small (H2 -0.4/-0.2/
+>   -4.7, H4 +1.9/-0.7/-2.2). **Neither needs a V1EEvenShaper-style port** — this was V1E-specific
+>   (V1E is the only revision with NO clip diodes/zener, i.e. the only one whose evens depend entirely
+>   on the rail's asymmetry, which only acts AT the clip). Don't re-investigate this for V1L/V2 without
+>   new evidence; the map already answered it.
+> - **V1L's map DOES show something worth a future look (not yet acted on):** at 1.2-4.8 kHz, odd
+>   harmonics (H3/H5/H7) run +10 to +20 dB HOT (plugin far too hot vs pedal) — an OVERSHOOT, the
+>   opposite problem from V1E. V1L also has the shallowest null in the whole matrix (D0.65 BL1.00,
+>   clean null -5.8 dB) on the SAME capture. Likely suspect: the Gap-F recovery saturator (fitted
+>   2026-07-17, `RecoverySaturator`/sat_refine.py) over-generating HF odd content. NOT investigated
+>   this session — flagged here so it isn't re-discovered from scratch. If pursued: the granular map +
+>   this file's guardrail checklist is the same playbook used for V1E below; start with `gapd_harmonic_
+>   map.py --filter V1L --json <path>` then `gapd_harmonic_perband.py --rev V1L`.
+>
+> **General technique worth reusing (not V1E-specific): the EVEN-ONLY / ODD-ONLY shaper trick.** When a
+> per-order map shows one harmonic PARITY (evens or odds) is wrong while the OTHER parity already
+> matches, a shaper of the form `y = x + a * f(x)` where `f` has the matching (anti)symmetry is the
+> clean tool — it only touches the parity you want:
+> - `f(x) = x*tanh(x/k)` is EVEN (odd arg * odd tanh = even) → generates ONLY even harmonics + DC,
+>   leaves every odd harmonic untouched. Used for V1E below.
+> - `f(x) = tanh(x/k) - x/k` (or a clamped cubic `x - x^3/(3k^2)`) is ODD → generates ONLY odd
+>   harmonics, leaves evens untouched — the mirror-image tool, if V1L's HF overshoot above ever needs
+>   REDUCING rather than a symmetric parity added (subtracting an odd-symmetric term reduces existing
+>   odd content without touching evens).
+> Always prototype the shaper's harmonic signature in Python FIRST (no render — see
+> `analysis/proto_v1e_even.py` as the template) to confirm the (anti)symmetry holds and get the
+> amplitude/level slope in the right range BEFORE writing any C++ or fitting against captures.
+>
+> **Gate-writing gotcha that cost time and is worth recording:** a full-chain low-level H2 ablation
+> gate measured via a single-bin, UNWINDOWED per-sample correlation is leakage-limited around -44 dB
+> (the fundamental's rectangular-window sidelobe) when the block length isn't an integer number of
+> cycles — this BURIES a real -52..-65 dB H2 signal and makes an ablation gate read "no change" even
+> though the DSP is correct (confirmed separately by the capture-based fit). Fix: collect enough
+> steady-state samples into one buffer and take a Hann-windowed DFT (~-90 dB sidelobes) at f and 2f
+> before computing the ratio. Any FUTURE low-level (rail/clip-idle) harmonic gate should use this
+> pattern from the start, not rediscover it (see `tests/V1EarlyIntegrationTest.cpp` §5 for the
+> reference implementation).
+
+## D-v1e: V1 EARLY EVEN-HARMONIC DEFICIT — FIXED 2026-07-21 (found via the granular map above)
+
+> **Not the same gap as V2's "Gap D."** V1E has no zener/clip diodes at all (rail-clip only), so it was
+> never part of the V2/V1L zener-module investigation below — it surfaced purely from the granular map
+> sweep across all three revisions, at the user's request to broaden the Gap-D work into a full
+> revision-wide granular audit rather than stay narrowly on V2.
+>
+> **Diagnosis.** Pedal V1E H2 is a near-level-INDEPENDENT small-signal floor: ~-50 dB re fund @-18 dBFS
+> rising to only ~-42 dB @-6 dBFS (+0.66 dB per dB of level — far flatter than a clip-generated
+> harmonic, which would climb much faster). Present at frequencies/levels where NOTHING in the modelled
+> chain clips (confirmed: plugin H2 sits at the numerical floor, -108 to -130 dB, in the same low-level
+> region). Physically this is the real op-amp/VCOM asymmetry (single-supply saturation, VCOM != exactly
+> VCC/2 from the R31/R32 divider tolerance + input-offset) — an ideal-op-amp model has none of it. The
+> shipped asymmetric rail (-4.10/+4.20 V, fit 2026-07-18 via `v1e_h2_asym_fit.py`) does NOT fix this: a
+> hard-clamp asymmetry only makes even harmonics WHILE CLIPPING, so it helped at the one high-drive
+> anchor it was fit against and left the broadband/low-level floor untouched — exactly what the map
+> exposed (H2 still -18.8 to -28.5 dB low across the whole matrix even with the asym rail live).
+>
+> **Fix.** `src/dsp/V1EEvenShaper.h` — `y = x + a*x*tanh(x/k)` on the V1E WET path (before BLEND, so it
+> vanishes at BLEND=dry like the pedal's own wet-path asymmetry would). Even-only by construction (see
+> the general technique note above) — verified in `analysis/proto_v1e_even.py` before any C++: H3/H5
+> sit at the numerical floor (-160..-180 dB) across the whole amplitude sweep while H2 tracks a
+> realistic level slope. f(0)=0 exactly (no offset/dcTrim machinery needed, unlike `RecoverySaturator`'s
+> offset-tanh — no silent-DC risk).
+>
+> **Fit.** `analysis/v1e_even_fit.py` sweeps (a, k), renders all 3 V1E captures, scores pooled |H2Δ| +
+> 0.5|H4Δ| over 14 non-notch anchors x 3 driven levels, WITH GUARDS that |H3Δ| and clean-FR rms don't
+> regress vs a=0 (proving the even-only property holds end-to-end, not just in the isolated prototype).
+> Grid then refined around the zero-bias point. **Winner: a=0.01, k=1.2** (k in volts, recovery-node
+> scale). Result: pooled |H2Δ| 18.0 → 8.9 dB (bias -15.05 → +0.88, i.e. unbiased, not just smaller),
+> |H4Δ| 17.8 → 8.4 dB, **|H3Δ| 7.54 → 7.26 (unchanged) and clean-FR rms 0.83 → 0.84 (unchanged)** — the
+> even-only property held under fitting, not just in the prototype. Per-capture whole-band means: H2
+> -18.8/-18.7/-28.5 → +2.8/-3.5/-9.1 dB at -18/-12/-6 dBFS; H4/H6 similarly improved 10-20 dB; odds
+> bit-for-bit unchanged. Residual ~9 dB under-delivery at -6 dBFS is the level-tracking limit of one
+> memoryless shaper vs the pedal's real freq/level-varying asymmetry — documented best-effort, guardrail
+> #4 (alternative not ruled out: a level-dependent a/k, not attempted — would need its own guardrail #6
+> justification as a per-level value, and the flat fit already closes most of the gap).
+>
+> **Gate.** `tests/V1EarlyIntegrationTest.cpp` §5 — full-chain windowed-DFT H2 measurement at LOW drive
+> (0.3, rail idle, so H2 comes ONLY from the shaper), asserting a >10 dB collapse when the shaper is
+> ablated (`setEvenShaper(0,·)`). Measured: ON -65.4 dB, ablated -122.4 dB (57 dB collapse) — verified
+> to actually FAIL before the Hann-window fix (see the gate-writing gotcha above), and to PASS/FAIL
+> correctly afterward (confirmed by re-running with `kV1eEvenA` temporarily set to 0). Guardrail #3 met.
+>
+> **Guardrails.** #1 (named calibration layer, `V1EEvenShaper.h`, not an altered component) — met. #2
+> (physical cause hunted & written down; rail-asymmetry alternative explicitly refuted) — met. #3 (gate
+> fails on ablation, verified) — met. #4 (documented judgement call: the (a,k) is capture-fitted, no
+> capture-free reference for harmonic magnitude exists per the ⚖ rule) — met. #6 (ONE correction, fit
+> jointly across all 3 captures x 3 levels x 14 anchors, not per-capture) — met. V1L/V2 do not
+> instantiate `V1EEvenShaper` — bit-identical to before this fix.
+>
+> 30/30 ctest green. `analysis/reports/comprehensive_data.json` regenerated; V1E/V1L/V2 FR rms
+> unchanged (1.11/5.18/3.15 mean) confirming no collateral FR movement.
+
 ## D: SPLIT 2026-07-19 — V1L's half CORRECTED (shipped), V2's half REFUTED for this mechanism
 
 > **⭐ HEAD OF SECTION — READ THIS BEFORE ANYTHING BELOW IT (2026-07-19, end of session).**

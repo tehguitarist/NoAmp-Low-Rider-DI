@@ -197,6 +197,65 @@ int main()
         check(std::isfinite(gainDb) && gainDb > -3.0 && gainDb < 3.0, "dry path is near-unity and stable");
     }
 
+    // --- 5. Even-harmonic floor (V1EEvenShaper) — ABLATION GATE (guardrail #3) --------------------
+    // The pedal's V1E H2 is a small-signal floor present BELOW the rail-clip threshold (op-amp/VCOM
+    // asymmetry); the symmetric rail clip cannot make it, and the asymmetric rail (-4.10) only makes
+    // H2 WHILE CLIPPING. V1EEvenShaper (wet path) restores it. This gate drives the chain at LOW drive
+    // so the rail stays idle — then H2 comes ONLY from the shaper — and proves H2 collapses when the
+    // shaper is ablated (setEvenShaper(0,·)). If kV1eEvenA is ever set to 0, default == ablated and
+    // this FAILS. Measured at BL=1.0 (full wet), 220 Hz.
+    std::printf("Even-harmonic floor (V1EEvenShaper) ablation gate:\n");
+    {
+        const double f = 220.0, amp = 0.20;   // ~1.1 V at the clip node at drive 0.3 -> rail idle
+        auto measureH2 = [&](bool ablate) -> double
+        {
+            nalr::V1EarlyDSP dsp;
+            dsp.prepare(kFs, kBlock);
+            dsp.setParams(0.3, 0.5, 1.0, 0.5, 0.5, 0.5); // low drive, full wet, noon
+            if (ablate)
+                dsp.setEvenShaper(0.0, 0.8);
+            dsp.setOversamplingFactor(8);
+            dsp.reset();
+            // Collect steady-state output, then a Hann-windowed DFT at f and 2f. A single-bin
+            // unwindowed correlation over a non-integer number of cycles is leakage-limited at
+            // ~-44 dB (the fundamental's rectangular-window sidelobe), which BURIES a -52 dB H2 floor
+            // and makes the ablation delta unmeasurable. Hann -> ~-90 dB sidelobes exposes it.
+            int n = 0;
+            std::vector<double> buf((size_t) kBlock), y;
+            const int warm = 30, take = 40;
+            y.reserve((size_t) (take * kBlock));
+            for (int b = 0; b < warm + take; ++b)
+            {
+                for (int i = 0; i < kBlock; ++i)
+                    buf[(size_t) i] = amp * std::sin(2.0 * kPi * f * (double) n++ / kFs);
+                dsp.processBlock(buf.data(), kBlock);
+                if (b >= warm)
+                    y.insert(y.end(), buf.begin(), buf.end());
+            }
+            const size_t N = y.size();
+            double reF = 0, imF = 0, re2 = 0, im2 = 0;
+            for (size_t i = 0; i < N; ++i)
+            {
+                const double w = 0.5 - 0.5 * std::cos(2.0 * kPi * (double) i / (double) (N - 1));
+                const double ph = 2.0 * kPi * f * (double) i / kFs;   // steady-state samples start at phase 0
+                const double yi = y[i] * w;
+                reF += yi * std::cos(ph);      imF += yi * std::sin(ph);
+                re2 += yi * std::cos(2 * ph);  im2 += yi * std::sin(2 * ph);
+            }
+            const double h1 = std::hypot(reF, imF);
+            const double h2 = std::hypot(re2, im2);
+            return 20.0 * std::log10(h2 / (h1 + 1e-20) + 1e-20);
+        };
+        const double h2On = measureH2(false);
+        const double h2Off = measureH2(true);
+        std::printf("      H2 re fund: shaper ON = %.1f dB,  ablated = %.1f dB,  delta = %.1f dB\n",
+                    h2On, h2Off, h2On - h2Off);
+        // ON must sit in a plausible even-floor band, AND be well above the ablated level (which is
+        // near the numerical/rail-idle floor). The delta is the ablation proof.
+        check(h2On > -75.0 && h2On < -30.0, "even shaper produces an H2 floor in the pedal's range");
+        check((h2On - h2Off) > 10.0, "H2 floor COLLAPSES when the shaper is ablated (gate can fail)");
+    }
+
     std::printf("%s\n", pass ? "V1EarlyIntegrationTest PASSED" : "V1EarlyIntegrationTest FAILED");
     return pass ? 0 : 1;
 }
