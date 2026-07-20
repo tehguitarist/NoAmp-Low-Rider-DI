@@ -222,6 +222,11 @@ int main()
         std::printf("      HF @8kHz = %.1f dB (target near the -40 dB point)\n", hf8k);
         check(lfEdge > -20.0 && lfEdge < 6.0, "§1 LF edge negative and in range");
         check(lowBump > -10.0 && lowBump < 8.0, "§1 low bump in range");
+        // Wet-path bass-bump calibration gate (src/dsp/WetLFCorrection.h, guardrail #3): the ~55 Hz
+        // bell lifts the 70 Hz low bump from ~3.0 dB (ablated) to ~6.3 dB. Proven to FAIL under
+        // NALR_WETLF_OFF. (V2's §1 LF is a known pre-existing best-effort gap — this gates the bell's
+        // effect, not §1 fidelity.)
+        check(lowBump > 4.5, "wet-LF bass-bump calibration active @70Hz (FAILS with NALR_WETLF_OFF)");
         check(notch < -20.0, "§1 deep notch present (< -20 dB)");
         check(highBump > -15.0 && highBump < 5.0, "§1 high bump in range");
         // ABSOLUTE, not relative-to-notch (changed 2026-07-16, ISS-008). This was `hf8k < notch`,

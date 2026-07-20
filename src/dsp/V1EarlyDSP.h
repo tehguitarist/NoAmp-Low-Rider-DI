@@ -26,6 +26,7 @@
 #include "V1EarlyDriveClipRecovery.h"
 #include "V1EarlyStages.h"
 #include "DryTapDelay.h"
+#include "DiagFlags.h"
 #include "../utils/ChangeGate.h"
 #include "Calibration.h"
 
@@ -159,7 +160,8 @@ public:
         // Stage 3 (base rate): BLEND(dry, wet) -> LEVEL -> gain -> BASS/TREBLE -> output buffer.
         for (int i = 0; i < n; ++i)
         {
-            const double b = blendLevel.process(dryTap[(size_t) i], data[i]);
+            const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
+            const double b = blendLevel.process(dry, data[i]);
             data[i] = output.process(tone.process(b));
         }
     }

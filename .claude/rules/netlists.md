@@ -254,6 +254,15 @@ C10** (100n → ~16 Hz corner → the delta collapses toward 0 dB, far worse aga
 proposed from captures and is refuted. The real LF error is **drive-dependent** (ISS-013) and a fixed
 cap cannot cause it. Verify with `python3.11 analysis/iss009_lf_probe.py`.
 
+**⚠ MODEL NOTE (2026-07-20): C10/R14 stay schematic (10n/100k), but a NAMED CALIBRATION LAYER now
+sits downstream on the wet path — `src/dsp/WetLFCorrection.h`, a ~55 Hz peaking bell.** The idealised
+(ideal-source-driven) C10/R14 HP places the wet bump ~30 Hz too high vs SPICE §1 (pure-wet peaks
+99.6 Hz vs §1 ~70; V1L is the sole outlier), which reads as the V1L bass hump at real drive. It is
+NOT fixed by changing C10 (that boosts ~25 Hz and deepens the drive=0 dry-leak null, breaking §1);
+the bell lifts 40-80 Hz while sparing 25 Hz. **So the code's wet-path LF response deliberately differs
+from a naive C10/R14 read — that difference is the calibration, not a transcription error. Do not
+"correct" it back.** V2 has the same layer (milder). See CLAUDE.md V1L SUB-INVESTIGATION (resolved).
+
 ## L6. BLEND → LEVEL (single inverting stage IC3A) [✓]
 
 ```

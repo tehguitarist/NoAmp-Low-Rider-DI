@@ -154,15 +154,31 @@ without images.
 >   had ALSO been updated to 220n (validated the fudge against itself, L-001) — reference restored to 47n.
 >   **§1 bump peak 70→94 Hz (dead-on §1's 90); ALL V1E captures now match (plug 100 vs ped 98).** V1E CLOSED.
 > - **V1L: NO fudged cap** — its LF caps are all schematic (C10 10n/R14 100k = the ISS-009-confirmed
->   159 Hz wet-buffer HP; C12 47n; C42 4.7n) — **but this half is now an ACTIVE, IN-PROGRESS
->   correction, not "stays open best-effort" (that framing is SUPERSEDED — see below).**
+>   159 Hz wet-buffer HP; C12 47n; C42 4.7n) — **✅ CLOSED 2026-07-20 by the wet-path PEAKING BELL
+>   (`src/dsp/WetLFCorrection.h`), NOT a cap change (C10 stays 10n). See the ✅✅ RESOLVED banner below.**
 > - ⚠ **What I first chased and REFUTED:** (1) "compression moves the peak" — no, plugin peak is
 >   level-independent; (2) "drive-knob moves the peak" — no, isolated peak is FLAT across drive (V1L 114,
 >   V2 85 at every drive); an earlier "drive-dependent" read was a PRESENCE-setting confound.
 >
-> **⭐ V1L SUB-INVESTIGATION (2026-07-20, same session) — WHY V1L DIFFERS FROM V1E/V2, THREE
-> CORRECTION SHAPES TRIED, ONE WORKS BUT IS DRIVE-DEPENDENT — READ BEFORE TOUCHING
-> `src/dsp/V1LPhaseCorrectionPrototype.h`.**
+> **✅✅ V1L (AND V2) BASS HUMP — RESOLVED AND SHIPPED 2026-07-20 (later session). The block below is
+> the HISTORICAL investigation record; its "OPEN PROBLEM / FIRST ACTION" framing is SUPERSEDED.**
+> The fix is `src/dsp/WetLFCorrection.h` — a wet-path RBJ PEAKING BELL (before BLEND), SHIPPED ON per
+> revision, REFINED after a user ear-check same session: **V1L 50 Hz/+7 dB/Q1.2, V2 50 Hz/+4 dB/Q1.2**
+> (V1E unused; first-pass 55 Hz/Q1.0 traded captures off against each other — see the header of
+> `WetLFCorrection.h` for the full refine record). Gated by the §1 low-bump check in V1Late/V2
+> IntegrationTest (ablate `NALR_WETLF_OFF` ⇒ FAILS). V1L mean per-capture RMS 2.04→1.74 (all 3
+> improve); V2's worst-case (D0.50/BL0.95) 1.98→1.85. 30/30 green. **The allpass prototype was
+> REFUTED and DELETED** (phase-only can't move
+> the magnitude bump; it net-regressed the captures). **Key reframe:** the bump error is ~⅔ MAGNITUDE
+> (V1L pure-wet peaks 99.6 Hz vs §1 ~70; C10/R14 over-cuts 40-80 Hz — C10=10n is CONFIRMED, not a
+> mistranscription) + ~⅓ leak interference. A bigger-C10/shelf/pole-zero BREAKS §1 (boosts ~25 Hz
+> where the drive=0 dry-leak sits antiphase → deepens that null; C10→33n drove §1 edge −9.7→−20.7).
+> A narrow BELL at ~55 Hz lifts 40-80 while SPARING 25 Hz, threading both the drive=0 §1 gate and the
+> drive>0 captures. Mechanism was measured B (phase excess drive-independent), so no per-knob term.
+> Full detail in `WetLFCorrection.h`'s header + [[v1l-bass-hump-mechanism-b]]. **Do not re-open from
+> the historical text below.**
+>
+> **⭐ V1L SUB-INVESTIGATION (2026-07-20, same session) — HISTORICAL RECORD (superseded, see above):**
 >
 > **Why V1L alone (not V2, despite V2 sharing the same direct-wire dry leg / cap-coupled wet leg
 > BLEND topology): PHASE, measured, not guessed.** Isolated (drive=0, presence=0, tones flat, dry
@@ -263,13 +279,11 @@ without images.
 > using the 3 captures only as a final cross-check, not as the fitting data itself (mirrors guardrail
 > #5's "tune to analog truth, not a single capture").
 >
-> **Prototype code committed as a starting point:** `src/dsp/V1LPhaseCorrectionPrototype.h` — a
-> working 1st-order allpass, wired into `V1LateDSP.h`'s wet path before BLEND, **OFF BY DEFAULT** (a
-> no-op, verified bit-identical to pre-investigation baseline) unless `NALR_ALLPASS_HZ` is set in the
-> environment. Zero effect on shipped/DAW audio as committed. Full investigation, both rejected
-> shapes, the phase-measurement methodology, and the drive-transfer table are documented in the
-> file's own header — read it before extending. `analysis/bass_hump_localise.py` (isolated §1
-> wet-path bump-peak localiser) is the companion keeper diagnostic. 30/30 ctest green throughout.
+> **⚠ SUPERSEDED: the allpass prototype (`src/dsp/V1LPhaseCorrectionPrototype.h`) referenced in this
+> historical block was REFUTED and DELETED 2026-07-20** (phase-only can't move the magnitude bump; it
+> net-regressed the captures). The shipped fix is the wet-path bell (`src/dsp/WetLFCorrection.h`) — see
+> the ✅✅ RESOLVED banner at the top of this block. `analysis/bass_hump_localise.py` (isolated §1
+> wet-path bump-peak localiser) remains a keeper diagnostic.
 >
 > 1. **Bass-hump frequency is shifted on ALL THREE revisions, but in OPPOSITE directions** (peak-bin
 >    read of `fr.sweep_clean`, raw dB): **V1L** pedal peaks ~80–100 Hz, plugin ~127 Hz, all 3 captures
@@ -310,9 +324,9 @@ without images.
 > wet-path LF magnitude class as item 1's V1L bass hump — see the V1L SUB-INVESTIGATION); the notch
 > and HF items are queued for later:
 > - **V2 HF ~2–4 kHz is ~3 dB LOW.** (Related to but distinct from item 3's V1E 1–6 kHz; this is V2.)
-> - **V2 BASS peak too HIGH: plugin peaks ~90 Hz, should be ~70 Hz.** ✅ IN SCOPE NOW — this is the
->   same defect as V1L's bass hump, milder (V2 pure-wet 79–85 Hz vs §1 70, +0.18 oct measured). The
->   wet-path LF magnitude correction covers both V1L and V2 (per-rev tuned to each rev's §1).
+> - **V2 BASS peak too HIGH: plugin peaks ~90 Hz, should be ~70 Hz.** ✅ **DONE 2026-07-20** — same
+>   wet-path bell as V1L, milder (V2 50 Hz/+4 dB/Q1.2, refined after ear-check; `WetLFCorrection.h`).
+>   Worst-case capture RMS 1.98→1.85. See the ✅✅ RESOLVED banner above.
 > - **V2 twin-T NOTCH ~3 dB too SHALLOW** (needs to be deeper).
 > - **V1E twin-T NOTCH center should be ~630 Hz, currently ~800 Hz** (user says V2 looks ~630 too;
 >   **V1L IS correctly ~800 Hz**). ⚠ TENSION TO RESOLVE BEFORE ACTING: netlists.md/circuit.md have the
@@ -328,13 +342,11 @@ without images.
 > against a trustworthy baseline instead of needing to be re-validated later (the same logic that
 > made L-006's Farina-estimator fix a prerequisite for trusting any THD-vs-frequency conclusion).
 >
-> 1. **Bass-hump frequency retune — ✅ MOSTLY DONE 2026-07-20 (see the ITEM 1 block above).** The
->    "cheap per-revision corner retune" guess was RIGHT for two of three revs, and cheaper than
->    expected: **two schematic values had been fudged** (V2 C41, V1E C12) and restoring them fixed V1E
->    outright and improved V2. V1L's half has no fudge (schematic caps + an unarbitrable dry-leak null)
->    and is best-effort. The WIDEST-blast-radius concern still applies to V1L's residual, so downstream
->    LF-anchored reads (Gap D's 100-110 Hz characterisation, null depth) are now trustworthy for V1E/V2
->    but keep the V1L caveat. Reports regenerated post-fix.
+> 1. **Bass-hump frequency retune — ✅ DONE 2026-07-20 (all three revs).** V1E/V2 fixed by restoring
+>    two fudged schematic caps (C41, C12; L-013). V1L (and a further V2 improvement) fixed by the
+>    wet-path PEAKING BELL (`src/dsp/WetLFCorrection.h`; see the ✅✅ RESOLVED banner). The V1L residual
+>    is now corrected, so downstream LF-anchored reads (Gap D's 100-110 Hz characterisation, null
+>    depth) are trustworthy on all three revs. Reports regenerated post-fix.
 > 2. **Validate the flat/level-independent HF THD reading** (existing item 6, "▶ NEXT STEPS" —
 >    "do NOT fit yet"). This is a suspected MEASUREMENT artifact, not a circuit finding — same
 >    category as the L-006 Farina edge-spike bug, which once found invalidated prior THD-vs-frequency
@@ -462,27 +474,22 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-20, LATEST session, session ends here — pick up per "FIRST ACTION" below):
-> ITEM 1 (bass hump) root-caused. V1E CLOSED, V2 improved (two fudged schematic caps restored, L-013).
-> V1L: root cause found via PHASE measurement (not magnitude) — a ~50° excess phase lead from the
-> V1L-exclusive C10/R14 159 Hz wet-buffer HP turns the schematic-faithful BLEND-pot leak (shared,
-> harmless on V1E/V2) into a deep destructive-interference null on V1L alone. Two correction shapes
-> REJECTED (flat shelf dominates BASS/TREBLE; magnitude pole-zero fixes isolation but fails the real
-> §1 gate — destructive interference is a phase problem, L-014). Third (1st-order allpass, phase-only)
-> WORKS, never regresses, but its effectiveness is drive-dependent for an UNRESOLVED reason (two
-> candidate mechanisms, not yet distinguished). User has AUTHORISED a per-knob (drive-tracking)
-> correction as a deliberate guardrail #6 exception IF the mechanism check confirms it's warranted.
-> See the ⭐ V1L SUB-INVESTIGATION block above and `src/dsp/V1LPhaseCorrectionPrototype.h`'s own header
-> for full detail — start there, not from scratch.**
-> **FIRST ACTION NEXT SESSION:** measure V1L's isolated wet-path phase excess (vs V1E/V2, 25-63 Hz,
-> `NALR_NODRY`-style dry-forced-to-zero condition) at drive=0.65 instead of drive=0. Still ~50° ⇒
-> Mechanism B (constant phase, drive changes the wet/dry BALANCE not the phase — do NOT drive-modulate
-> the allpass, look at BLEND-node amplitude ratio instead). Grown toward ~90° ⇒ Mechanism A (phase
-> itself is drive-dependent — proceed to fit a drive-vs-corner relationship, using the isolated sweep
-> as the fitting data and the 3 captures, BL0.30 now included, only as a cross-check per guardrail #5).
-> Commits a3eae69, 168ed57 (the two cap fixes, shipped/safe) plus this session's final commit adding
-> the allpass prototype — off by default, zero shipped-audio effect, see its own file header for the
-> complete record. Reports regenerated post-cap-fix. 30/30 ctest green throughout, prototype included.**
+> **Last change (2026-07-20, LATEST session): ✅ BASS HUMP FULLY RESOLVED AND SHIPPED (V1E + V1L + V2).**
+> V1E CLOSED + V2 improved earlier via restoring two fudged schematic caps (L-013). This session
+> closed the V1L (and further improved the V2) LF bump with a wet-path **PEAKING BELL**
+> (`src/dsp/WetLFCorrection.h`, SHIPPED ON: V1L 50 Hz/+7 dB/Q1.2, V2 50 Hz/+4 dB/Q1.2; V1E unused;
+> refined from an initial 55 Hz/Q1.0 pass after the user caught a per-capture trade-off by ear —
+> see `WetLFCorrection.h`'s header for the refine record). V1L median FR-shape rms 5.00→3.76;
+> §1 low-bump gate added to both integration tests (fails under `NALR_WETLF_OFF`, verified as the
+> SOLE failure). **The V1L allpass prototype was REFUTED and DELETED** — the defect
+> is dominantly MAGNITUDE (pure-wet peaks 99.6 Hz vs §1 ~70), not phase, and phase-only net-regressed
+> the captures. A bigger-C10/shelf/pole-zero was ruled out (breaks the drive=0 §1 edge by deepening
+> the dry-leak null); a narrow bell lifts 40-80 Hz while sparing 25 Hz, threading both gates. Also
+> committed: `src/dsp/DiagFlags.h` (`NALR_NODRY` pure-wet diagnostic). 30/30 ctest green; reports
+> regenerated. Full record: `WetLFCorrection.h` header, the ✅✅ RESOLVED banner above,
+> [[v1l-bass-hump-mechanism-b]]. **QUEUED (logged, not done): V2 HF 2-4 kHz +3 dB, V2/V1E twin-T notch
+> ~3 dB deeper, V1E twin-T notch 800→630 Hz (see the USER-FLAGGED TWEAKS block — the notch-frequency
+> one has a schematic-tension caveat to resolve first).**
 >
 > **Prior (2026-07-19): GAPS J AND E CLOSED — three real bugs, all found
 > capture-free.** (1) **Two POLARITY INVERSIONS**: chowdsp's `WDFSeriesT` returns a child's voltage

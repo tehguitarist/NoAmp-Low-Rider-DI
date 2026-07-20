@@ -187,6 +187,10 @@ int main()
         std::printf("      HF -40 dB point = %.2f kHz (§1 target ~11 kHz; 22k override of 33k)\n", minus40Hz / 1000.0);
         check(lfEdge > -18.0 && lfEdge < 2.0, "§1 LF edge in range");
         check(lowBump > -5.0 && lowBump < 6.0, "§1 low bump in range");
+        // Wet-path bass-bump calibration gate (src/dsp/WetLFCorrection.h, guardrail #3): the ~55 Hz
+        // bell lifts the 70 Hz low bump from ~-1.7 dB (ablated) to ~+4.0 dB. Proven to FAIL under
+        // NALR_WETLF_OFF. Keep this ABOVE the "in range" upper bound so both stay meaningful.
+        check(lowBump > 1.5, "wet-LF bass-bump calibration active @70Hz (FAILS with NALR_WETLF_OFF)");
         check(notch < -15.0, "§1 deep notch present (< -15 dB)");
         check(highBump > -6.0 && highBump < 6.0, "§1 high bump in range");
         check(minus40Hz > 10000.0 && minus40Hz < 12000.0,

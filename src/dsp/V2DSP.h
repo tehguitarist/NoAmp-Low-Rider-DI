@@ -30,6 +30,8 @@
 #include "V1EarlyStages.h" // V1EarlyInputBuffer, reused verbatim (netlists.md V1 == E1/L1)
 #include "V1LateStages.h"  // V1LatePresenceStage, reused verbatim (netlists.md reuse map)
 #include "V2Stages.h"
+#include "DiagFlags.h"
+#include "WetLFCorrection.h"
 #include "DryTapDelay.h"
 #include "ToneWarpShelf.h"
 #include "ZenerDriveClipRecovery.h"
@@ -60,6 +62,10 @@ public:
         mid.prepare(baseFs);
         tone.prepare(baseFs);
         warpShelf.prepare(baseFs);
+        wetLFCorr.prepare(baseFs);
+        // Refined 2026-07-20 (per-capture RMS check): 50Hz/Q1.2 targets the D0.50/BL0.95 hot spot the
+        // user flagged by ear (worst-case RMS 1.98->1.85) without regressing the other 4 captures.
+        wetLFCorr.setParams(50.0, 4.0, 1.2); // V2 wet-path bass-bump calibration (WetLFCorrection.h)
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -79,6 +85,7 @@ public:
         mid.reset();
         tone.reset();
         warpShelf.reset();
+        wetLFCorr.reset();
         output.reset();
     }
 
@@ -185,7 +192,9 @@ public:
         // Stage 3 (base rate): BLEND(dry,wet) -> LEVEL -> +10.1dB -> MID -> BASS/TREBLE -> output.
         for (int i = 0; i < n; ++i)
         {
-            const double bl = blendLevel.process(dryTap[(size_t) i], data[i]); // V6
+            const double wetLF = wetLFCorr.process(data[i]);                    // V2 wet-path bass-bump calibration
+            const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i];   // diag: pure-wet measure
+            const double bl = blendLevel.process(dry, wetLF);                  // V6
             const double midded = mid.process(bl);                             // V6: MID + MID SHIFT
             const double toned = warpShelf.process(tone.process(midded));      // V7 tone + base-rate warp trim
             data[i] = output.process(toned);                                   // V8 output
@@ -200,6 +209,7 @@ private:
     V2MidStage mid;
     V2PeakingToneStage tone;
     ToneWarpShelf warpShelf; // base-rate tone-stack top-octave warp correction (calibration shelf)
+    WetLFCorrection wetLFCorr; // wet-path bass-bump calibration (shipped ON, see header)
     V2OutputStage output;
 
     std::vector<double> dryTap;

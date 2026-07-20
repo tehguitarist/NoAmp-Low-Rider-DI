@@ -28,8 +28,9 @@
 #include "V1EarlyStages.h" // V1EarlyInputBuffer, reused verbatim (netlists.md L1 == E1, small-signal)
 #include "V1LateStages.h"
 #include "DryTapDelay.h"
+#include "DiagFlags.h"
 #include "ToneWarpShelf.h"
-#include "V1LPhaseCorrectionPrototype.h"
+#include "WetLFCorrection.h"
 #include "ZenerDriveClipRecovery.h"
 #include "../utils/ChangeGate.h"
 #include "Calibration.h"
@@ -96,7 +97,12 @@ public:
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         warpShelf.prepare(baseFs);
-        phaseCorrProto.prepare(baseFs); // PROTOTYPE, off unless NALR_ALLPASS_HZ set -- see header
+        wetLFCorr.prepare(baseFs);
+        // Refined 2026-07-20 (per-capture RMS + hot-zone check, analysis session): 50Hz/Q1.2 (narrower,
+        // lower-centred) beats 55Hz/Q1.0 on ALL 3 captures at once (mean RMS 2.04->1.74, none regress);
+        // +7dB needed since D0.65/BL1.00 wants MORE lift than +6 gave even after reshaping (its hot-zone
+        // delta stays negative -- undershot -- at every gain tested up to +7).
+        wetLFCorr.setParams(50.0, 7.0, 1.2); // V1L wet-path bass-bump calibration (WetLFCorrection.h)
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -114,7 +120,7 @@ public:
         dryDelay.reset();
         tone.reset();
         warpShelf.reset();
-        phaseCorrProto.reset();
+        wetLFCorr.reset();
         output.reset();
     }
 
@@ -203,8 +209,9 @@ public:
         // Stage 3 (base rate): BLEND(dry, wet) -> LEVEL -> BASS/TREBLE -> output buffer.
         for (int i = 0; i < n; ++i)
         {
-            const double wetPh = phaseCorrProto.process(data[i]); // PROTOTYPE, no-op unless env-enabled
-            const double b = blendLevel.process(dryTap[(size_t) i], wetPh); // L6
+            const double wetLF = wetLFCorr.process(data[i]);       // V1L wet-path bass-bump calibration
+            const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
+            const double b = blendLevel.process(dry, wetLF); // L6
             const double toned = warpShelf.process(tone.process(b));          // L7 tone + base-rate warp trim
             data[i] = output.process(toned);                                  // L8 output
         }
@@ -217,7 +224,7 @@ private:
     V1LateBlendLevelStage blendLevel;
     V1LatePeakingToneStage tone;
     ToneWarpShelf warpShelf; // base-rate tone-stack top-octave warp correction (calibration shelf)
-    V1LPhaseCorrectionPrototype phaseCorrProto; // PROTOTYPE (off by default) -- see header for status
+    WetLFCorrection wetLFCorr;                   // wet-path bass-bump calibration (shipped ON, see header)
     V1LateOutputStage output;
 
     std::vector<double> dryTap;
