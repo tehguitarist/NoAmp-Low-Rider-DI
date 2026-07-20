@@ -32,6 +32,7 @@
 #include "V2Stages.h"
 #include "DiagFlags.h"
 #include "WetLFCorrection.h"
+#include "WetHFCorrection.h"
 #include "DryTapDelay.h"
 #include "ToneWarpShelf.h"
 #include "ZenerDriveClipRecovery.h"
@@ -66,6 +67,8 @@ public:
         // Refined 2026-07-20 (per-capture RMS check): 50Hz/Q1.2 targets the D0.50/BL0.95 hot spot the
         // user flagged by ear (worst-case RMS 1.98->1.85) without regressing the other 4 captures.
         wetLFCorr.setParams(50.0, 4.0, 1.2); // V2 wet-path bass-bump calibration (WetLFCorrection.h)
+        wetHFCorr.prepare(baseFs);
+        wetHFCorr.setParams(3400.0, 3.0, 1.1); // V2 wet-path 3-4 kHz calibration (WetHFCorrection.h)
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -86,6 +89,7 @@ public:
         tone.reset();
         warpShelf.reset();
         wetLFCorr.reset();
+        wetHFCorr.reset();
         output.reset();
     }
 
@@ -145,17 +149,13 @@ public:
     // Gap D calibration layer (src/dsp/ClipDriveNormaliser.h). depth 0 = OFF and BIT-IDENTICAL to
     // the uncorrected chain — the shipping default until a joint fit across V1L AND V2 is committed
     // (guardrail #6; analysis/gapd_fit_harness.py enforces the one-fit constraint).
-    void setClipDriveNormalisation(double depth, double targetV, double tauMs, double scHz,
-                                   double makeup) noexcept
+    void setClipDriveNormalisation(double depth, double targetV, double tauMs, double scHz, double makeup) noexcept
     {
         driveRegion.setClipDriveNormalisation(depth, targetV, tauMs, scHz, makeup);
     }
 
     // Gap D calibration-layer clamp diagnostics (see ClipDriveNormaliser.h).
-    void setClipDriveGainLimits(double minG, double maxG) noexcept
-    {
-        driveRegion.setClipDriveGainLimits(minG, maxG);
-    }
+    void setClipDriveGainLimits(double minG, double maxG) noexcept { driveRegion.setClipDriveGainLimits(minG, maxG); }
     double getClipDriveClampedFraction() const noexcept { return driveRegion.getClipDriveClampedFraction(); }
     void resetClipDriveClampStats() noexcept { driveRegion.resetClipDriveClampStats(); }
 
@@ -183,7 +183,7 @@ public:
             const double inb = input.process(data[i]); // V1: input buffer
             // Gap J: align the dry leg with the wet path's oversampler latency (a wire has none).
             dryTap[(size_t) i] = dryDelay.process(inb);
-            data[i] = presence.process(inb);           // V2/V3: twin-T notch + PRESENCE
+            data[i] = presence.process(inb); // V2/V3: twin-T notch + PRESENCE
         }
 
         // Stage 2 (oversampled): CH40 DRIVE + zener clip -> recovery S-Ks (no bridged-T on V2).
@@ -192,12 +192,13 @@ public:
         // Stage 3 (base rate): BLEND(dry,wet) -> LEVEL -> +10.1dB -> MID -> BASS/TREBLE -> output.
         for (int i = 0; i < n; ++i)
         {
-            const double wetLF = wetLFCorr.process(data[i]);                    // V2 wet-path bass-bump calibration
-            const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i];   // diag: pure-wet measure
-            const double bl = blendLevel.process(dry, wetLF);                  // V6
-            const double midded = mid.process(bl);                             // V6: MID + MID SHIFT
-            const double toned = warpShelf.process(tone.process(midded));      // V7 tone + base-rate warp trim
-            data[i] = output.process(toned);                                   // V8 output
+            const double wetLF = wetLFCorr.process(data[i]);                 // V2 wet-path bass-bump calibration
+            const double wetHF = wetHFCorr.process(wetLF);                   // V2 wet-path 3-4 kHz calibration
+            const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
+            const double bl = blendLevel.process(dry, wetHF);                // V6
+            const double midded = mid.process(bl);                           // V6: MID + MID SHIFT
+            const double toned = warpShelf.process(tone.process(midded));    // V7 tone + base-rate warp trim
+            data[i] = output.process(toned);                                 // V8 output
         }
     }
 
@@ -208,8 +209,9 @@ private:
     V2BlendLevelStage blendLevel;
     V2MidStage mid;
     V2PeakingToneStage tone;
-    ToneWarpShelf warpShelf; // base-rate tone-stack top-octave warp correction (calibration shelf)
+    ToneWarpShelf warpShelf;   // base-rate tone-stack top-octave warp correction (calibration shelf)
     WetLFCorrection wetLFCorr; // wet-path bass-bump calibration (shipped ON, see header)
+    WetHFCorrection wetHFCorr; // wet-path 3-4 kHz calibration (shipped ON, see header)
     V2OutputStage output;
 
     std::vector<double> dryTap;

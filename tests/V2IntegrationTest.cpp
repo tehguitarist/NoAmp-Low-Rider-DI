@@ -34,6 +34,9 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kFs = 48000.0;
+// Wet-HF calibration gate threshold (WetHFCorrection.h) — the bell-boost delta (g@3400 - g@1050)
+// reads 9.08 dB ablated vs 11.83 dB active; 10.5 passes active (+1.3) and FAILS ablated (-1.4).
+constexpr double kWetHFBoostGate = 10.5;
 
 bool finiteBounded(const std::vector<double>& x, double bound)
 {
@@ -193,8 +196,9 @@ int main()
         dsp.setParams(1.0, 0.5, 0.0, 0.5, 0.5, true, 0.5, 0.5, false); // blend=full dry, level/mid/tone flat
         dsp.reset();
         const double gainDb = magnitudeDb(dsp, 1000.0, 0.3);
-        std::printf("      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[2] = %s compensates to 0 dB at DAW)\n",
-                    gainDb, "0.618");
+        std::printf(
+            "      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[2] = %s compensates to 0 dB at DAW)\n",
+            gainDb, "0.618");
         // Voltage-domain measurement (DSP output in volts). kOutputMakeup[2] = 0.618 is calibrated
         // so that this × kOutputMakeup/kInputRef = 0 dB at the DAW output (T-002 anchor). Tight band:
         // V2's U3B fixed +10.1 dB means the dry path CANNOT be below unity + pot losses (~+2.5 dB
@@ -215,6 +219,11 @@ int main()
         const double notch = magnitudeDb(dsp, 750.0, 0.3);
         const double highBump = magnitudeDb(dsp, 2700.0, 0.3);
         const double hf8k = magnitudeDb(dsp, 8000.0, 0.3);
+        // Wet-path 3-4 kHz calibration (src/dsp/WetHFCorrection.h). Gated as a BOOST DELTA (bell
+        // centre 3400 Hz minus out-of-bell reference 1050 Hz), immune to the wet path's own darkness.
+        const double bellCenter = magnitudeDb(dsp, 3400.0, 0.3);
+        const double bellRef = magnitudeDb(dsp, 1050.0, 0.3);
+        const double bellBoost = bellCenter - bellRef;
         std::printf("      LF edge @25Hz = %.1f dB (target ~-15 dB; see class-comment gap note (b))\n", lfEdge);
         std::printf("      low bump @70Hz = %.1f dB (target ~-3 dB)\n", lowBump);
         std::printf("      deep notch @750Hz = %.1f dB (target ~-36 dB; see class-comment gap note (a))\n", notch);
@@ -229,6 +238,9 @@ int main()
         check(lowBump > 4.5, "wet-LF bass-bump calibration active @70Hz (FAILS with NALR_WETLF_OFF)");
         check(notch < -20.0, "§1 deep notch present (< -20 dB)");
         check(highBump > -15.0 && highBump < 5.0, "§1 high bump in range");
+        std::printf("      wet-HF bell boost (g@3400 - g@1050) = %.2f dB\n", bellBoost);
+        // Wet-HF calibration gate (WetHFCorrection.h, guardrail #3): FAILS with NALR_WETHF_OFF.
+        check(bellBoost > kWetHFBoostGate, "wet-HF 3-4kHz calibration active (FAILS with NALR_WETHF_OFF)");
         // ABSOLUTE, not relative-to-notch (changed 2026-07-16, ISS-008). This was `hf8k < notch`,
         // which couples an HF-rolloff assertion to the DEPTH OF THE NOTCH — a different §1 feature
         // that legitimately moves. Removing kDryGain deepened the notch -21.9 -> -26.7 dB (toward its

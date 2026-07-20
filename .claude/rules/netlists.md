@@ -274,6 +274,14 @@ the bell lifts 40-80 Hz while sparing 25 Hz. **So the code's wet-path LF respons
 from a naive C10/R14 read — that difference is the calibration, not a transcription error. Do not
 "correct" it back.** V2 has the same layer (milder). See CLAUDE.md V1L SUB-INVESTIGATION (resolved).
 
+**⚠ MODEL NOTE (2026-07-21): a SECOND named calibration layer sits on the same wet path (before BLEND)
+— `src/dsp/WetHFCorrection.h`, a ~3.4 kHz peaking bell (+3 dB/Q1.1).** V1L and V2 (never V1E) run
+~2.5-3.5 dB dark across 1.6-5 kHz vs the NAM captures; the model already matches SPICE §1 there, so
+this is a DELIBERATE capture-match departure from §1 (the ⚖ rule would leave it, but the user chose to
+match the captures). Same rule as the LF bell: the code's wet-path 2-5 kHz response deliberately
+differs from a naive schematic read — do NOT "correct" it back. Shared by V1L+V2 (same params). See
+CLAUDE.md USER-FLAGGED TWEAKS "V2 HF ~2-4 kHz" (resolved) and WetHFCorrection.h's header.
+
 ## L6. BLEND → LEVEL (single inverting stage IC3A) [✓]
 
 ```

@@ -326,7 +326,24 @@ without images.
 > From the user's visual/aural read of the dashboard. The BASS items are being fixed NOW (same
 > wet-path LF magnitude class as item 1's V1L bass hump — see the V1L SUB-INVESTIGATION); the notch
 > and HF items are queued for later:
-> - **V2 HF ~2–4 kHz is ~3 dB LOW.** (Related to but distinct from item 3's V1E 1–6 kHz; this is V2.)
+> - **V2 HF ~2–4 kHz is ~3 dB LOW.** ✅ **DONE 2026-07-21 — and it was a SHARED V1L+V2 deficit, not
+  V2-only.** Investigating all three revs (user ask) found V1E already correct at 2–4 kHz (±0.2 dB
+  clean) but BOTH V1L and V2 consistently ~2.5–3.5 dB dark across ~1.6–5 kHz, centred ~3.5 kHz,
+  LINEAR (on the clean sweep) and KNOB-INDEPENDENT (constant across treble 0.30→0.75, drive
+  0.25→0.90, presence 0.30→0.75 — a fixed wet-path property, not under-delivered TREBLE/PRESENCE).
+  ⚠ **Capture-vs-SPICE, closed by MATCHING THE CAPTURES per explicit user instruction.** At the §1
+  condition the MODEL already matches the author's SPICE high-bump (`analysis/hf_s1_check.py`: V1E
+  +1.99@3150 vs §1 +1.5; V2 −8.80@2806 vs §1 −10, model even ~1 dB brighter), so the NAM captures
+  carry ~3 dB MORE 3–4 kHz than SPICE itself — the ⚖ rule would normally leave it best-effort. The
+  user steered to match the captures ("get the top end right") and pre-authorised a small EQ, so the
+  fix is a wet-path **peaking bell** `src/dsp/WetHFCorrection.h` (3400 Hz/+3 dB/Q1.1, wet path before
+  BLEND, ON V1L+V2, OFF V1E — mirrors WetLFCorrection), documented in-code as a DELIBERATE departure
+  from §1 (guardrail #4). Results (SHAPE, gap_audit): V2 3225/4064 Hz driven −3.29/−3.53 (both HUGE)
+  → −0.62/−1.19; V1L clean 2560/3225/4064 −3.14/−3.25/−2.49 → −1.52/−0.72/−0.09. Pooled target-band
+  (1.5–6 kHz) RMS V1L 3.77→2.39, V2 3.30→1.59; guard band flat/improving; V1E bit-identical. Gated by
+  the wet-HF boost-delta check in V1Late/V2 IntegrationTest (ablate `NALR_WETHF_OFF` ⇒ FAILS; boost
+  11.13/11.83 active vs 8.37/9.08 ablated). New diagnostics: `analysis/hf_s1_check.py`,
+  `analysis/wet_hf_verify.py`. 30/30 green.
 > - **V2 BASS peak too HIGH: plugin peaks ~90 Hz, should be ~70 Hz.** ✅ **DONE 2026-07-20** — same
 >   wet-path bell as V1L, milder (V2 50 Hz/+4 dB/Q1.2, refined after ear-check; `WetLFCorrection.h`).
 >   Worst-case capture RMS 1.98→1.85. See the ✅✅ RESOLVED banner above.
@@ -507,7 +524,16 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-21, LATEST session): ✅ V1E TWIN-T NOTCH CENTRE FIXED (user-flagged tweak).**
+> **Last change (2026-07-21, LATEST session): ✅ V1L+V2 HF 2–4 kHz DEFICIT FIXED (user-flagged V2
+> item, extended to all revs).** A shared ~2.5–3.5 dB dark band ~1.6–5 kHz on V1L and V2 (V1E already
+> correct), LINEAR + knob-independent. The model already matches SPICE §1 there, so the NAM captures
+> carry ~3 dB more than SPICE — closed by MATCHING THE CAPTURES per explicit user instruction (a
+> documented departure from the ⚖ rule, guardrail #4). Fix: wet-path peaking bell
+> `src/dsp/WetHFCorrection.h` (3400 Hz/+3 dB/Q1.1, ON V1L+V2, OFF V1E; mirrors WetLFCorrection).
+> V2 3225/4064 Hz driven −3.29/−3.53 (HUGE) → −0.62/−1.19; V1L clean improves across 2.5–4 kHz.
+> Gated by the wet-HF boost-delta check in both integration tests (fails on `NALR_WETHF_OFF`). New
+> diagnostics `analysis/hf_s1_check.py` + `analysis/wet_hf_verify.py`. 30/30 green; reports regenerated.
+> See the USER-FLAGGED TWEAKS block for full detail. **Prior (2026-07-21): ✅ V1E TWIN-T NOTCH CENTRE FIXED (user-flagged tweak).**
 > The "~630 Hz" premise was REFUTED — all 11 pedal captures put the notch at 674-762 Hz (mean 721);
 > "630" was the notch's left SHOULDER on the dashboard. The real defect was V1e's plugin composite
 > notch sitting ~35 Hz HIGH (750 vs 715). Fixed with a per-rev cap scale `kV1eNotchFreqScale=1.05` on
@@ -536,9 +562,9 @@ without images.
 > the dry-leak null); a narrow bell lifts 40-80 Hz while sparing 25 Hz, threading both gates. Also
 > committed: `src/dsp/DiagFlags.h` (`NALR_NODRY` pure-wet diagnostic). 30/30 ctest green; reports
 > regenerated. Full record: `WetLFCorrection.h` header, the ✅✅ RESOLVED banner above,
-> [[v1l-bass-hump-mechanism-b]]. **QUEUED (logged, not done): V2 HF 2-4 kHz +3 dB, V2/V1E twin-T notch
-> ~3 dB deeper, V1E twin-T notch 800→630 Hz (see the USER-FLAGGED TWEAKS block — the notch-frequency
-> one has a schematic-tension caveat to resolve first).**
+> [[v1l-bass-hump-mechanism-b]]. **QUEUED (logged, not done): V2/V1E twin-T notch depth (V2 ~1–3 dB
+> shallow; V1E now ~2 dB too DEEP after the centre fix — small). V1E twin-T notch centre ✅ DONE
+> 2026-07-21; V1L+V2 HF 2–4 kHz ✅ DONE 2026-07-21 (WetHFCorrection bell — see USER-FLAGGED TWEAKS).**
 >
 > **Prior (2026-07-19): GAPS J AND E CLOSED — three real bugs, all found
 > capture-free.** (1) **Two POLARITY INVERSIONS**: chowdsp's `WDFSeriesT` returns a child's voltage

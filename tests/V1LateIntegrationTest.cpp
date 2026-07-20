@@ -17,6 +17,9 @@ namespace
 {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kFs = 48000.0;
+// Wet-HF calibration gate threshold (WetHFCorrection.h) — the bell-boost delta (g@3400 - g@1050)
+// reads 8.37 dB ablated vs 11.13 dB active; 10.0 passes active (+1.1) and FAILS ablated (-1.6).
+constexpr double kWetHFBoostGate = 10.0;
 
 bool finiteBounded(const std::vector<double>& x, double bound)
 {
@@ -139,8 +142,9 @@ int main()
         dsp.setParams(1.0, 0.5, 0.0, 0.5, 0.5, 0.5); // blend=full dry, level noon, tone flat
         dsp.reset();
         const double gainDb = magnitudeDb(dsp, 1000.0, 0.3);
-        std::printf("      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[1] = %s compensates to 0 dB at DAW)\n",
-                    gainDb, "1.121");
+        std::printf(
+            "      dry-path 1 kHz gain = %.2f dB (voltage-domain; kOutputMakeup[1] = %s compensates to 0 dB at DAW)\n",
+            gainDb, "1.121");
         // Voltage-domain measurement (DSP output in volts). kOutputMakeup[1] = 1.121 is calibrated
         // so that this × kOutputMakeup/kInputRef = 0 dB at the DAW output (T-002 anchor). Tight gate
         // to catch accidental stage changes that would drift the unity point.
@@ -168,6 +172,12 @@ int main()
         const double lowBump = magnitudeDb(dsp, 70.0, 0.3);
         const double notch = magnitudeDb(dsp, 750.0, 0.3);
         const double highBump = magnitudeDb(dsp, 3500.0, 0.3);
+        // Wet-path 3-4 kHz calibration (src/dsp/WetHFCorrection.h). Gated as a BOOST DELTA (bell
+        // centre 3400 Hz minus an out-of-bell reference 1050 Hz) so the threshold is immune to the
+        // wet path's own darkness at that band. The +3 dB/Q1.1 bell lifts this delta by ~+2.8 dB.
+        const double bellCenter = magnitudeDb(dsp, 3400.0, 0.3);
+        const double bellRef = magnitudeDb(dsp, 1050.0, 0.3);
+        const double bellBoost = bellCenter - bellRef;
         const double passband = lowBump; // §1 is normalised to its own low bump
         // Search the -40 dB (re passband) crossing above the high bump by bisecting magnitude.
         double flo = 4000.0, fhi = 20000.0;
@@ -193,6 +203,10 @@ int main()
         check(lowBump > 1.5, "wet-LF bass-bump calibration active @70Hz (FAILS with NALR_WETLF_OFF)");
         check(notch < -15.0, "§1 deep notch present (< -15 dB)");
         check(highBump > -6.0 && highBump < 6.0, "§1 high bump in range");
+        std::printf("      wet-HF bell boost (g@3400 - g@1050) = %.2f dB\n", bellBoost);
+        // Wet-HF calibration gate (WetHFCorrection.h, guardrail #3): FAILS with NALR_WETHF_OFF
+        // (boost delta 11.13 active vs 8.37 ablated; threshold 10.0).
+        check(bellBoost > kWetHFBoostGate, "wet-HF 3-4kHz calibration active (FAILS with NALR_WETHF_OFF)");
         check(minus40Hz > 10000.0 && minus40Hz < 12000.0,
               "§1 -40 dB point near ~11 kHz (R48/R49=22k §1-match; FAILS the old 33k build @9.15 kHz)");
     }
