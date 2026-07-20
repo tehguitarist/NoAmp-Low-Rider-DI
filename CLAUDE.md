@@ -153,19 +153,123 @@ without images.
 >   a "sub-100 Hz" fix, dropping the hump peak ~⅓ oct (the OPPOSITE sign from V1L/V2). `V1EarlyBlendLevelTest`
 >   had ALSO been updated to 220n (validated the fudge against itself, L-001) — reference restored to 47n.
 >   **§1 bump peak 70→94 Hz (dead-on §1's 90); ALL V1E captures now match (plug 100 vs ped 98).** V1E CLOSED.
-> - **V1L: NO fudged cap — this half is genuine and stays open, best-effort.** Its LF caps are all
->   schematic (C10 10n/R14 100k = the ISS-009-confirmed 159 Hz wet-buffer HP; C12 47n; C42 4.7n). Isolated
->   §1 peaks 100 (pure) / 114 (with dry-leak) vs §1's ~70-90. TWO contributors, both best-effort: (a) the
->   159 Hz HP is schematic (§1's "70" may itself be a low graph read — §1 calls V1E/V1L "broadly similar"
->   and V1E is 90); (b) a **V1L-only ~40 Hz dry/wet cancellation null** (−24 dB at drive=0, filling to
->   ~1 dB at capture drives — the flat dry leaking through the BLEND pot vs the phase-shifted wet). The
->   null is **UNARBITRABLE**: pedal is smooth AT CAPTURE DRIVE but there is NO V1L low-drive capture, and
->   the topology (100k pot, C12 47n, direct dry wire) is schematic-faithful. Do NOT retune V1L's schematic
->   caps or the blend model to chase it. New keeper tool: `analysis/bass_hump_localise.py` (isolated §1
->   wet-path bump-peak localiser vs the SPICE targets). Reports regenerated 2026-07-20 (post-fix).
+> - **V1L: NO fudged cap** — its LF caps are all schematic (C10 10n/R14 100k = the ISS-009-confirmed
+>   159 Hz wet-buffer HP; C12 47n; C42 4.7n) — **but this half is now an ACTIVE, IN-PROGRESS
+>   correction, not "stays open best-effort" (that framing is SUPERSEDED — see below).**
 > - ⚠ **What I first chased and REFUTED:** (1) "compression moves the peak" — no, plugin peak is
 >   level-independent; (2) "drive-knob moves the peak" — no, isolated peak is FLAT across drive (V1L 114,
 >   V2 85 at every drive); an earlier "drive-dependent" read was a PRESENCE-setting confound.
+>
+> **⭐ V1L SUB-INVESTIGATION (2026-07-20, same session) — WHY V1L DIFFERS FROM V1E/V2, THREE
+> CORRECTION SHAPES TRIED, ONE WORKS BUT IS DRIVE-DEPENDENT — READ BEFORE TOUCHING
+> `src/dsp/V1LPhaseCorrectionPrototype.h`.**
+>
+> **Why V1L alone (not V2, despite V2 sharing the same direct-wire dry leg / cap-coupled wet leg
+> BLEND topology): PHASE, measured, not guessed.** Isolated (drive=0, presence=0, tones flat, dry
+> forced to zero — `NALR_NODRY` diagnostic pattern) complex-transfer comparison at 25-100 Hz:
+> V1E and V2 track each other within a few degrees at every frequency (e.g. 25 Hz: +50.1° / +53.4°).
+> **V1L consistently carries ~45-52° MORE phase lead at 25-63 Hz**, tapering out by 100 Hz — the
+> fingerprint of one extra single-pole HP in the cascade. There is exactly one confirmed,
+> V1L-EXCLUSIVE candidate: **the wet make-up buffer's C10(10n)/R14(100k), a 159 Hz corner neither
+> V1E nor V2 has an equivalent of** (V1E has no such buffer stage at all; V2's nearest analog, C41/R46,
+> sits at a gentler, now-restored 72 Hz). DRIVE module coupling caps (C28/C8) and the twin-T were
+> both empirically ruled out first (bypass tests / shared-class comparison against the now-clean V1E).
+>
+> **The destructive-interference mechanism.** V1L's BLEND pot is a real potentiometer (not an ideal
+> crossfade): at BLEND=100% the dry leg still carries the FULL 100 kΩ (a real pot's "off" leg is
+> never infinite), competing against the wet leg's C12 (47 nF) reactance, which is comparable
+> magnitude at ~34 Hz. That's schematically faithful and shared by V2 too (same topology, minimal
+> effect: leak contribution only ~1.0-1.4 dB). On V1L the SAME mechanism produces a **-12.6 dB**
+> leak contribution (10x bigger) purely because the wet signal arrives ~50° out of phase with the
+> (zero-phase, direct-wire) dry signal — destructive interference needs phase misalignment, not just
+> comparable impedance, and V1L has it, V1E/V2 don't.
+>
+> **THREE CORRECTION SHAPES TRIED, applied to the WET signal only, before BLEND:**
+> 1. **Flat 2nd-order RBJ low-shelf** (ToneWarpShelf's usual pattern) — REJECTED. Needed +12 dB to hit
+>    the isolated peak target, and at that magnitude completely DOMINATED the downstream BASS/TREBLE
+>    peaking stage: the peak locked to ONE frequency regardless of drive/bass/treble knob position —
+>    it broke the tone controls' own knob-responsiveness, a worse defect than the one being fixed.
+> 2. **Pole-zero magnitude filter** (cancel C10's 159 Hz zero analytically, reintroduce a lower pole —
+>    i.e. exactly what "C10 were larger" would do, without touching the schematic value, guardrail #1
+>    compliant) — REJECTED. Converged BEAUTIFULLY in isolation (peak 100→70.3 Hz, edge -19.7→-10.4 dB,
+>    both §1 targets hit simultaneously) — but FAILED `V1LateIntegrationTest`'s existing §1 gate at the
+>    REAL reference condition (dry leg genuinely present, not isolated): baseline LF edge was already
+>    fine (-9.7 dB, close to §1's -10), the correction made it much WORSE (-19.9 dB). **Root cause:
+>    destructive interference is a PHASE problem — boosting the wet path's MAGNITUDE just feeds more
+>    amplitude into the still-misaligned phase sum, deepening the very null it was meant to fix.**
+>    This is now **L-014** (see Lessons). Methodological lesson for future tuning: an isolated
+>    (dry-forced-to-zero) test condition is NOT the same thing as rendering at the reference knob
+>    settings through the REAL signal path — always validate against the latter, which is what the
+>    project's own existing gates already do.
+> 3. **1st-order allpass** (unity magnitude, phase-only) tuned to cancel the ~50° excess — WORKS
+>    DIRECTIONALLY, NEVER REGRESSES, but has an unresolved drive-dependence (see below). Isolated:
+>    null(25-63Hz re peak) -24.4→-8.4 dB, peak 125→80 Hz — **both improve together from a
+>    magnitude-neutral fix**, strong evidence the interference was inflating the apparent peak error,
+>    not a separate defect. Passes `V1LateIntegrationTest`'s §1 gate (unlike attempt 2) — low bump
+>    moved -1.7→+5.7 dB (target ~+0.5, PASS), LF edge -9.7→-6.4 to -19.9 dB depending on corner tested
+>    (fc=50 for the magnitude test, fc=15 for the phase test — DIFFERENT numbers, don't conflate the
+>    two rejected/accepted attempts' fitted constants). Real captures (BL0.30 initially excluded,
+>    now RE-INCLUDED, see below): D0.45 BL0.65 improved dramatically (+0.34..+0.66 oct baseline →
+>    +0.00..+0.29 oct corrected, near-perfect at several points); D0.65 BL1.00 only marginal
+>    (+0.70→+0.68 oct) — never worse than baseline at any tested point.
+>
+> **⚠ THE OPEN PROBLEM: a FIXED allpass corner's effectiveness is DRIVE-DEPENDENT** (isolated
+> knob-transfer sweep, `NALR_ALLPASS_HZ` diagnostic):
+> ```
+>   drive=0.00, tones flat            : baseline 114 Hz -> corrected  85 Hz  (full effect)
+>   drive=0.65, tones flat            : baseline 114 Hz -> corrected 105 Hz  (partial)
+>   drive=0.00, bass/treble=capture1  : baseline 126 Hz -> corrected  85 Hz  (full effect --
+>                                        BASS/TREBLE alone does NOT degrade the correction)
+>   drive=0.65, bass/treble=capture1  : baseline 114 Hz -> corrected 114 Hz  (ZERO effect)
+> ```
+> DRIVE is the variable that breaks the transfer; BASS/TREBLE do not. Note the BASELINE peak does
+> **not** move with drive alone (114 Hz at both drive=0 and drive=0.65) — only the CORRECTION's
+> effectiveness does. **Two candidate mechanisms, NOT yet distinguished — this is the first thing
+> the next session must MEASURE, not assume:**
+> - **Mechanism A:** the wet path's phase excess is ITSELF drive-dependent (the zener drive module's
+>   own coupling caps interact with the pot's changing resistance as DRIVE moves, adding phase on top
+>   of C10/R14's fixed contribution). If true, a drive-tracking allpass corner models something REAL.
+> - **Mechanism B:** the phase excess is CONSTANT (still ~50° at drive=0.65), but DRIVE changes the
+>   wet/dry AMPLITUDE BALANCE at BLEND (louder wet at higher drive), changing how the same constant
+>   phase error manifests in the sum. If true, the fixed allpass already corrects the right thing, and
+>   drive-modulating it would be curve-fitting a symptom with the wrong lever (the L-008 pattern).
+> **First action: re-run the isolated phase-compare methodology at drive=0.65 instead of drive=0**
+> (dry forced to zero, complex transfer at 25-63 Hz, V1L vs V1E/V2). ~50° unchanged ⇒ Mechanism B,
+> do NOT drive-modulate this filter — look at the dry/wet amplitude ratio instead. Grown toward ~90°
+> ⇒ Mechanism A, proceed to fit a drive-vs-corner relationship.
+>
+> **✅ AUTHORIZED DEPARTURE FROM GUARDRAIL #6 (user, 2026-07-20):** if Mechanism A is confirmed, the
+> user has explicitly authorised a PER-KNOB (drive-tracking) correction for this specific case — a
+> deliberate, acknowledged break from "one correction per deficit, never per knob, else it's a curve
+> fit." Justification, to be restated in the shipped file's own header regardless of which mechanism
+> is confirmed: (a) the physical cause is fully hunted and documented (guardrail #2 satisfied in
+> full — this is not a guess); (b) the base drive-independent correction is ALREADY a strict
+> improvement with zero measured regressions — this refines a working correction, doesn't build one
+> on an unverified premise; (c) if Mechanism A holds, a drive-tracking corner fits a REAL, physically
+> explained mechanism (the drive pot's own resistance change), not an arbitrary per-capture value.
+>
+> **BL0.30 RE-INCLUDED as fitting evidence (user, 2026-07-20)** — its earlier exclusion (70% dry,
+> hypothesised to over-weight the dry leg's own quirks) was never actually tested against THIS
+> correction; with only 3 V1L captures total it's too valuable to discard without a tested reason.
+> One data point already in hand: at drive=0.40 the base (non-modulated) allpass OVERSHOT badly
+> (baseline +0.36 oct → corrected -0.69 to -1.00 oct) — re-check once the drive mechanism is settled;
+> it may itself be evidence for whichever mechanism wins (BL0.30's low BLEND shifts the wet/dry
+> balance far more than BASS/TREBLE alone does, which fits Mechanism B's shape).
+>
+> **⚠ Practical constraint for whatever fit is attempted:** only 3 usable V1L captures exist to
+> constrain a per-knob relationship (drives 0.65/0.45/0.40, each at a different BLEND too) — fitting
+> a multi-knob curve through 3 points is a real overfitting risk. Prefer fitting against the
+> CAPTURE-FREE isolated phase measurement swept across drive (cheap, as many points as needed) and
+> using the 3 captures only as a final cross-check, not as the fitting data itself (mirrors guardrail
+> #5's "tune to analog truth, not a single capture").
+>
+> **Prototype code committed as a starting point:** `src/dsp/V1LPhaseCorrectionPrototype.h` — a
+> working 1st-order allpass, wired into `V1LateDSP.h`'s wet path before BLEND, **OFF BY DEFAULT** (a
+> no-op, verified bit-identical to pre-investigation baseline) unless `NALR_ALLPASS_HZ` is set in the
+> environment. Zero effect on shipped/DAW audio as committed. Full investigation, both rejected
+> shapes, the phase-measurement methodology, and the drive-transfer table are documented in the
+> file's own header — read it before extending. `analysis/bass_hump_localise.py` (isolated §1
+> wet-path bump-peak localiser) is the companion keeper diagnostic. 30/30 ctest green throughout.
 >
 > 1. **Bass-hump frequency is shifted on ALL THREE revisions, but in OPPOSITE directions** (peak-bin
 >    read of `fr.sweep_clean`, raw dB): **V1L** pedal peaks ~80–100 Hz, plugin ~127 Hz, all 3 captures
@@ -341,9 +445,27 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-20, LATEST session): ITEM 1 (bass hump) root-caused — TWO FUDGED SCHEMATIC
-> CAPS restored (V2 C41 22n, V1E C12 47n); V1E CLOSED, V2 improved, V1L best-effort. See the ✅ ITEM 1
-> block near the top and L-013. Commits a3eae69, 168ed57. Reports regenerated. 30/30 ctest green.**
+> **Last change (2026-07-20, LATEST session, session ends here — pick up per "FIRST ACTION" below):
+> ITEM 1 (bass hump) root-caused. V1E CLOSED, V2 improved (two fudged schematic caps restored, L-013).
+> V1L: root cause found via PHASE measurement (not magnitude) — a ~50° excess phase lead from the
+> V1L-exclusive C10/R14 159 Hz wet-buffer HP turns the schematic-faithful BLEND-pot leak (shared,
+> harmless on V1E/V2) into a deep destructive-interference null on V1L alone. Two correction shapes
+> REJECTED (flat shelf dominates BASS/TREBLE; magnitude pole-zero fixes isolation but fails the real
+> §1 gate — destructive interference is a phase problem, L-014). Third (1st-order allpass, phase-only)
+> WORKS, never regresses, but its effectiveness is drive-dependent for an UNRESOLVED reason (two
+> candidate mechanisms, not yet distinguished). User has AUTHORISED a per-knob (drive-tracking)
+> correction as a deliberate guardrail #6 exception IF the mechanism check confirms it's warranted.
+> See the ⭐ V1L SUB-INVESTIGATION block above and `src/dsp/V1LPhaseCorrectionPrototype.h`'s own header
+> for full detail — start there, not from scratch.**
+> **FIRST ACTION NEXT SESSION:** measure V1L's isolated wet-path phase excess (vs V1E/V2, 25-63 Hz,
+> `NALR_NODRY`-style dry-forced-to-zero condition) at drive=0.65 instead of drive=0. Still ~50° ⇒
+> Mechanism B (constant phase, drive changes the wet/dry BALANCE not the phase — do NOT drive-modulate
+> the allpass, look at BLEND-node amplitude ratio instead). Grown toward ~90° ⇒ Mechanism A (phase
+> itself is drive-dependent — proceed to fit a drive-vs-corner relationship, using the isolated sweep
+> as the fitting data and the 3 captures, BL0.30 now included, only as a cross-check per guardrail #5).
+> Commits a3eae69, 168ed57 (the two cap fixes, shipped/safe) plus this session's final commit adding
+> the allpass prototype — off by default, zero shipped-audio effect, see its own file header for the
+> complete record. Reports regenerated post-cap-fix. 30/30 ctest green throughout, prototype included.**
 >
 > **Prior (2026-07-19): GAPS J AND E CLOSED — three real bugs, all found
 > capture-free.** (1) **Two POLARITY INVERSIONS**: chowdsp's `WDFSeriesT` returns a child's voltage
@@ -1251,6 +1373,26 @@ the gate FAILS when you delete the feature it guards.
 
 ### Lessons (hard-won, do not re-learn)
 
+- **L-014: A destructive-interference NULL is a PHASE defect — diagnose and fix it with phase, never
+  with a magnitude-only correction (which feeds it more amplitude and deepens it).** V1L's bass-hump
+  investigation (item 1) tried a magnitude pole-zero filter that converged beautifully on an ISOLATED
+  test (dry forced to zero) — peak and LF-edge both landed on §1's targets — then FAILED the project's
+  own existing gate (`V1LateIntegrationTest`'s §1 check) at the REAL reference condition, because the
+  isolated test never included the dry leg the correction would actually sum against. Magnitude-boosting
+  the wet path's LF content didn't fix the null the pedal doesn't have; it fed more amplitude into the
+  same phase-misaligned sum and made the null ~10 dB DEEPER. The tell that should have caught it
+  earlier: a magnitude correction tuned against an artificially isolated signal is a different
+  measurement than rendering at the SAME knob settings through the real, complete signal path — always
+  validate the latter, not a proxy, especially when the deficit involves TWO signals summing (dry+wet,
+  L+R, any parallel path) rather than one signal passing through one stage. Once reframed as a phase
+  problem — measured directly via a complex-transfer comparison across revisions (V1E/V2 track each
+  other within a few degrees at 25-100 Hz; V1L carries a consistent ~45-52° excess) — a PHASE-ONLY
+  (allpass, unity magnitude) correction fixed the null and the peak TOGETHER without the magnitude
+  side-effect, and never regressed at any tested setting. General rule: before building a magnitude
+  correction for a dip/null, ask whether the dip could be two signals cancelling — if so, measure
+  phase, not just magnitude, before choosing the correction's shape. Sibling of L-004 (validate the
+  premise before modelling a mechanism) and L-010 (compute magnitude before building) — L-014 adds
+  "and check you're computing the magnitude of the right QUANTITY (phase vs level)."
 - **L-013: A LINEAR schematic value altered to flatten one FR band silently moves a POLE/CORNER
   everywhere else — audit for it by comparing each shipped component value to the schematic, not by
   re-measuring.** The bass-hump-frequency error (item 1) was TWO independent instances of the same

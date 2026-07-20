@@ -29,6 +29,7 @@
 #include "V1LateStages.h"
 #include "DryTapDelay.h"
 #include "ToneWarpShelf.h"
+#include "V1LPhaseCorrectionPrototype.h"
 #include "ZenerDriveClipRecovery.h"
 #include "../utils/ChangeGate.h"
 #include "Calibration.h"
@@ -95,6 +96,7 @@ public:
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         warpShelf.prepare(baseFs);
+        phaseCorrProto.prepare(baseFs); // PROTOTYPE, off unless NALR_ALLPASS_HZ set -- see header
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -112,6 +114,7 @@ public:
         dryDelay.reset();
         tone.reset();
         warpShelf.reset();
+        phaseCorrProto.reset();
         output.reset();
     }
 
@@ -200,7 +203,8 @@ public:
         // Stage 3 (base rate): BLEND(dry, wet) -> LEVEL -> BASS/TREBLE -> output buffer.
         for (int i = 0; i < n; ++i)
         {
-            const double b = blendLevel.process(dryTap[(size_t) i], data[i]); // L6
+            const double wetPh = phaseCorrProto.process(data[i]); // PROTOTYPE, no-op unless env-enabled
+            const double b = blendLevel.process(dryTap[(size_t) i], wetPh); // L6
             const double toned = warpShelf.process(tone.process(b));          // L7 tone + base-rate warp trim
             data[i] = output.process(toned);                                  // L8 output
         }
@@ -213,6 +217,7 @@ private:
     V1LateBlendLevelStage blendLevel;
     V1LatePeakingToneStage tone;
     ToneWarpShelf warpShelf; // base-rate tone-stack top-octave warp correction (calibration shelf)
+    V1LPhaseCorrectionPrototype phaseCorrProto; // PROTOTYPE (off by default) -- see header for status
     V1LateOutputStage output;
 
     std::vector<double> dryTap;
