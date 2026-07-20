@@ -23,6 +23,16 @@ THE TEST -- an INDEPENDENT estimator, not a second opinion from the same one
   a passing grade; it is an untested claim. This is a real limitation of how the guard is used
   elsewhere and it is why 3 kHz (no tone at all) cannot be validated by it in principle.
 
+RESOLVED 2026-07-20 -- THE RULER IS SOUND (priority item #2). Run at OS=8x on all 11 captures:
+  * At 4 kHz EVERY plugin row agrees to <=0.20 pp with no interpolation.
+  * At 2 kHz every plugin row is IN-BRACKET; the only rows the old distance-to-nearest-bound metric
+    flagged DISAGREE (V2 D0.50 BL{1.00,0.90,0.95}) agree to <0.10 pp once the sweep is interpolated
+    to the tone's own -14 dBFS level -- a metric flaw, not a real disagreement (verdict now fixed).
+  => The plugin's flat/level-independent HF THD is REAL PLUGIN OUTPUT, not a Farina artefact. Every
+     HF-THD-based conclusion (Gap D's ~11 dB HF shortfall, any Gap F revisit) is trustworthy as a
+     MEASUREMENT. What the flatness MEANS (why the plugin's HF THD ignores drive where the pedal's
+     does not) is a separate CIRCUIT question, not a ruler bug -- see gap-audit "HF THD RULER".
+
 Run from repo root:
   python3.11 analysis/hf_thd_flatness_check.py [--os 8]
 """
@@ -76,8 +86,8 @@ def main():
     caps.sort(key=lambda pq: (pq[1].get("rev"), -float(pq[1].get("drive", 0))))
 
     print(f"HF THD flatness -- Farina sweep vs INDEPENDENT tone estimator (OS={a.os}x)")
-    print("bracket: sweep(-18) <= tone(-14) <= sweep(-12).  WIDTH = sweep(-12) - sweep(-18).")
-    print("⚠ a narrow WIDTH means the bracket is trivially satisfiable => 'ok' proves little.\n")
+    print("verdict: sweep interpolated to the tone's -14 dBFS level; agree if |tone-interp| small.")
+    print("WIDTH = sweep(-12) - sweep(-18) = how level-DEPENDENT the THD is (a CIRCUIT property).\n")
 
     for hz in TONE_HZ:
         print(f"--- {hz:.0f} Hz " + "-" * 62)
@@ -96,28 +106,31 @@ def main():
                 seg = A.seg_of(sig, f"tone_{hz:.0f}")
                 t = tone_thd(seg, hz) if seg is not None and len(seg) else float("nan")
                 width = s[1] - s[0]
-                # TWO SEPARATE QUESTIONS -- the L-006 bracket as used elsewhere CONFLATES them:
-                #   (1) ORDERING: does THD rise with level between -18 and -12?
-                #   (2) AGREEMENT: do the two independent estimators give the same MAGNITUDE?
-                # Only (2) is evidence about estimator soundness. A flat or falling THD curve fails
-                # (1) for reasons that have nothing to do with the estimator, and that is exactly the
-                # regime we are investigating -- so the ordering form of the guard cannot be used
-                # here without begging the question.
-                near = min(abs(t - s[0]), abs(t - s[1])) if np.isfinite(t) else float("nan")
+                # AGREEMENT is the only estimator-soundness question (ORDERING is about the CIRCUIT).
+                # ⚠ THE FIX (2026-07-20): the earlier `|tone - nearest sweep BOUND|` metric penalised
+                # agreement on STEEP curves -- when THD rises fast with level, the -14 dBFS tone
+                # legitimately lands MID-bracket, far from either bound, so it was flagged DISAGREE
+                # even when perfectly bracketed. That is exactly backwards (it fails hardest in the
+                # level-DEPENDENT regime, where the two estimators are easiest to compare). Interpolate
+                # the sweep to the tone's OWN level (-14, linearly between -18 and -12) and compare
+                # there. This is the L-006-extension lesson taken to its conclusion.
+                e = s[0] + ((-14) - (-18)) / 6.0 * (s[1] - s[0])   # sweep THD interpolated to -14 dBFS
+                resid = t - e if np.isfinite(t) else float("nan")
+                in_bracket = min(s[0], s[1]) - 1e-9 <= t <= max(s[0], s[1]) + 1e-9 if np.isfinite(t) else False
                 if not np.isfinite(t):
                     v = "no tone segment"
                 else:
-                    agree = near <= max(0.15, 0.10 * max(s[0], s[1]))
-                    v = ("AGREE" if agree else "DISAGREE") + f" (|tone-sweep|={near:.2f}pp)"
-                    if not (s[0] <= t <= s[1]):
-                        v += "; non-monotonic in level" if agree else "; ordering also fails"
+                    agree = abs(resid) <= max(0.15, 0.10 * max(s[0], s[1], t))
+                    v = ("AGREE" if agree else "DISAGREE") + f" (tone-interp={resid:+.2f}pp"
+                    v += ", in-bracket)" if in_bracket else ", OUT of bracket)"
                 print(f"  {label:<22} {who:<6} {s[0]:>8.2f} {s[1]:>8.2f} {s[2]:>8.2f} "
                       f"{t:>8.2f} {width:>7.2f}  {v}")
         print()
 
     print("READ: AGREE on the plugin rows => the flat HF THD is REAL, not an estimator artefact, and")
-    print("may be used as evidence. DISAGREE => the Farina reading is suspect at that anchor.")
-    print("'non-monotonic in level' is a statement about the CIRCUIT, not about the estimator.")
+    print("may be used as evidence. DISAGREE (with OUT-of-bracket) => the Farina reading is suspect.")
+    print("WIDTH~0 with AGREE => the plugin genuinely emits a level-INDEPENDENT HF THD (a real model")
+    print("property, distinct from the pedal's level-dependent HF THD -- a circuit gap, not a ruler bug).")
     return 0
 
 

@@ -898,6 +898,26 @@ D0.40 BL0.30 P0.65         +25.5 at EVERY value                           +0.5
 
 ### V1L / Gap B — THE HF THD FLOOR IS REAL, AND IT IS THE RECOVERY SATURATOR (2026-07-19)
 
+> **✅ HF-THD RULER VALIDATED ACROSS THE WHOLE MATRIX — priority item #2 CLOSED (2026-07-20).**
+> `analysis/hf_thd_flatness_check.py` re-run at OS=8 on all 11 captures × {2 kHz, 4 kHz} × both
+> revisions of every rev. **Every plugin row AGREES**: the discrete-tone estimate (−14 dBFS, plain
+> harmonic binning) matches the Farina sweep interpolated to −14 dBFS to **≤0.37 pp, almost all
+> ≤0.10 pp**. Recorded: `analysis/reports/hf_thd_ruler_check.txt`. ⇒ **the plugin's flat/level- and
+> drive-independent HF THD is REAL PLUGIN OUTPUT, not a Farina estimator artefact.** Every HF-THD-based
+> conclusion — Gap D's ~11 dB HF shortfall, the Gap F/B saturator floor below, any Gap F revisit — is
+> **trustworthy as a measurement**. What the flatness MEANS (the plugin's HF THD ignores drive where
+> the pedal's rises with it — a real model gap, small absolute energy) is a separate CIRCUIT question,
+> not a ruler bug, and stays low-priority per "work the midband before the HF residual".
+>
+> **⚠ THE METRIC IN POINT 3 BELOW IS NOW SUPERSEDED.** Point 3 recommended re-checking bracket
+> rejections with `|tone − nearest sweep BOUND|`. That metric is ITSELF flawed on a STEEP curve: the
+> −14 dBFS tone legitimately lands mid-bracket, far from either bound, so it reads "disagree" when the
+> estimators actually agree (it fabricated 6 false DISAGREEs on this run). **The correct test is to
+> interpolate the sweep to the tone's own −14 dBFS level and compare there** (now the tool's default;
+> `in-bracket` is also reported as the robust L-006 pass/fail). Any `✗ bracket (L-006)` rejection in
+> `gapd_anchor_map.py` should be re-checked against the interpolated residual, NOT the nearest-bound
+> distance.
+
 **Tools: `analysis/hf_thd_flatness_check.py`, `analysis/v1l_sat_hf_ablate.py`.**
 
 **1. The observation.** The plugin's HF THD is nearly **LEVEL- and DRIVE-independent**. V1E's 3 kHz

@@ -301,11 +301,14 @@ without images.
 >    already-tracked Gap D V2 half** (main Gap-D block above, "V2 needs fewer harmonics at unchanged
 >    compression") seen from a frequency-shape angle rather than level-vs-drive — treat as
 >    corroborating Gap D, not a new gap, unless it turns out not to reduce to that mechanism.
-> 3. **V1E is ~2.5–3 dB light 1–6 kHz** (user read ~4 dB off the heatmap; measured mean is a bit
->    smaller but same sign/ballpark — confirmed real). Verified via `gap_audit.py`'s per-revision
->    CLEAN-sweep band table: 1016 Hz −3.13, 1280 −2.82, 1613 −2.54, 2032 −2.34, 2560 −2.41,
->    3225 −2.53, 4064 −2.26 dB, tapering to −0.76 by 6451 Hz. Not attributed to a stage yet — no
->    existing gap in the status table currently covers this band for V1E specifically.
+> 3. **V1E ~2.5–3 dB light 1–6 kHz — ✅ CLOSED 2026-07-20, STALE PREMISE (no broadband deficit on the
+>    current DSP).** The −3.13.. −2.26 dB numbers below were read off a report that PREDATES the
+>    bass-hump-fix regen. Re-measured on the post-regen DSP (gap_audit summary + direct render): the
+>    same anchors now read −0.90/−0.41/−0.10/+0.11/+0.06/−0.06/+0.22 dB — a ±0.5 dB match across
+>    1.3–4 kHz. The residual in that region is the narrow twin-T NOTCH position error (plugin ~756 Hz
+>    vs pedal ~673 Hz), i.e. the queued "V1E notch 800→630" tweak below, not a 1–6 kHz shortfall.
+>    (HISTORICAL: user read ~4 dB off the heatmap; gap_audit CLEAN-sweep band table then showed
+>    1016 Hz −3.13, 1280 −2.82, 1613 −2.54, 2032 −2.34, 2560 −2.41, 3225 −2.53, 4064 −2.26 dB.)
 > 4. **V1L BL0.30's FR shape looks very different from the other two V1L captures — confirmed, but
 >    it's expected physics, not a defect.** Its `fr.sweep_clean` curve is much flatter across the LF
 >    region (pedal swings only −11.8..+0.5 dB vs BL1.00's −8.9..+14.2 dB) because BL0.30 is 70% dry —
@@ -347,25 +350,39 @@ without images.
 >    wet-path PEAKING BELL (`src/dsp/WetLFCorrection.h`; see the ✅✅ RESOLVED banner). The V1L residual
 >    is now corrected, so downstream LF-anchored reads (Gap D's 100-110 Hz characterisation, null
 >    depth) are trustworthy on all three revs. Reports regenerated post-fix.
-> 2. **Validate the flat/level-independent HF THD reading** (existing item 6, "▶ NEXT STEPS" —
->    "do NOT fit yet"). This is a suspected MEASUREMENT artifact, not a circuit finding — same
->    category as the L-006 Farina edge-spike bug, which once found invalidated prior THD-vs-frequency
->    conclusions built on it. Until validated (independent low/discrete-tone cross-check, L-006-style
->    bracket), every HF-THD-based conclusion (Gap D's ~11 dB HF shortfall, any Gap F revisit) is
->    provisional. Narrower blast radius than #1 (only HF-THD work depends on it) but same
->    fix-the-ruler-first logic.
+> 2. **Validate the flat/level-independent HF THD reading — ✅ DONE 2026-07-20. THE RULER IS SOUND.**
+>    `analysis/hf_thd_flatness_check.py` re-run at OS=8 across ALL 11 captures × {2 kHz, 4 kHz}: on
+>    EVERY plugin row the independent discrete-tone estimator (−14 dBFS, plain harmonic binning, no
+>    shared failure mode with Farina) matches the Farina sweep interpolated to −14 dBFS to **≤0.37 pp,
+>    almost all ≤0.10 pp**. ⇒ the plugin's flat/level- and drive-independent HF THD is **REAL PLUGIN
+>    OUTPUT, not an estimator artefact** — every HF-THD-based conclusion (Gap D's ~11 dB HF shortfall,
+>    any Gap F revisit) is now trustworthy AS A MEASUREMENT. Recorded: `analysis/reports/hf_thd_ruler_
+>    check.txt`; full detail in gap-audit "HF-THD RULER VALIDATED". ⚠ Fixed the verdict metric while
+>    here: the old `|tone − nearest sweep bound|` check (and §899's "re-check with |tone−nearest sweep|"
+>    advice) is flawed on STEEP curves — interpolate the sweep to the tone's OWN level instead. What the
+>    flatness MEANS (plugin HF THD ignores drive where the pedal's rises — a real model gap, tiny
+>    absolute energy) is a separate CIRCUIT question, low priority per "midband before HF residual".
 > 3. **Gap D V2 half** (main Gap-D block above). The single biggest audible defect left (10+ dB THD
 >    error), but SELF-CONTAINED — doesn't bias other open items' measurements — and currently a stuck
 >    research problem with no untried mechanism (every drive-normaliser-class idea is refuted). High
 >    impact, low flow-on, low tractability right now; keep pursuing but don't expect #1/#2 to unblock
 >    it. Do #1 first anyway, since Gap D's own characterisation data is 100/110 Hz-anchored.
-> 4. **V1E ~2.5–3 dB light 1–6 kHz** (item 3 above). Real and confirmed, narrower blast radius than
->    #1/#2 (doesn't touch the 100 Hz-ish anchors nearly everything else reads), not yet attributed.
+> 4. **V1E ~2.5–3 dB light 1–6 kHz — ✅ CLOSED 2026-07-20: THE PREMISE IS STALE, no broadband deficit
+>    exists on the current DSP.** Item 3's −2.5..−3 dB numbers predate the bass-hump-fix report regen.
+>    Re-measured TWO independent ways on the post-regen DSP (gap_audit summary + a direct render,
+>    `analysis/v1e_1to6k_check.py` → `reports/v1e_1to6k_check.txt`): the 1016..4064 Hz anchors now read
+>    **−0.90/−0.41/−0.10/+0.11/+0.06/−0.06/+0.22 dB** (was −3.13.. −2.26) — the plugin MATCHES the pedal
+>    to ±0.5 dB across 1.3–4 kHz and runs POSITIVE at 5–6.5 kHz. The only real FR error in that region
+>    is a **narrow twin-T NOTCH misplacement** (plugin notch min ~756 Hz vs pedal ~673 Hz — a +3.3 dB
+>    shoulder @673 then a −6.4 dB dip @756), which is the SEPARATE queued "V1E notch 800→630 Hz" tweak,
+>    NOT a broadband 1–6 kHz deficit. Durable lesson: an FR delta read off a median-referenced SHAPE
+>    metric shifts across the WHOLE band when the reference (here the LF, changed by the bass-hump fix)
+>    moves — re-derive band deltas against the CURRENT report before actioning them (sibling of L-005).
 > 5. **Gap F.** Cheap re-check now that H err2 and Gap J (its suspected siblings) are both closed —
 >    may just dissolve for free. Low impact in isolation either way.
-> 6. **Gap D's ~11 dB intrinsic HF shortfall** (item 3, "▶ NEXT STEPS"). Sequence AFTER #2 — its
->    premise depends on trusting HF THD numbers. Already flagged low-audibility by the project's own
->    prior "work the midband before the HF residual" note; this ranking agrees with that.
+> 6. **Gap D's ~11 dB intrinsic HF shortfall** (item 3, "▶ NEXT STEPS"). ✅ UNBLOCKED 2026-07-20 —
+>    #2 is done, so its premise (trusting HF THD numbers) now holds. Still flagged low-audibility by
+>    the project's own "work the midband before the HF residual" note; this ranking agrees with that.
 > 7. **V1L Gap D polish** (tau/scHz never swept, item 0(b) above) — explicitly low value, park.
 > 8. **Housekeeping** (delete dead `src/dsp/GbwCorrection.h`, stale `analysis/reports/*` predating
 >    2026-07-19/20 — already regenerated fresh this session) — trivial, whenever convenient.
@@ -474,7 +491,15 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-20, LATEST session): ✅ BASS HUMP FULLY RESOLVED AND SHIPPED (V1E + V1L + V2).**
+> **Last change (2026-07-20, LATEST session): ✅ HF-THD RULER VALIDATED (priority item #2 CLOSED).**
+> Re-ran `analysis/hf_thd_flatness_check.py` at OS=8 across all 11 captures × {2 kHz, 4 kHz}: the
+> plugin's flat/level- and drive-independent HF THD is confirmed REAL by an independent discrete-tone
+> estimator (matches the Farina sweep interpolated to −14 dBFS to ≤0.37 pp, almost all ≤0.10 pp) — NOT
+> a Farina artefact. Every HF-THD conclusion (Gap D's ~11 dB HF shortfall, Gap F) is now trustworthy
+> as a measurement. Fixed the tool's verdict metric (interpolate-to-level, not distance-to-nearest-
+> bound — the latter fabricates false DISAGREEs on steep curves). No DSP change; docs/report only.
+> Recorded: `analysis/reports/hf_thd_ruler_check.txt`, gap-audit "HF-THD RULER VALIDATED". No-code-
+> change session. **Prior (same day, earlier session): ✅ BASS HUMP FULLY RESOLVED AND SHIPPED (V1E + V1L + V2).**
 > V1E CLOSED + V2 improved earlier via restoring two fudged schematic caps (L-013). This session
 > closed the V1L (and further improved the V2) LF bump with a wet-path **PEAKING BELL**
 > (`src/dsp/WetLFCorrection.h`, SHIPPED ON: V1L 50 Hz/+7 dB/Q1.2, V2 50 Hz/+4 dB/Q1.2; V1E unused;
@@ -986,11 +1011,14 @@ without images.
 > - Anchor map DONE (`gapd_anchor_map.py --rev V1L`, negative control PASSED): usable anchors
 >   **110, 220, 440, 2000, 3000**. **440 Hz is usable on V1L after all** — the expectation that the
 >   bridged-T would fail it was wrong.
-> - ⚠ **NEW, UNEXPLAINED, DO NOT FIT YET:** the plugin's HF THD is **level- AND drive-INDEPENDENT** on
->   every revision (V1E 3 kHz reads 2.6/2.8/2.8% at D0.50, D0.60 *and* D1.00; V1L 4.7% vs pedal
->   0.5–0.8%). A THD that ignores a 28 dB gain change is not clipping. Suspect an estimator or fixed
->   artefact and **validate before treating it as a circuit error** (L-006). ⚠ The L-006 bracket has
->   LOW POWER on a flat curve — it is trivially satisfied — so "bracket ok" is NOT evidence here.
+> - ✅ **VALIDATED 2026-07-20 — the flat HF THD is REAL, not an estimator artefact (was "DO NOT FIT
+>   YET").** The plugin's HF THD is level- AND drive-INDEPENDENT on every revision (V1E 3 kHz
+>   2.6/2.8/2.8% at D0.50/0.60/1.00; V1L 4.7% vs pedal 0.5–0.8%), and the independent discrete-tone
+>   estimator confirms it on every plugin row to ≤0.37 pp (`hf_thd_flatness_check.py`, all 11 captures,
+>   2 k+4 k). So it may now be treated as a real model property. ⚠ The old "L-006 bracket has low power
+>   on a flat curve" caveat is resolved by interpolating the sweep to the tone's level (not comparing
+>   to the nearest bound). It is a real CIRCUIT gap (plugin doesn't track drive at HF where the pedal
+>   does), NOT a ruler bug — small absolute energy, low priority per "midband before HF residual".
 >
 > **Housekeeping:** `src/dsp/GbwCorrection.h` is dead code (zero references since T-001's removal) —
 > delete or keep deliberately. `analysis/reports/*` predate the 2026-07-18/19 work; regenerate before
