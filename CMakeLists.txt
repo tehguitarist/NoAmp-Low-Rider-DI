@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(NoAmpLowRiderDI VERSION 0.1.0)   # bump VERSION to force Logic to rescan the AU after changes
+project(NoAmpLowRiderDI VERSION 0.9.0)   # bump VERSION to force Logic to rescan the AU after changes
 
 # Fallback version string for console-app targets that source PluginEditor.cpp directly (e.g.
 # StateRoundTrip, UIRenderProbe) — they don't get juce_add_plugin's generated JucePlugin_VersionString.

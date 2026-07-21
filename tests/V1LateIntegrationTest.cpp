@@ -9,6 +9,7 @@
 
 #include "../src/dsp/V1LateDSP.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <vector>
@@ -81,16 +82,20 @@ int main()
     // --- 1. All-knobs sweep: finite + bounded (no NaN/Inf/blowup) ---------------------------------
     std::printf("All-knobs finite/bounded sweep:\n");
     {
+        constexpr int kMaxBlock = 256;
         nalr::V1LateDSP dsp;
-        dsp.prepare(kFs, 256);
+        dsp.prepare(kFs, kMaxBlock);
         bool ok = true;
         const double steps[5] = {0.0, 0.25, 0.5, 0.75, 1.0};
+        // processBlock's contract is n <= maxBlock (dryTap is sized to it) — feed it in
+        // kMaxBlock-sized chunks, same discipline as V1EarlyIntegrationTest's run().
         auto run = [&](int nSamples)
         {
             std::vector<double> buf((size_t) nSamples);
             for (int i = 0; i < nSamples; ++i)
                 buf[(size_t) i] = excite(i);
-            dsp.processBlock(buf.data(), nSamples);
+            for (int off = 0; off < nSamples; off += kMaxBlock)
+                dsp.processBlock(buf.data() + off, std::min(kMaxBlock, nSamples - off));
             return buf;
         };
         auto sweepKnob = [&](int which)
