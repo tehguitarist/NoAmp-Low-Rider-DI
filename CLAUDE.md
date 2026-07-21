@@ -134,6 +134,195 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
+> **🆕 QUEUED ACTION ITEMS FROM A FULL THD BAND AUDIT (2026-07-21, NOT yet investigated or fixed).**
+> New script `analysis/thd_band_audit.py` (reads the existing `comprehensive_data.json`, no fresh
+> renders) aggregates THD(plugin−pedal), ranked by dB ratio (20·log10(plugin/pedal), the scale-
+> invariant metric — a flat pp delta misleads across THD's 0.1%→80% range), over **all 27
+> Farina-measurable bands × 11 captures × 3 driven levels** — the full band grid, not a curated
+> anchor subset (`gapd_harmonic_map.py`'s 24 anchors) or a per-capture-only view
+> (`gap_audit.py --mode thd`). Full table: `analysis/reports/thd_band_audit.csv`. Findings, checked
+> against existing docs before logging (per project discipline):
+> - **CONFIRMS, no new action:** the Gap-G notch complex (~370–1050 Hz, wider than the script's
+>   strict ±1/6-oct guard — widen the mental model, not just the code, when reading THD near there)
+>   carries the largest swings in BOTH directions, sign differing per revision (V1E overshoot
+>   +6.6/+9.1 dB @806/1016 Hz; V2 deficient −17 dB @640/806 Hz) — consistent with each rev's own
+>   notch-shoulder shape already flagged unarbitrable, not three independent clip defects.
+>   **✅ RE-CHECKED 2026-07-21 (later session, queued punch-list item) — still holds, no action.**
+>   `thd_band_audit.csv`'s 5 notch-flagged rows: V2 640 Hz −17.7 dB (deficient), V1E 640 Hz −9.8 dB
+>   (deficient, smaller), V1E 403 Hz +8.8 dB (overshoot — same rev, opposite sign at a neighbouring
+>   band), V1L 403/640 Hz both "good" grade (mild). Same pattern as originally logged; nothing new
+>   to chase. Closing this off the punch list.
+> - **CONFIRMS + sharpens, no new action:** the documented "~11 dB intrinsic HF shortfall" (Gap D)
+>   at 6.4/8.1 kHz is present on **all three revisions**, not V2-alone as the existing writeup
+>   emphasizes — V1E −8.6/−18.3 dB, V1L −8.5/−22.2 dB, V2 −15.9/−32.1 dB. V1E has no clip element at
+>   all, so a shared-shape deficiency across all three argues this is a linear/recovery-stage HF
+>   rolloff effect (H2 at 2f rolling off faster than the pedal's), not three independent per-rev
+>   clip-element gaps. Still low-priority (tiny absolute energy, "midband before HF residual").
+> - **CORROBORATES the in-progress WIP:** V2's 100–320 Hz THD overshoot (+3–4 dB) lines up exactly
+>   with what the uncommitted `src/dsp/ClipHarmonicReducer.h` (shipping default OFF, not yet fit —
+>   see its header) is being built to correct — independent evidence the fix targets the right band.
+> - **❌ REFUTED 2026-07-21 (magnitude computed, no rendering needed — L-010) — the WetHFCorrection
+>   hypothesis is DEAD, do not re-attempt it as the explanation.** V1L carries a large, CONTIGUOUS
+>   THD overshoot across 1.6–5 kHz (+5 to +7 dB at 1613/2032/2560/3225/4064/5120 Hz; V2 shows a
+>   smaller matching bump, +5.5 dB @4064 Hz). It was hypothesized that `WetHFCorrection`'s +3 dB/Q1.1
+>   bell (3400 Hz, added 2026-07-21 to fix a *linear* FR deficiency in the same band) was boosting a
+>   fundamental's own harmonics more than the fundamental, inflating THD as a side effect.
+>   `analysis/wetbell_harmonic_gain_check.py` (new, capture-free — evaluates the shipped RBJ biquad's
+>   EXACT digital magnitude response at each fundamental and its harmonics) computes the bell's own
+>   predicted contribution: **+0.5, −0.4, −1.7, −2.7, −2.4, −1.4 dB** at those six anchors — an order
+>   of magnitude too small, and mostly the WRONG SIGN (the bell would if anything COOL the THD at the
+>   higher anchors, since the fundamental itself sits nearer the bell's peak than its harmonics do).
+>   Measured deltas (+5 to +7 dB) are NOT explained by the bell. **⇒ the real cause is upstream of
+>   this EQ** — genuine clip/harmonic-generation behaviour, not a side effect of the 2026-07-21
+>   correction. Needs its own investigation (not yet started); likely the same class of
+>   drive-independent-memory issue as Gap D, just showing up at a frequency range Gap D's own
+>   anchors (100/110/220/440 Hz) never sampled.
+> - **⚠ PARTIALLY REFUTED, same tool:** the parallel hypothesis for `WetLFCorrection` (V1L, 50 Hz/
+>   +7 dB/Q1.2) against the V1L 20 Hz overshoot below — predicted bell contribution is **+2.4 dB**
+>   against a measured ~+9 dB. Not the wrong sign this time, and not negligible, but explains only
+>   ~27% of the effect — **a minor contributor at most, not the primary cause.** The other ~6.6 dB
+>   is unexplained and needs its own investigation, same as the HF case above.
+>
+> **✅ MID-BAND OVERSHOOT — THE SATURATOR HYPOTHESIS BELOW IS REFUTED (2026-07-21, later session).
+> UNIFIED WITH THE ALREADY-DOCUMENTED GAP I ONSET FLOOR — NOT A NEW MECHANISM, NO NEW C++ BUILT.**
+> Before writing the envelope-gated saturator mix this block's "NEXT STEPS" called for, its own
+> first step (a capture-free saturator on/off diff, `analysis/sat_midband_ablation.py`) was run, per
+> the project's own L-004/L-010 discipline of computing a mechanism's magnitude before building it.
+> **It refutes the premise for V1E and shows the wrong SHAPE for V1L:**
+> - **V1E's `RecoverySaturator` is shipped `gain=0.0` (DISABLED) since the 2026-07-18 Gap-I stack
+>   unwind** (`V1EarlyDSP.h::prepare()` — `driveRegion.setRecoverySaturation(0.0, 0.25)`) — it has
+>   been off in every render this block's own `_v1e.json` control map was generated from. Forcing it
+>   off (already off) vs shipped is, correctly, **bit-identical to the last decimal at every anchor,
+>   every level, all 3 captures** — zero effect, because there is nothing running to turn off. The
+>   "V1E's OWN separately-fit RecoverySaturator" framing below is simply wrong about the current
+>   shipped state; whatever is producing V1E's overshoot, it cannot be this class of element.
+> - **V1L's saturator (gain=0.40/knee=0.50/offset=0.10) DOES contribute real THD in this band**
+>   (~1.5–3.4 pp at 1.2–4.8 kHz, `sat_midband_ablation.py`, all 3 V1L captures) — but its shape is
+>   **roughly LEVEL-FLAT across −18/−12/−6 dBFS** (2 of 3 captures literally read "does NOT shrink
+>   w/ level"; the one that does is dominated by a single noisy 4800 Hz/−18dBFS outlier, +9.04 pp).
+>   The flagged signature is specifically that the OVERSHOOT shrinks with level — a flat contributor
+>   cannot be the thing producing a shrinking shape, even though it is a real, measurable error.
+> - **⇒ Since V1E shows the identical shrinking-with-level shape with the saturator provably
+>   inactive, the shared mechanism is something else entirely, common to V1E+V1L.** Checked against
+>   the already-documented **Gap I "onset-shape floor"** (CLAUDE.md Gap table: V1E's plugin THD is
+>   level-flatter than the pedal's own steep onset slope, so the plugin reads HOT vs the pedal at
+>   low driven level and the gap shrinks/crosses as level rises — the *exact* sign and shape found
+>   here). `analysis/midband_onset_floor_unify.py` (new, reads existing JSON, no renders) compares
+>   the mid-band pooled delta against Gap I's own 110 Hz characterisation anchor, per driven level:
+>   **V1E matches cleanly** (same sign at all 3 levels, both shrink −18→−6: 110 Hz +0.86→+0.71→+0.07
+>   pp vs midband +3.86→+1.98→+0.80 pp). **V1L is directionally consistent but noisier** (110 Hz
+>   dips slightly negative at −12 while midband stays positive — small numbers, single-capture
+>   noise, not a contradiction of the broad shrinking trend) — read together with the confirmed
+>   flat saturator excess, V1L's midband signal is best understood as **the same shared onset-floor
+>   effect PLUS the saturator's own separate, flat, ~1.5–3 pp contribution layered on top** — two
+>   deficits summed, not one.
+> - **⇒ NO NEW C++ WARRANTED.** Gap I's onset floor is already characterised as **unfixable by any
+>   memoryless nonlinearity** (a 36-point tanh scan already found no shape reproduces the pedal's
+>   onset — CLAUDE.md Gap I history) — an envelope-gated saturator mix is itself a memoryless-ish
+>   shaping trick on a DIFFERENT element and would not touch the dominant (onset-floor) mechanism at
+>   all, since that mechanism is proven present with the saturator fully off. Gating V1L's saturator
+>   down at low level would also target the wrong shape (its excess is flat, not concentrated at low
+>   level) and would blend two separate deficits into one "fix" — exactly what guardrail #6 forbids
+>   ("if it needs a different value/shape per capture, it is a curve fit, and the real cause is still
+>   upstream — STOP"). **Disposition: absorbed into Gap I, now known to be BROADBAND (not LF-only as
+>   originally characterised) rather than a new midband-specific gap. Stays best-effort, same as Gap
+>   I's LF residual.** V1L's ~1.5–3 pp flat saturator excess on top is left as-is (small, and
+>   untangling it from the onset floor is not worth it at this priority per the project's own
+>   "midband before HF residual, and low-audibility items stay parked" ranking).
+>
+> **🆕 (SUPERSEDED BY THE ✅ BLOCK ABOVE — kept for the historical record only, do not act on its
+> "NEXT STEPS.") LIKELY CAUSE FOUND FOR THE MID-BAND OVERSHOOT (2026-07-21, investigation done, FIX NOT YET
+> BUILT — good handoff point for a fresh session).** `analysis/midband_overshoot_diagnose.py` (new,
+> reads the existing per-order harmonic maps, no fresh renders — `gapd_harmonic_map_v1l.json`/`_v2.json`,
+> plus a newly-generated `_v1e.json` for the control) reads per-ORDER (H2-H7) deltas at 1.2-4.8 kHz,
+> pooled by driven level. Signature: **V1E (no zener module, its OWN separately-fit `RecoverySaturator`)
+> AND V1L both show the SAME pattern — THD overshoot LARGEST at low drive, shrinking as drive rises**
+> (V1E +3.9→+2.0→+0.8 pp across −18/−12/−6; V1L +2.6→+1.9→+1.0 pp), spread fairly uniformly across
+> H3-H7 (not one dominant order — rules out a simple asymmetry-style single-order cause). **V2 shows
+> essentially none of it** (deltas ~0 pp at these anchors) — and V2's saturator is separately documented
+> as "negligible, zener dominates THD" (2026-07-17 sat_decision.py note), while V1E/V1L both actively
+> rely on theirs. ⇒ **likely cause: `RecoverySaturator`'s small-signal H-generation (by design, active
+> at ALL levels, not just clipping) is proportionally excessive when the main clip element isn't yet
+> engaged** — present on every revision that uses a real saturator, absent on the one whose saturator
+> is negligible. **This is the SAME phenomenon as the already-documented Gap B** ("V1E+V2
+> drive-dependent band saturation… 2k/4k too HOT… but 8k too COLD, so no band-limiting filter can fix
+> it — REFUTED 2026-07-19, saturator kept unchanged") — not a new mechanism, a sharper characterisation
+> of an old one. **Why it's worth re-opening despite the 2026-07-19 refutation:** that refutation was
+> against a STATIC, frequency-only fix (a fixed band-limit can't cut 2-4 kHz while also boosting 8 kHz
+> — a real structural contradiction). This finding shows the excess is *level*-selective, not just
+> frequency-selective — an ENVELOPE-GATED correction (same class as `ClipHarmonicReducer`: dial the
+> saturator's contribution down at LOW signal levels where it's proportionally excessive, leave it
+> alone or even favour it at HIGH levels where it's already a net win and where 8 kHz needs MORE, not
+> less) sidesteps the exact contradiction that killed the static approach — a genuinely new angle, only
+> available now that envelope-gated named calibration layers are a sanctioned mechanism.
+> **NOT YET BUILT.** Next steps for whoever picks this up: (1) confirm the mechanism directly (a
+> saturator-on/off diff at LOW drive, isolated, would show it appearing/vanishing with the saturator —
+> cheap, capture-free, do this FIRST before writing any new C++); (2) if confirmed, design an
+> envelope-gated saturator mix (reuse `ClipHarmonicReducer`'s envelope/sidechain pattern, but gating
+> the SATURATOR's blend fraction down at low signal rather than reducing clip harmonics); (3) fit
+> against V1E's 3 captures + V1L's 3 captures jointly (guardrail #6 — one correction, not per-revision
+> values beyond what the envelope naturally provides); (4) gate with an ablation test proven to fail.
+> V2 is excluded by construction (its saturator is already negligible; do not touch it here).
+> - **✅ BRACKET-CHECKED 2026-07-21, UPGRADED FROM LOW-CONFIDENCE TO REAL — do not dismiss as
+>   N-004.** `analysis/thd_lf_bracket_check.py` (new): (1) raw-signal SNR of each V1L capture's own
+>   18–32 Hz band vs its own silence gap is **53–104 dB**, nowhere near the ~12 dB usability floor —
+>   the captures are NOT noise-limited there (unlike the original N-004 25 Hz case, which was a true
+>   low-SNR bin). (2) the overshoot is **not** the swinging-sign N-004 signature — it's one-directional
+>   (overshoot) and, on the fullest-wet/highest-drive capture (D0.65 BL1.00), a remarkably CONSISTENT
+>   **+8–10 dB across all three driven levels (−18/−12/−6)**, i.e. drive-independent in dB terms, not
+>   noise. It IS concentrated in the higher-drive/higher-blend V1L captures (mildest on D0.40 BL0.30);
+>   some individual cells (esp. −18 dBFS where the pedal's own THD is <2%) inflate the RATIO metric
+>   further and shouldn't be over-read literally, but the underlying effect is real. ⚠ **A bug in the
+>   checker itself was found and fixed while building this** — a narrow-band (18–32 Hz) Welch PSD at
+>   the default 4096-point resolution can land only ONE bin in range, and `np.trapz` over a single
+>   point silently returns 0.0 (reads as −300 dB "digital silence", not an error) — fixed by widening
+>   to 16384 points. Worth remembering for any future narrow-band SNR check. **The `WetLFCorrection`
+>   bell was checked as a candidate mechanism (see the ❌/⚠ REFUTED block above, same session,
+>   `wetbell_harmonic_gain_check.py`) and explains only ~27% of it (+2.4 of ~+9 dB) — real cause still
+>   open, not yet investigated further.**
+>
+> **🆕 RECONSIDERATION SWEEP (user, 2026-07-21) — now that named-calibration-layer AND (case-by-case,
+> authorised) per-knob corrections are both sanctioned, re-check every "best-effort / parked" item
+> for WHY it was parked: genuinely exhausted (computed magnitude, measured authority, or a proof —
+> see the "RE-AFFIRMED 2026-07-21" note on the Gap D refuted-candidates table just above; those ten
+> stay dead, a free choice of value can't fix them either) vs merely deprioritized for lack of an
+> idea / lack of a sanctioned mechanism at the time — those are back on the table. Tracked as
+> session todos, logged here so a future session doesn't skip them as "closed":**
+> - **Gap D's ~11 dB HF shortfall (6.4–8.1 kHz, this audit confirms on all 3 revs, not just V2)** —
+>   parked purely on low-audibility grounds; an HF-restoring calibration layer (the same envelope/
+>   sidechain class as `ClipHarmonicReducer`, mirrored to ADD rather than reduce) has never actually
+>   been tried. Candidate for a new named layer.
+> - **Gap H err2 — ✅ RE-EXAMINED 2026-07-21 (later session), STAYS CLOSED, asymmetry resolved (not
+>   inertia — the two bands are structurally different).** Checked whether the `WetHFCorrection`
+>   precedent (a small capture-matching EQ, 2026-07-21) should extend to Gap H err2's 10–16 kHz band,
+>   per the "worth resolving explicitly" note below. It should NOT, on the evidence, and the user
+>   confirmed leaving it closed. Two capture-free checks, both already in the tree:
+>   `analysis/hf_s1_check.py` shows the model's V1L HF −40 dB point (~10.5 kHz) already lands on
+>   SPICE §1's own specified corner (~11 kHz — the ONE point §1 actually gives in this region);
+>   `analysis/topoct_analog_truth.py` shows the model matches its own discretisation-free analog
+>   truth almost exactly beyond that (~1.7 dB real droop at 16 kHz, not the ~19 dB the capture
+>   implies) — no hidden bug. **The load-bearing difference from `WetHFCorrection`'s band:** SPICE's
+>   plotted curve runs off the bottom of the graph before ~12.5 kHz (N-004's graph-edge caveat), so
+>   there is NO SPICE reference at all at the frequencies carrying the big capture disagreement —
+>   unlike 1.6–5 kHz, where SPICE had a specific curve the model matched to ~1 dB and the capture
+>   asked for a small, bounded +3 dB more. Matching Gap H err2's capture would mean fabricating up to
+>   +19 dB of boost with ZERO physical cross-check anywhere in that band — a materially bigger, far
+>   less anchored bet than the 3 dB precedent, not the same move at a different frequency. **User
+>   decision (2026-07-21): NOT permanently closed — moved to the FIRM LAST ITEM on the whole Phase-10
+>   punch list.** Revisit only once every other accuracy item is done, and decide it by EAR (a real
+>   listening test against the pedal captures/reference), not by another round of numeric
+>   arbitration — the numeric case above is deliberately inconclusive-by-design (no SPICE anchor
+>   exists in that band either way), so more analysis here has diminishing returns; a listening
+>   judgement call is the actual tiebreaker. Do not re-open from the WetHFCorrection precedent
+>   alone before then — a future session would still need a fresh argument, not just "we did it for
+>   the neighbouring band."
+> - **Gap F (V1L blend residual's cab-sim/HF component)** — re-checked 2026-07-21, "partially
+>   dissolved, not fully closed," parked for lack of a new idea. Check whether it's the same
+>   underlying HF droop as the two items above before treating it as a third, separate problem.
+> - **Gap I residual (V1E onset-shape floor + drive-dependent H2 spread)** — still best-effort;
+>   never attempted with a dedicated named calibration layer (unlike the LF/HF bells and the two
+>   envelope correctors). Worth a feasibility pass now that the mechanism class exists.
+>
 > **🆕 QUEUED ACTION ITEMS FROM A VISUAL SWEEP (2026-07-20, NOT yet investigated or fixed).** User
 > visually read `analysis/dashboard_gen.py`'s dashboard against a fresh 11/11-capture
 > `comprehensive_report.py` run and flagged four candidates; all four were verified against
@@ -498,6 +687,14 @@ without images.
 > **⇒ The entire chain is excluded**: pre-drive (buffer ~3.4 Hz, twin-T, PRESENCE), the clip element
 > and every element in the module, and post-clip (`R_post` flat to 0.74 dB, post-blend clipping
 > 7.6–47.8 dB short). Nine rule-outs on computed magnitude plus one on measured authority.
+>
+> **⚠ RE-AFFIRMED 2026-07-21, do NOT reopen these ten despite the artificial/per-knob policy
+> loosening (below):** every row in this table died on **computed magnitude, measured authority, or
+> the memoryless-impossibility proof** — none were rejected for lacking schematic fidelity or for
+> being per-knob/non-schematic, so relaxing those guardrails doesn't revive any of them. A free
+> choice of value (circuit-accurate or not) cannot produce the required effect for any of these; only
+> a MEMORY element can (the proof's own conclusion), which is exactly why `ClipDriveNormaliser` /
+> `ClipHarmonicReducer` (envelope-based) are the live approach, not a re-scan of these ten.
 >
 > **📌 KNOWN MODEL LIMITATION, RECORDED NOT FIXED.** The zener knee is **2.4–3× harder than its own
 > datasheet** (`r_dif` 95 Ω @5 mA / 600 @1 mA vs model 40/200 ⇒ datasheet implies Vzt 0.475–0.60, we

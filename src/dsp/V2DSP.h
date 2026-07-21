@@ -59,6 +59,10 @@ public:
         // (RMS 7.8 dB). At sweep_drv_-18: H2 Δ = -2 dB (was -7), H3 Δ = +2 dB.
         driveRegion.setRecoverySaturation(0.04, 0.150);
         driveRegion.setSaturationOffset(0.080);
+        // Gap D V2 harmonic reducer (ClipHarmonicReducer.h) — the sanctioned calibration layer for V2's
+        // LF (40-230 Hz) odd-harmonic overshoot that grows with level. slope 0 => OFF/bit-identical
+        // until the fit is committed here; the fit harness overrides via OfflineRender --chr-*.
+        driveRegion.setClipHarmonicReduction(kChrSlope, kChrEnv0, kChrBetaMax, kChrTauMs, kChrScHz);
         blendLevel.prepare(baseFs);
         mid.prepare(baseFs);
         tone.prepare(baseFs);
@@ -154,6 +158,13 @@ public:
         driveRegion.setClipDriveNormalisation(depth, targetV, tauMs, scHz, makeup);
     }
 
+    // Gap D V2 harmonic reducer (src/dsp/ClipHarmonicReducer.h). slope 0 = OFF and BIT-IDENTICAL.
+    // Enabled with fitted constants in prepare(); the harness overrides via OfflineRender --chr-*.
+    void setClipHarmonicReduction(double slope, double env0, double betaMax, double tauMs, double scHz) noexcept
+    {
+        driveRegion.setClipHarmonicReduction(slope, env0, betaMax, tauMs, scHz);
+    }
+
     // Gap D calibration-layer clamp diagnostics (see ClipDriveNormaliser.h).
     void setClipDriveGainLimits(double minG, double maxG) noexcept { driveRegion.setClipDriveGainLimits(minG, maxG); }
     double getClipDriveClampedFraction() const noexcept { return driveRegion.getClipDriveClampedFraction(); }
@@ -203,6 +214,27 @@ public:
     }
 
 private:
+    // Gap D V2 harmonic-reducer constants (ClipHarmonicReducer.h). Fitted 2026-07-21
+    // (analysis/gapd_v2_chr_fit.py): two-stage grid search (coarse on 2 representative captures,
+    // confirmed on all 5 V2 captures at OS=8, LF anchors 40-230 Hz). ⚠ Discovered mid-fit that the
+    // OfflineRender binary was STALE (built before this layer's --chr-* CLI wiring existed in
+    // source, from uncommitted prior-session work) -- the first fit pass silently scored a no-op
+    // (every grid point identical to baseline). Rebuilt before trusting any of these numbers; see
+    // CLAUDE.md 2026-07-21 for the full story (a fresh L-009-adjacent lesson: a stale BINARY can
+    // silently no-op a flag exactly like an unguarded setter can).
+    //   LF (40-230 Hz) rms:  baseline 3.38 pp  ->  fitted 2.30 pp   (mean +1.50 -> +0.53, near-unbiased)
+    //   midband guard (1.2-4.8 kHz), must not regress: 1.83 -> 1.83 pp (unchanged)
+    // Not a perfect close (rms doesn't hit 0) -- slope was grid-edge-selected (0.03 was the lowest
+    // tested and still winning; a finer/lower sweep was not run, diminishing-returns judgement call
+    // given this is already an improvement with zero measured regression). tau/scHz left at the
+    // ClipDriveNormaliser-precedent defaults (30 ms / 250 Hz), not separately swept, same rationale
+    // CLAUDE.md records for V1L's normaliser (low expected leverage vs the primary three levers).
+    static constexpr double kChrSlope = 0.03;
+    static constexpr double kChrEnv0 = 2.5;
+    static constexpr double kChrBetaMax = 0.4;
+    static constexpr double kChrTauMs = 30.0;
+    static constexpr double kChrScHz = 250.0;
+
     V1EarlyInputBuffer input;
     V1LatePresenceStage presence;
     ZenerDriveClipRecovery<V2RecoveryStage> driveRegion; // V4 DRIVE + zener + V5 recovery (oversampled)

@@ -288,6 +288,43 @@ int main(int argc, char** argv)
             gapdClamped = d.getClipDriveClampedFraction();
     };
 
+    // Gap D V2 harmonic reducer (src/dsp/ClipHarmonicReducer.h). V2 ONLY. --chr-slope < 0 = not
+    // specified (keeps the prepare() default, which is OFF/bit-identical). The four sub-params do
+    // nothing without --chr-slope, so passing one alone is an ERROR, not a silent no-op (L-009).
+    //   --chr-slope <s>     beta ramp slope (0 = OFF). REQUIRED to engage the layer.
+    //   --chr-env0 <volts>  envelope threshold; below it beta==0 (bit-identical). default 0.
+    //   --chr-betamax <0..1> ceiling on the blend fraction. default 0.6.
+    //   --chr-tau <ms>      envelope/gain-match smoothing (tens of ms => no harmonics). default 30.
+    //   --chr-sc <Hz>       sidechain LF lowpass corner (gives LF-selectivity, not tau). default 250.
+    const double chrSlope   = argVal(argc, argv, "--chr-slope", -1.0);
+    const double chrEnv0    = argVal(argc, argv, "--chr-env0", kUnset);
+    const double chrBetaMax = argVal(argc, argv, "--chr-betamax", kUnset);
+    const double chrTauMs   = argVal(argc, argv, "--chr-tau", kUnset);
+    const double chrScHz    = argVal(argc, argv, "--chr-sc", kUnset);
+    const bool chrSubSpecified = (chrEnv0 == chrEnv0) || (chrBetaMax == chrBetaMax)
+                                 || (chrTauMs == chrTauMs) || (chrScHz == chrScHz);
+    if (chrSubSpecified && chrSlope < 0.0)
+    {
+        std::fprintf(stderr, "error: --chr-env0/-betamax/-tau/-sc do nothing without --chr-slope "
+                             "(0 = off). Refusing to render a silent no-op.\n");
+        return 2;
+    }
+    if (chrSlope >= 0.0 && revIdx != 2)
+    {
+        std::fprintf(stderr, "error: --chr-* is V2 only (V1L's Gap D half is ClipDriveNormaliser; "
+                             "V1E has no zener module).\n");
+        return 2;
+    }
+    const double chrE0 = (chrEnv0 == chrEnv0) ? chrEnv0 : 0.0;
+    const double chrBM = (chrBetaMax == chrBetaMax) ? chrBetaMax : 0.6;
+    const double chrTau = (chrTauMs == chrTauMs) ? chrTauMs : 30.0;
+    const double chrSc = (chrScHz == chrScHz) ? chrScHz : 250.0;
+    auto applyChr = [&](auto& d)
+    {
+        if (chrSlope >= 0.0)
+            d.setClipHarmonicReduction(chrSlope, chrE0, chrBM, chrTau, chrSc);
+    };
+
     // Use 0.0 as sentinel for "use per-revision default from kOutputMakeup[rev]". The caller can
     // override with --out-makeup <gain>; if not provided, each rev branch picks its own array element.
     const double outMakeupOverride = argVal(argc, argv, "--out-makeup", 0.0);
@@ -350,6 +387,7 @@ int main(int argc, char** argv)
                                                bassShift40);
                                    d.setDriveParams(zp);
                                    applyGapD(d);
+                                   applyChr(d);
                                },
                                readGapD);
     }

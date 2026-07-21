@@ -366,6 +366,18 @@ target_link_libraries(V1LateGapDTest
 add_test(NAME V1LateGapDTest COMMAND V1LateGapDTest)
 set_tests_properties(V1LateGapDTest PROPERTIES LABELS "CI")
 
+# Gap D calibration layer as shipped on V2 (ClipHarmonicReducer) — L-003 gate (magnitude, level-
+# dependent-shape check, proven to fail when the layer is ablated). See tests/V2ClipHarmonicReducerTest.cpp.
+juce_add_console_app(V2ClipHarmonicReducerTest PRODUCT_NAME "V2ClipHarmonicReducerTest")
+target_sources(V2ClipHarmonicReducerTest PRIVATE tests/V2ClipHarmonicReducerTest.cpp)
+target_compile_definitions(V2ClipHarmonicReducerTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V2ClipHarmonicReducerTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME V2ClipHarmonicReducerTest COMMAND V2ClipHarmonicReducerTest)
+set_tests_properties(V2ClipHarmonicReducerTest PROPERTIES LABELS "CI")
+
 # 6.1 — V2 recovery stage: new R47/C42 input LP corner + retuned S-K coupling, no bridged-T
 # (src/dsp/V2Stages.h) vs an independent analytic nodal reference + FR §1 qualitative HF trend.
 add_executable(V2RecoveryTest tests/V2RecoveryTest.cpp)

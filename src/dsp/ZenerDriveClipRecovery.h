@@ -32,6 +32,7 @@
 #include <memory>
 
 #include "ClipDriveNormaliser.h"
+#include "ClipHarmonicReducer.h"
 #include "RecoverySaturator.h"
 #include "TopOctaveShelf.h"
 #include "ZenerDriveModule.h"
@@ -76,6 +77,7 @@ public:
         drive.reset();
         recovery.reset();
         normaliser.reset();
+        reducer.reset();
         shelf.reset();
         for (size_t i = 0; i < kNumOs; ++i)
             if (os[i] != nullptr)
@@ -133,6 +135,14 @@ public:
     double getClipDriveClampedFraction() const noexcept { return normaliser.clampedFraction(); }
     void resetClipDriveClampStats() noexcept { normaliser.resetClampStats(); }
 
+    // Gap D V2 calibration layer (ClipHarmonicReducer.h — a labelled correction, NOT a component).
+    // slope 0 = OFF and BIT-IDENTICAL to the uncorrected chain (the shipping default on V1L, which
+    // never enables this — its Gap D half is ClipDriveNormaliser). V2 enables it via V2DSP::prepare.
+    void setClipHarmonicReduction(double slope, double env0, double betaMax, double tauMs, double scHz) noexcept
+    {
+        reducer.setParams(slope, env0, betaMax, tauMs, scHz);
+    }
+
     // Single-sample core at the CURRENT discretisation rate (drive+clip -> recovery). Used for the 1x
     // path and by base-rate probes (DC-step polarity test).
     //
@@ -160,7 +170,11 @@ public:
     {
         const double gPre = normaliser.preGain(x * drive.clipDriveGain());
         const double clipped = drive.process(x * gPre) * normaliser.postGain(gPre);
-        return saturator.process(recovery.process(clipped));
+        // Gap D V2 harmonic reducer (off = bit-identical). Fed the UNCLIPPED drive that produced this
+        // clipped sample (x*gPre through the module's small-signal gain) so cleanRef can be level-
+        // matched to the fundamental; on V1L slope==0 so this returns `clipped` unchanged.
+        const double reduced = reducer.process(x * gPre * drive.clipDriveGain(), clipped);
+        return saturator.process(recovery.process(reduced));
     }
 
     int getActiveFactor() const noexcept { return activeFactor; }
@@ -180,6 +194,7 @@ private:
         // are recomputed at osRate — its tau and corner are then OS-factor-independent, and a fit
         // made at OS=8 stays valid at the 4x live default. prepare() preserves the set parameters.
         normaliser.prepare(osRate);
+        reducer.prepare(osRate); // OS-factor-independent tau/corner, same rationale as the normaliser
         shelf.setOSFactor(factor); // scale the top-octave restore for this factor (base rate)
         drive.reset();
         recovery.reset();
@@ -191,6 +206,7 @@ private:
     RecoveryStage recovery;
     RecoverySaturator saturator; // small-signal op-amp saturation (0 gain = disabled, production default)
     ClipDriveNormaliser normaliser; // Gap D CALIBRATION layer (depth 0 = off = bit-identical default)
+    ClipHarmonicReducer reducer;    // Gap D V2 CALIBRATION layer (slope 0 = off = bit-identical default)
     TopOctaveShelf shelf; // base-rate low-OS top-octave restore (transparent at 4x/8x)
 
     std::array<std::unique_ptr<juce::dsp::Oversampling<double>>, kNumOs> os{};
