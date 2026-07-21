@@ -926,7 +926,99 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-21, LATEST session): ✅ GAP D HF (6-9 kHz H2 shortfall) BUILT AND SHIPPED**
+> **🆕 GAP H err2 — BUILT AND SHIPPED 2026-07-21 (LATEST session), on the user's listening verdict
+> ("I've listened and I think it's worth trying to fix"). `src/dsp/WetTopOctaveRestore.h` — a V1L-ONLY
+> wet-path RBJ HIGH SHELF (13000 Hz / +6 dB / Q0.9; corner+Q set by the NULL, gain by EAR), LAST on the wet leg before BLEND (after
+> HFEvenRestore, so it cannot perturb that layer's fitted 5.5 kHz sidechain). ⚠ EAR-TUNED, NOT FITTED
+> — the magnitude is provisional pending the user's A/B verdict on the audition set.**
+> - **⛔ THE BL1.00 CAPTURE ASKS FOR ~+34 dB AND MUST NOT BE BELIEVED. Do NOT re-tune this against it.**
+>   Three independent reasons, all measured this session: (1) our wet path is **−41.6 dB @12.5 kHz** re
+>   1 kHz and **SPICE §1 puts V1L's wet path at −40 dB by ~11 kHz** — the model already matches its only
+>   capture-free reference; the capture demands −7.9 dB, i.e. the two cascaded S-K cab-sim stages barely
+>   roll off at all. (2) **THE PEDAL'S OWN TOP OCTAVE IS NON-MONOTONIC IN BLEND** (12.5 kHz: −7.89 at
+>   BL1.00, −26.38 at BL0.65, −7.75 at BL0.30) — adding a FLAT dry leg to a DARK wet leg cannot REDUCE
+>   the top octave by 18 dB, so at least one of those three captures is untrustworthy in this band.
+>   That is a **capture-intrinsic** disqualification (plugin never involved — the L-007 standard).
+>   (3) the captures **disagree about the sign**: at BLEND<1.00 the plugin is already TOO BRIGHT up here
+>   (+6.4 dB at BL0.65, +4.4 at BL0.90, +4.2 at BL0.95).
+> - **⭐ THE LEG SPLIT IS THE KEY NEW MEASUREMENT** (`analysis/gaph_topoct_legs.py`, NALR_NODRY,
+>   reconstruction err ~1e-15). Who owns the top octave at 12.5 kHz, re the full render at 1 kHz:
+>   **BL1.00 wet −41.6 / dry −74.2** (dry leak 32.6 dB DOWN ⇒ the band is **100% wet path**);
+>   BL0.65 wet −39.5 / dry −20.6 (dry dominates by 18.9); BL0.30 wet −41.4 / dry −9.4 (by 32.0).
+>   `sum − max(leg)` ≈ 0.1–0.6 dB at BL1.00 ⇒ **NO cancellation, so L-014's "diagnose a null with
+>   phase" does NOT apply** — checked FIRST and refuted, which is exactly what L-014 demands.
+> - **⇒ THE WET-PATH INSERTION POINT SATISFIES GUARDRAIL #6 BY PHYSICS, NOT BY FITTING.** Being
+>   pre-BLEND, the shelf's audible effect is diluted exactly as the dry leg takes over. **MEASURED**
+>   (`analysis/wet_top_verify.py`, ON minus NALR_WETTOP_OFF): at 12.5 kHz **BL1.00 +4.57 | BL0.65 +0.74
+>   | BL0.30 +0.17**; at 16 kHz +5.29 / +0.12 / +0.02. ~6:1 at 12.5k and ~44:1 at 16k, with the 1 kHz
+>   control inert (0.03 dB). ONE fixed filter, no knob tracking.
+> - **✅ AND A SMALL PART OF IT HAS CAPTURE-FREE SUPPORT.** The §1 **−40 dB point moves 10.82 → 11.04 kHz**
+>   against §1's ~11 kHz target — essentially exact. It does not break the §1 anchor; it improves it.
+>   ⚠ The ablated BASELINE is **10.82 kHz, measured** — NOT the 10.08 the docs quote for the R48/R49=22k
+>   fix (that predates WetHFCorrection and the other layers, which already moved it). An earlier draft
+>   of this entry cited 10.08 from the docs instead of measuring the ablated build, and the first
+>   9 kHz/Q0.7 shelf then read 11.61 — an apparent "improvement" that was partly an overshoot past §1's
+>   target measured against a stale baseline. **Measure the ablated build; do not quote a historical
+>   number as the baseline** (sibling of L-005).
+> - **⭐ THE CORNER/Q ARE MEASURED, NOT EAR-TUNED — the null caught real collateral damage.**
+>   `analysis/wet_top_null_sweep.py` (null depth vs shelf gain, boundary-guarded). A first pass at
+>   **9000 Hz / Q0.7** cost **BL0.30 sweep_clean −11.40 → −10.18 dB** — far too large to be the top
+>   octave, which is only 1.46% of that capture's sweep energy. Cause: at **BL0.30 / 4 kHz the legs sit
+>   at −150° with the SUM 5.79 dB BELOW the louder leg** (a near-cancellation, where a small change in
+>   one leg is AMPLIFIED in the sum), and a Q0.7 shelf still delivers ~+1.5 dB an octave below its
+>   corner, so its skirt landed in that zone. **13000 Hz / Q0.9 keeps it out**: null penalty at
+>   BLEND=1.00 and 0.65 is **ZERO at every gain to +12 dB**, BL0.30's halves. Do not lower the corner
+>   or Q without re-running that sweep.
+> - **⛔ THE NULL CANNOT ARBITRATE THE LIFT ITSELF — IT HAS NO POWER HERE, AND THIS REFUTES A
+>   DOCUMENTED CLAIM.** The pedal's energy **above 9 kHz is 0.11% of the clean sweep at BL1.00**
+>   (0.01% at BL0.65, 1.46% at BL0.30), so even a PERFECT top-octave fix moves the BL1.00 null by
+>   **~0.015 dB** — below the metric's own noise. Measured: −5.10 (off) → −5.08 (+6 dB) → −4.93
+>   (+18 dB), i.e. flat then very slightly worse. ⇒ **the earlier note that BL1.00's null "is dominated
+>   by the parked Gap H err2 top-octave item" is WRONG** — 0.11% of the energy cannot dominate a −5 dB
+>   null. Whatever limits BL1.00's null (−5.1, vs BL0.65 −10.6 and BL0.30 −11.4) lives where the energy
+>   is, i.e. the midband/LF, and is **an open lead nobody has chased**. ⚠ Also beware BL0.65's reported
+>   "interior optimum at 6 dB": it is an AVERAGING ARTEFACT — `sweep_clean` improves monotonically while
+>   `sweep_drv_-12` worsens monotonically and they cancel. Read the per-segment columns, not the mean.
+> - **PHYSICAL-CAUSE HUNT CAME BACK EMPTY (guardrail #2), which is why this is artificial:** blend
+>   off-side leak is FAITHFUL (physics gives ~−51 dB through the 100k pot against C12's 271 Ω at
+>   12.5 kHz; the model measures within ~2 dB); no cancellation (above); discretisation already handled
+>   (`topoct_analog_truth.py`, ~1.7 dB at 16 kHz); S-K stopband floor-out can only DARKEN (wrong sign,
+>   `v1l_sk_stopband_floor.py`); PRESENCE/C42/S-K corner ruled out on authority long ago.
+>   **The alternative NOT ruled out (guardrail #4): the model is simply RIGHT and the pedal is this dark**
+>   — unsettleable, the matrix is FINAL and §1 has no curve above ~12.5 kHz. `kWetTopDb = 0.0` ships it off.
+> - **✅ V2 CHECKED AND LEFT OFF (`kWetTopDbV2 = 0.0`, V2 bit-identical) — and the check produced a NEW
+>   METHODOLOGICAL LESSON.** The layer IS wired into `V2DSP` (same shape, own gain constant) so it is
+>   measurable, and enabling it does NO measurable harm (worst null change across V2's 5 captures is
+>   +0.03 dB). It was still left off, because the only numeric evidence favouring it fails its own
+>   power check: **V2's energy above 9 kHz is 0.00% of the clean sweep on ALL FIVE captures** ⇒ the max
+>   null change ANY top-octave fix can produce is ~0.000 dB. Yet the sweep showed the null improving
+>   monotonically (pooled −0.037 dB at +12) and, widened, a **"pooled INTERIOR optimum at 18 dB"**.
+>   Both are spurious — the observed 0.08 dB swing EXCEEDS what the lift can explain, so it is the
+>   shelf's **SKIRT below 9 kHz**, not the lift. ⇒ **V2 is an EAR decision, exactly as V1L was.**
+> - **⭐ NEW LESSON (automated into `wet_top_null_sweep.py`): THE BOUNDARY GUARD IS NOT ENOUGH.** This
+>   project already learned that an optimum on the EDGE of a sweep is a non-result (Vzt 0.20–0.60;
+>   `v1l_blend_knob_probe`). V2 adds the other half: **an INTERIOR optimum is equally worthless when
+>   the metric has no POWER in the band being changed.** Bound the metric's power FIRST (here: the
+>   band's share of the reference energy), and treat any swing LARGER than that bound as evidence the
+>   knob is moving something OTHER than the thing you think you are tuning. The script now prints the
+>   bound per capture and flags both failure modes.
+> - **⚠ THE "V1L-SPECIFIC" FRAMING WAS STALE.** Re-measured (`analysis/gaph_topoct_current.py`, reads
+>   the existing JSON, no renders): **V1E is now CLEAN up there** (top-octave shape mean **+0.02 dB**
+>   across its 3 captures) but **V2 is NOT** (mean **−2.73**; its three BL1.00 captures read −9.9/−6.5/−5.8
+>   and its BL0.90/0.95 read +4.4/+4.2 — the SAME blend-organised sign structure). **V2 is deliberately
+>   NOT enabled** — that is a separate ear decision, not a numeric one. V1L's own numbers are unchanged
+>   from 2026-07-17 (−24.00/+6.14/−2.00 vs the documented −25.3/+6.2/−1.9), so the deficit is NOT stale.
+> - Gated by the top-octave boost-delta check in `V1LateIntegrationTest` (g@14k − g@1050): **shipped
+>   −37.41 vs ablated −40.85 dB, threshold −39.0**, verified to PASS shipped and FAIL under
+>   `NALR_WETTOP_OFF` as the SOLE failure (L-003). ⚠ The first draft used a **5 kHz** reference and had
+>   almost no separation (2.5 dB) — a Q0.7 shelf cornered at 9 kHz still delivers ~+1.5 dB an octave
+>   BELOW its corner, so the reference sat INSIDE the shelf's own skirt. Pick a gate reference the
+>   filter is MEASURED inert at, not one that merely looks far away.
+> - New constants `kWetTopHz/_Db/_Q` in `Calibration.h`; env `NALR_WETTOP_OFF/_HZ/_DB/_Q`. New scripts:
+>   `gaph_topoct_current.py`, `gaph_topoct_legs.py`, `wet_top_verify.py`, `wet_top_audition.py`.
+>   **31/31 ctest green** on a full `-j8` build. V1E and V2 are bit-identical.
+>
+> **Prior change (2026-07-21, earlier session): ✅ GAP D HF (6-9 kHz H2 shortfall) BUILT AND SHIPPED**
 > — `src/dsp/HFEvenRestore.h`, an HP-sidechain-gated even-only shaper (4-pole @5500 Hz), ONE joint fit
 > (a=5.0/k=0.15) shared across all three revisions. Pooled |H2Δ| at 6/7.5 kHz 13.17→11.73 dB, bias
 > −11.40→+0.85 (near-unbiased), midband/odd/FR guards all held. Gated by a DFT H2 ablation check in
@@ -1510,7 +1602,7 @@ without images.
 >
 > | Gap | What | Status → next action |
 > |---|---|---|
-> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
+> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **ADDRESSED 2026-07-21 by `WetTopOctaveRestore.h`** (V1L-only wet-path high shelf 13 kHz/+6 dB/Q0.9, gain EAR-TUNED on the user's listening verdict, magnitude provisional). The leg split proved the band is 100% WET path at BL1.00 (dry leak 32.6 dB down, no cancellation) and the wet insertion point gives ~6:1 blend dilution for free (guardrail #6 by physics). ⛔ The BL1.00 capture's implied ~+34 dB is REJECTED — the pedal's own top octave is NON-MONOTONIC in blend, and the model already matches §1. §1's −40 dB point IMPROVES (10.82 → 11.04 kHz vs target ~11). Gated (fails on `NALR_WETTOP_OFF`). V2 shows the same structure but is deliberately NOT enabled (separate ear decision). Prior state: ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | ✅ **BOTH CLOSED 2026-07-19 — they were ONE defect, and it was ours.** J was an **oversampler-latency comb**: the dry tap was never delay-aligned with the oversampled wet path, so dry+wet summed misaligned by ~84 samples at 8x ⇒ first comb null at fs/(2·84) ≈ **285 Hz**. Fixed by `src/dsp/DryTapDelay.h` (no fitted constant — reads the oversampler's own latency; exact no-op at OS=1), gated by `DryTapAlignmentTest` (ablated: fails by 5.34/30.80/23.42 dB vs a 1.0 dB tol). **E then dissolved**: its BASS=0.50/0.35 captures ARE the only two V2 files with BLEND<1.00, so E's "~3 dB hump" was J's comb — after the fix those rows are the CLEANEST (+0.54/+0.64 dB) and the premise is inverted. Residual is a broad TILT uncorrelated with BASS or MID-SHIFT ⇒ ordinary V2 broadband residual, **not** a MID-stage error. See gap-audit §J/§E. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **DEMOTED 2026-07-19 — the saturator is NOT V1L's main THD error, and the planned fix is REFUTED.** The joint LF+HF score §5 asked for was built (`v1l_sat_joint_score.py`) and it killed the fix it was built to gate: the error is **NON-MONOTONIC in frequency** (2k **+4.6/+0.2/+5.3**, 4k **+1.1/+2.2/+1.9** too HOT, but 8k **−6.2/−0.1/−0.6** too COLD), so **no band-limit/pre-emphasis can work** — a lowpass on the nonlinear drive cuts 2k, 4k AND 8k, and 8k needs MORE. **Do not implement it.** Saturator is a net JOINT win (rms **3.81 shipped vs 4.88 disabled**) ⇒ **KEEP, unchanged**; but Gap F's "9×" was an LF-only score, worth ~22% on a joint one. ⭐ **The real V1L THD error is 440 Hz** (see Gap D row). Prior state: V1L half root-caused to the Gap F saturator (`v1l_sat_hf_ablate.py`), 2.9 of 3.19 pp of 4 kHz THD. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |

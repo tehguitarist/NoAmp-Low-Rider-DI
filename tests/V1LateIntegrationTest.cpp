@@ -21,6 +21,16 @@ constexpr double kFs = 48000.0;
 // Wet-HF calibration gate threshold (WetHFCorrection.h) — the bell-boost delta (g@3400 - g@1050)
 // reads 8.37 dB ablated vs 11.13 dB active; 10.0 passes active (+1.1) and FAILS ablated (-1.6).
 constexpr double kWetHFBoostGate = 10.0;
+// Gap H err2 top-octave lift (src/dsp/WetTopOctaveRestore.h, guardrail #3). Gated as a BOOST DELTA
+// (16 kHz minus a 1050 Hz reference the shelf is measured inert at) so the threshold is immune to the
+// wet path's own darkness up there. MEASURED: shipped -44.82 dB vs ablated (NALR_WETTOP_OFF) -46.93;
+// -46.0 passes shipped by +1.2 and FAILS ablated by -0.9 (verified both ways, L-003).
+// ⚠ The separation is 2.1 dB, NOT the shelf's own 6 dB, and that is expected: §1's condition is
+// DRIVE=0, where the wet path carries only +12.9 dB of gain, so by 16 kHz the blend pot's dry leak
+// is comparable to the (very weak) wet signal and dilutes the lift in the SUM. Do not "fix" this by
+// assuming the shelf under-delivers — at the captures' real drive settings it delivers in full
+// (analysis/wet_top_verify.py: +5.29 dB at 16 kHz, BLEND=1.00, D0.65).
+constexpr double kWetTopBoostGate = -46.0;
 
 bool finiteBounded(const std::vector<double>& x, double bound)
 {
@@ -218,6 +228,14 @@ int main()
         // Wet-HF calibration gate (WetHFCorrection.h, guardrail #3): FAILS with NALR_WETHF_OFF
         // (boost delta 11.13 active vs 8.37 ablated; threshold 10.0).
         check(bellBoost > kWetHFBoostGate, "wet-HF 3-4kHz calibration active (FAILS with NALR_WETHF_OFF)");
+        // Wet top-octave lift gate (WetTopOctaveRestore.h, guardrail #3): FAILS with NALR_WETTOP_OFF.
+        // ⚠ Reference at 1050 Hz, NOT 5 kHz: a Q0.7 shelf cornered at 9 kHz still delivers ~+1.5 dB
+        // an octave below its corner, so a 5 kHz reference sits INSIDE the shelf's own skirt and
+        // collapsed the ablation separation to 2.5 dB. 1050 Hz is measured inert (0.03 dB).
+        const double topBoost = magnitudeDb(dsp, 16000.0, 0.3) - magnitudeDb(dsp, 1050.0, 0.3);
+        std::printf("      wet top-octave lift (g@16k - g@1050) = %.2f dB\n", topBoost);
+        check(topBoost > kWetTopBoostGate,
+              "wet top-octave restore active (FAILS with NALR_WETTOP_OFF)");
         check(minus40Hz > 10000.0 && minus40Hz < 12000.0,
               "§1 -40 dB point near ~11 kHz (R48/R49=22k §1-match; FAILS the old 33k build @9.15 kHz)");
     }

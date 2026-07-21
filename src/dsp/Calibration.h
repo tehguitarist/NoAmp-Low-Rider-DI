@@ -118,6 +118,35 @@ constexpr double kHFEvenK = 0.15;
 constexpr double kHFEvenHz = 5500.0;
 constexpr int kHFEvenStages = 4;
 
+// V1L wet-path TOP-OCTAVE restore ("Gap H error 2") — see src/dsp/WetTopOctaveRestore.h for the full
+// judgement-call record. V1L ONLY (V1E measures clean up here: top-octave shape mean +0.02 dB across
+// its 3 captures; V2 is a separate, un-auditioned question — see the header).
+//
+// ⚠ THIS MAGNITUDE IS EAR-TUNED, NOT FITTED, AND DELIBERATELY SO. There is NO capture-free reference
+// in this band (§1's curve has run off the graph before 12.5 kHz) and the captures cannot arbitrate
+// either — they are NON-MONOTONIC in BLEND up here (pedal 12.5 kHz: -7.89 at BL1.00, -26.38 at
+// BL0.65, -7.75 at BL0.30), which a crossfade of a flat dry leg and a dark wet leg cannot produce.
+// The BL1.00 capture alone would ask for ~+34 dB, which would mean the cab-sim does not roll off at
+// all; that is rejected. DO NOT re-tune this against the BL1.00 capture.
+// Set kWetTopDb = 0.0 to ship it OFF (bypasses cleanly, bit-identical to pre-layer).
+// ⚠ CORNER/Q CHOSEN BY THE NULL, NOT BY EAR — the one part of this layer that IS measured.
+// A first pass at 9000 Hz / Q0.7 cost real null depth on the low-blend capture (BL0.30 sweep_clean
+// -11.40 -> -10.18 dB) — far too large to be the top octave itself, which is only 1.46% of that
+// capture's sweep energy. Cause (analysis/gaph_topoct_legs.py): at BL0.30 / 4 kHz the dry and wet
+// legs sit at -150 deg with the SUM 5.79 dB BELOW the louder leg — a near-cancellation, where a
+// small change in one leg is AMPLIFIED in the sum. A Q0.7 shelf still delivers ~+1.5 dB an octave
+// below its corner, so its skirt was landing in that zone. 13000/Q0.9 keeps the skirt out of it:
+// null penalty at BLEND=1.00 and 0.65 becomes ZERO at every gain to +12 dB, and BL0.30's halves.
+// Do not lower the corner or the Q without re-running analysis/wet_top_null_sweep.py.
+constexpr double kWetTopHz = 13000.0;
+constexpr double kWetTopDb = 6.0;
+constexpr double kWetTopQ = 0.9;
+// V2's own gain for the SAME shelf shape. V2 shows the same blend-organised top-octave structure as
+// V1L (its three BLEND=1.00 captures read -9.9/-6.5/-5.8 dB, its BL0.90/0.95 read +4.4/+4.2), so the
+// layer is wired in and measurable — but the magnitude is an EAR decision exactly as V1L's was, and
+// V2 has not been auditioned. 0.0 = OFF, and V2 is bit-identical to pre-layer while it stays 0.
+constexpr double kWetTopDbV2 = 0.0;
+
 // NO kDryGain — DO NOT REINTRODUCE A PER-PATH GAIN HERE (removed 2026-07-16, ISS-008).
 //
 // A `kDryGain[rev] = kInputRef / kOutputMakeup[rev]` scalar used to multiply the dry tap before it

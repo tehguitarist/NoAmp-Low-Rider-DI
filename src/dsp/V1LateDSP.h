@@ -32,6 +32,7 @@
 #include "ToneWarpShelf.h"
 #include "WetLFCorrection.h"
 #include "WetHFCorrection.h"
+#include "WetTopOctaveRestore.h"
 #include "HFEvenRestore.h"
 #include "ZenerDriveClipRecovery.h"
 #include "../utils/ChangeGate.h"
@@ -111,6 +112,10 @@ public:
         // params as V1E/V2 — one joint fit, guardrail #6.
         hfEvenRestore.prepare(baseFs);
         hfEvenRestore.setParams(kHFEvenA, kHFEvenK, kHFEvenHz, kHFEvenStages);
+        // Gap H err2: V1L-only top-octave voicing lift, LAST on the wet leg so it cannot perturb
+        // HFEvenRestore's fitted 5.5 kHz sidechain (WetTopOctaveRestore.h). EAR-TUNED judgement call.
+        wetTopRestore.prepare(baseFs);
+        wetTopRestore.setParams(kWetTopHz, kWetTopDb, kWetTopQ);
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -131,6 +136,7 @@ public:
         wetLFCorr.reset();
         wetHFCorr.reset();
         hfEvenRestore.reset();
+        wetTopRestore.reset();
         output.reset();
     }
 
@@ -222,8 +228,9 @@ public:
             const double wetLF = wetLFCorr.process(data[i]);                 // V1L wet-path bass-bump calibration
             const double wetHF = wetHFCorr.process(wetLF);                   // V1L wet-path 3-4 kHz calibration
             const double wetHF2 = hfEvenRestore.process(wetHF);              // Gap D HF 6-9kHz even restore
+            const double wetTop = wetTopRestore.process(wetHF2);             // Gap H err2 top-octave lift
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
-            const double b = blendLevel.process(dry, wetHF2);                // L6
+            const double b = blendLevel.process(dry, wetTop);                // L6
             const double toned = warpShelf.process(tone.process(b));         // L7 tone + base-rate warp trim
             data[i] = output.process(toned);                                 // L8 output
         }
@@ -238,6 +245,7 @@ private:
     ToneWarpShelf warpShelf;   // base-rate tone-stack top-octave warp correction (calibration shelf)
     WetLFCorrection wetLFCorr; // wet-path bass-bump calibration (shipped ON, see header)
     WetHFCorrection wetHFCorr; // wet-path 3-4 kHz calibration (shipped ON, see header)
+    WetTopOctaveRestore wetTopRestore; // wet-path top-octave voicing lift (V1L only, ear-tuned)
     HFEvenRestore hfEvenRestore; // Gap D HF (6-9 kHz) even-harmonic restore, shared all revs
     V1LateOutputStage output;
 

@@ -34,6 +34,7 @@
 #include "WetLFCorrection.h"
 #include "WetHFCorrection.h"
 #include "HFEvenRestore.h"
+#include "WetTopOctaveRestore.h"
 #include "DryTapDelay.h"
 #include "ToneWarpShelf.h"
 #include "ZenerDriveClipRecovery.h"
@@ -78,6 +79,11 @@ public:
         // params as V1E/V1L — one joint fit, guardrail #6.
         hfEvenRestore.prepare(baseFs);
         hfEvenRestore.setParams(kHFEvenA, kHFEvenK, kHFEvenHz, kHFEvenStages);
+        // Gap H err2 top-octave lift — SAME shelf shape as V1L, V2's own gain (kWetTopDbV2, default
+        // 0.0 = OFF so V2 is bit-identical). Last on the wet leg, after HFEvenRestore, so it cannot
+        // perturb that layer's fitted 5.5 kHz sidechain. See WetTopOctaveRestore.h.
+        wetTopRestore.prepare(baseFs);
+        wetTopRestore.setParams(kWetTopHz, kWetTopDbV2, kWetTopQ);
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -100,6 +106,7 @@ public:
         wetLFCorr.reset();
         wetHFCorr.reset();
         hfEvenRestore.reset();
+        wetTopRestore.reset();
         output.reset();
     }
 
@@ -216,8 +223,9 @@ public:
             const double wetLF = wetLFCorr.process(data[i]);                 // V2 wet-path bass-bump calibration
             const double wetHF = wetHFCorr.process(wetLF);                   // V2 wet-path 3-4 kHz calibration
             const double wetHF2 = hfEvenRestore.process(wetHF);              // Gap D HF 6-9kHz even restore
+            const double wetTop = wetTopRestore.process(wetHF2);             // Gap H err2 top-octave lift
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
-            const double bl = blendLevel.process(dry, wetHF2);               // V6
+            const double bl = blendLevel.process(dry, wetTop);               // V6
             const double midded = mid.process(bl);                           // V6: MID + MID SHIFT
             const double toned = warpShelf.process(tone.process(midded));    // V7 tone + base-rate warp trim
             data[i] = output.process(toned);                                 // V8 output
@@ -256,6 +264,7 @@ private:
     WetLFCorrection wetLFCorr; // wet-path bass-bump calibration (shipped ON, see header)
     WetHFCorrection wetHFCorr; // wet-path 3-4 kHz calibration (shipped ON, see header)
     HFEvenRestore hfEvenRestore; // Gap D HF (6-9 kHz) even-harmonic restore, shared all revs
+    WetTopOctaveRestore wetTopRestore; // Gap H err2 top-octave lift (OFF by default on V2)
     V2OutputStage output;
 
     std::vector<double> dryTap;
