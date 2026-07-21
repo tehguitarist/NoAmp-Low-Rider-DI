@@ -216,6 +216,22 @@ without images.
 >   - **⛔ DO NOT fit a blend taper to this.** It would be guardrail #6's failure mode, and on the
 >     balance of evidence it would be fitting a knob-position error into the circuit model — the exact
 >     shape of the L-008 disaster (an unphysical constant absorbing someone else's measurement error).
+>   - **✅ AND ITS AUTHORITY IS NOW MEASURED: < 0.5 dB. The blend is NOT the limiter**
+>     (`analysis/v1l_blend_knob_probe.py` — sweeps the RENDERED blend and reads the null optimum per
+>     capture; unlike α this works on EVERY capture, so it settles taper-vs-knob after all).
+>     BL0.65 optimum **0.55** (−0.10, worth **+0.29 dB**); BL0.30 optimum **0.20–0.25** (−0.05..−0.10,
+>     worth **+0.08..+0.50 dB**). The two agree on a small downward shift ⇒ a modest systematic
+>     wet-level excess, **not** the full clock-hour α implied (α is read over 50 Hz–2.5 kHz, the null
+>     integrates the whole spectrum — they need not agree, and here they don't).
+>     **⇒ even a perfect blend fix buys <0.5 dB. Don't spend more on this.**
+>     ⚠ **BL1.00 IS AN EDGE NON-RESULT — excluded, and it says something different:** its null keeps
+>     improving monotonically all the way down to blend 0.50 and never turns. That is the Gap H err2
+>     capture (−24 dB @12.5 kHz); diluting a badly-wrong WET PATH keeps helping. **A real blend error
+>     would turn** ⇒ BL1.00's problem is the wet path itself, i.e. the parked top-octave item.
+>     ⚠ **TRAP THE PROBE ITSELF FELL INTO FIRST (guard now in the script):** its first run swept too
+>     narrow, so 2 of 3 "optima" sat on the sweep EDGE and it printed a confident but bogus
+>     "INCONSISTENT ⇒ not one taper". **An optimum at the edge of a one-sided sweep is a non-result**
+>     — same trap as the old Vzt 0.20–0.60 scan. Widen until the curve TURNS, or exclude the row.
 >
 > **🆕 FEASIBILITY PASSES ON THE 3-ITEM PUNCH LIST (2026-07-21, earlier session) — NO C++ WRITTEN,
 > paper-tests only, per L-004/L-010 discipline. Rebuilt `OfflineRender` first (`cmake --build build
