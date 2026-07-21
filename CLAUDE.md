@@ -134,7 +134,52 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
-> **🆕 FEASIBILITY PASSES ON THE 3-ITEM PUNCH LIST (2026-07-21, LATEST session) — NO C++ WRITTEN,
+> **🆕 V1L NULL DEPTH — DIAGNOSED, ONE FIX SHIPPED, ROOT CAUSE LOCALISED (2026-07-21, LATEST
+> session).** Prompted by a null-depth spot-check: V1L nulls −5.8/−9.3/−10.0 dB vs V1E's
+> −16.5..−19.7 and V2's −9.0..−16.8. Two new self-controlled diagnostics
+> (`analysis/v1l_null_budget.py`, `v1l_minphase_check.py`) + `v1l_blend_balance.py`.
+> - **V1L's null is PHASE-dominated (54–77%) where V1E's is MAGNITUDE-dominated (77–83%)** — V1L
+>   carries 26–51° of LF phase error at 32–50 Hz vs V1E's 3–17°. ⚠ **But 63–73% of that phase is
+>   IMPLIED BY the magnitude error** (minimum-phase; genuinely non-min-phase excess is only 3.0–7.8°
+>   rms) ⇒ **an ordinary EQ is the right instrument and an ALLPASS is not** — this retro-justifies
+>   deleting the V1L allpass prototype rather than reviving it. **Do not re-raise an allpass here.**
+> - **⚠ THE WHOLE FR TOOLCHAIN IS PHASE-BLIND.** `analyze.transfer()` takes `np.abs(Pxy)`, so
+>   `fr_shape_rms` — the metric that has driven most V1L tuning — **cannot see half of the null's
+>   residual.** This is **L-011 in a new place** (a magnitude-only gate can't see a phase defect).
+>   Use `v1l_null_budget.complex_transfer` for anything phase-sensitive.
+> - **✅ SHIPPED: V1L `WetLFCorrection` 7.0 → 4.0 dB** (V2 unchanged at 4.0; V1E doesn't use it).
+>   The 7 dB value came from a per-capture FR-shape-rms refine, and that metric turns out to be
+>   **indifferent** between 4 and 7 dB (6.97/2.42/1.85 → 7.04/2.43/1.74, flat to 0.1 dB) while 7 dB
+>   **overshot §1's own low-bump target by 3 dB** (§1 target +0.5; ablated −1.7, 4 dB +1.4, 7 dB
+>   +3.5). Nulls: BL0.65 −9.3→−10.6, BL0.30 −10.0→−11.4; BL1.00 −5.8→−5.1 (that capture is dominated
+>   by the parked Gap H err2 top-octave item, so not a clean read here). **⇒ NOT a capture-vs-SPICE
+>   trade — 4 dB is closer to BOTH.** Gate **re-anchored to §1's +0.5 dB target and TIGHTENED**: it
+>   now fails on ablation (−1.7) **and** on a silent revert to 7 dB (+3.5) — verified both ways
+>   (guardrail #3; deliberately not the L-001 pattern, the window is narrower than what it replaced).
+>   31/31 ctest green on a full `-j8` build.
+> - **⛔ THE REMAINING V1L DEFICIT CANNOT BE FIXED BY EITHER WET-PATH BELL — STOP RE-TUNING THEM.**
+>   The required correction **flips sign with BLEND**: at 50–80 Hz BL0.65/BL0.30 want ~−2 dB while
+>   BL1.00 wants ~+2 dB; at 4 kHz the plugin is −2.9 dB (BL0.65) but **+5.4 dB** (BL0.30). Both
+>   `WetLFCorrection` and `WetHFCorrection` sit on the WET path BEFORE the blend, so no fc/gain/Q
+>   fixes all three captures (guardrail #6). **The deficit is in the DRY/WET BALANCE.**
+> - **ROOT CAUSE LOCALISED, NOT YET FIXED.** `v1l_blend_balance.py` splits a render into its two legs
+>   exactly via `NALR_NODRY` (`dry = full − wet`, verified to 1.3e-15 — the tap is summed after all
+>   nonlinearity) and solves for the wet-leg scaling α(f) that would match the pedal, pinning the free
+>   global gain **in the twin-T notch** (the one band where the wet path is ~−35 dB, so the pedal's
+>   output is a near-direct read of its own dry leg). **Result (V1L BL0.30): α = −5.4..−7.0 dB, FLAT
+>   63 Hz–2.5 kHz, phase ~0°** ⇒ a LEVEL/balance error, not a shape error: **our wet leg is ~6 dB too
+>   hot relative to dry at BLEND=0.30.** Above 2.5 kHz α rises (+0.6 @4k, +6.1 @6.3k) — real HF
+>   structure on top, matching the HF sign-flip.
+>   **⚠ IDENTIFIABILITY LIMIT — α is measurable on EXACTLY ONE capture in the FINAL matrix.** BL1.00
+>   self-rejects (wet dominates the notch by 28.5 dB), BL0.65 self-rejects (legs within 0.6 dB), and
+>   V1E can't cross-check (it has **no** BLEND<1.00 capture — documented permanent blind spot). ⇒ a
+>   **strong lead, NOT a fitting target**; fitting a blend taper to one point is the guardrail #6
+>   failure mode. **NEXT (capture-free, where the schematic CAN arbitrate): audit the modelled BLEND
+>   pot law + wiper loading against `netlists.md` L6** (VR6 wiper → VR4 → R4 100k into virtual
+>   ground — the wiper is LOADED, so an ideal-crossfade or unloaded-taper implementation would
+>   mis-weight the legs exactly like this).
+>
+> **🆕 FEASIBILITY PASSES ON THE 3-ITEM PUNCH LIST (2026-07-21, earlier session) — NO C++ WRITTEN,
 > paper-tests only, per L-004/L-010 discipline. Rebuilt `OfflineRender` first (`cmake --build build
 > -j8`) — fresh, not stale; full `ctest` 31/31 green.**
 > - **Item 1 (Gap D HF, 6.4-8.1 kHz H2 shortfall) — RE-CONFIRMED CURRENT + FEASIBLE, design note
