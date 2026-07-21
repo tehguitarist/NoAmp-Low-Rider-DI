@@ -74,7 +74,7 @@ def main():
         nom = parsed["blend"]
         offs = np.linspace(-a.span, a.span, a.steps)
         print(f"=== {parsed['rev']}  D{parsed['drive']:.2f} BL{nom:.2f} P{parsed['presence']:.2f}")
-        best, bestb = None, None
+        best, bestb, tested = None, None, []
         for o in offs:
             b = nom + o
             if not (0.0 <= b <= 1.0):
@@ -82,22 +82,36 @@ def main():
             nd = render_null(a.bin, parsed, b, orig, cap_al, a.os)
             if nd is None:
                 continue
+            tested.append(b)
             mark = " *" if abs(o) < 1e-9 else "  "
             print(f"    blend {b:5.2f}{mark}  null {nd:7.2f} dB")
             if best is None or nd < best:
                 best, bestb = nd, b
         if best is not None:
-            print(f"    -> best {bestb:.2f} (nominal {nom:.2f}, shift {bestb-nom:+.2f})   "
-                  f"gain over nominal: see rows above\n")
-            summary.append((nom, bestb, best))
+            # ⚠ BOUNDARY GUARD. An optimum sitting on the swept EDGE is a non-result: the curve is
+            # still descending when the range runs out, so the true optimum is unknown and the
+            # printed "shift" is an artefact of where the sweep stopped, not a measurement. The
+            # first run of this probe reported shift -0.15 for two captures purely this way, and
+            # comparing those against the one genuine interior optimum produced a bogus
+            # "INCONSISTENT" verdict. (Same trap as the old one-sided Vzt 0.20-0.60 scan.)
+            lo, hi = min(tested), max(tested)
+            edge = (abs(bestb - lo) < 1e-9 and lo > 0.0) or (abs(bestb - hi) < 1e-9 and hi < 1.0)
+            tag = "  *** AT SWEEP EDGE — NOT AN OPTIMUM, widen --span ***" if edge else ""
+            print(f"    -> best {bestb:.2f} (nominal {nom:.2f}, shift {bestb-nom:+.2f}){tag}\n")
+            summary.append((nom, bestb, best, edge))
 
     if summary:
         print("SUMMARY  nominal -> best rendered blend")
-        for nom, bb, nd in summary:
-            print(f"  BL{nom:.2f} -> {bb:.2f}  (shift {bb-nom:+.2f}, null {nd:.2f} dB)")
-        shifts = [bb - nom for nom, bb, _ in summary]
-        print(f"  shifts: {['%+.2f' % s for s in shifts]}   "
-              f"{'CONSISTENT ⇒ taper' if max(shifts)-min(shifts) < 0.06 else 'INCONSISTENT ⇒ not one taper'}")
+        for nom, bb, nd, edge in summary:
+            print(f"  BL{nom:.2f} -> {bb:.2f}  (shift {bb-nom:+.2f}, null {nd:.2f} dB)"
+                  f"{'   [EDGE — excluded]' if edge else ''}")
+        good = [(nom, bb) for nom, bb, _, edge in summary if not edge]
+        if len(good) < 2:
+            print(f"  only {len(good)} interior optimum/optima — CANNOT decide taper vs knob; widen --span")
+        else:
+            shifts = [bb - nom for nom, bb in good]
+            print(f"  interior shifts: {['%+.2f' % s for s in shifts]}   "
+                  f"{'CONSISTENT ⇒ taper' if max(shifts)-min(shifts) < 0.06 else 'INCONSISTENT ⇒ not one taper'}")
 
 
 if __name__ == "__main__":
