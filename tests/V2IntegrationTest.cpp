@@ -290,6 +290,57 @@ int main()
               "MID SHIFT throw audibly changes the response (500Hz throw boosts more at 440Hz)");
     }
 
+    // Gap D HF even-harmonic restore (HFEvenRestore) — ABLATION GATE (guardrail #3). Shared,
+    // revision-independent ~11 dB H2 shortfall at 6-9 kHz (gapd_harmonic_map.py); fitted jointly
+    // across all 3 revisions' captures (analysis/gapd_hf_restore_fit.py). Same DFT technique used
+    // for V1E's even-shaper gate: drive at 7.5 kHz (in the recovery cab-sim's rolled-off top octave),
+    // measure H2 via a Hann-windowed DFT, prove it collapses when the layer is ablated.
+    std::printf("Gap D HF even-harmonic restore (HFEvenRestore) ablation gate:\n");
+    {
+        const double f = 7500.0, amp = 0.5;
+        auto measureH2 = [&](bool ablate) -> double
+        {
+            nalr::V2DSP dsp;
+            dsp.prepare(kFs, 256);
+            // low drive, full wet, noon, mid/mid-shift/bass-shift flat/off
+            dsp.setParams(0.3, 0.5, 1.0, 0.5, 0.5, false, 0.5, 0.5, false);
+            if (ablate)
+                dsp.setHFEvenRestore(0.0, 0.15, 5500.0, 4);
+            dsp.setOversamplingFactor(8);
+            dsp.reset();
+            int n = 0;
+            std::vector<double> buf(256), y;
+            const int warm = 30, take = 40;
+            y.reserve((size_t) (take * 256));
+            for (int b = 0; b < warm + take; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                    buf[(size_t) i] = amp * std::sin(2.0 * kPi * f * (double) n++ / kFs);
+                dsp.processBlock(buf.data(), 256);
+                if (b >= warm)
+                    y.insert(y.end(), buf.begin(), buf.end());
+            }
+            const size_t N = y.size();
+            double reF = 0, imF = 0, re2 = 0, im2 = 0;
+            for (size_t i = 0; i < N; ++i)
+            {
+                const double w = 0.5 - 0.5 * std::cos(2.0 * kPi * (double) i / (double) (N - 1));
+                const double ph = 2.0 * kPi * f * (double) i / kFs;
+                const double yi = y[i] * w;
+                reF += yi * std::cos(ph);      imF += yi * std::sin(ph);
+                re2 += yi * std::cos(2 * ph);  im2 += yi * std::sin(2 * ph);
+            }
+            const double h1 = std::hypot(reF, imF);
+            const double h2 = std::hypot(re2, im2);
+            return 20.0 * std::log10(h2 / (h1 + 1e-20) + 1e-20);
+        };
+        const double h2On = measureH2(false);
+        const double h2Off = measureH2(true);
+        std::printf("      H2 re fund @7.5kHz: shaper ON = %.1f dB,  ablated = %.1f dB,  delta = %.1f dB\n",
+                    h2On, h2Off, h2On - h2Off);
+        check((h2On - h2Off) > 5.0, "Gap D HF H2 restore COLLAPSES when ablated (gate can fail)");
+    }
+
     std::printf("%s\n", pass ? "V2IntegrationTest PASSED" : "V2IntegrationTest FAILED");
     return pass ? 0 : 1;
 }

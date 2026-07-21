@@ -97,6 +97,27 @@ constexpr double kOutputMakeup[3] = { 1.084, 1.121, 0.618 };
 constexpr double kV1eEvenA = 0.01;
 constexpr double kV1eEvenK = 1.2;
 
+// HF-selective even-harmonic restore (Gap D's ~11 dB intrinsic HF/H2 shortfall) — see
+// src/dsp/HFEvenRestore.h. SHARED across ALL THREE revisions (the deficit is revision-independent,
+// present even on V1E which has no clip element). Fitted jointly across all 3 revisions' captures
+// (11 total) x 3 driven levels, anchored at 6-7.5 kHz only (analysis/gapd_hf_restore_fit.py; the
+// 9 kHz anchor is a discounted Farina-edge artefact — see HFEvenRestore.h). a=0 disables
+// (bit-identical to pre-fit).
+// Fitted a=5.0 / k=0.15 / corner=5500 Hz / stages=4 (2026-07-21): pooled |H2Δ_HF| (6/7.5 kHz, 11
+// captures x 3 levels) 13.17 -> 11.73 dB, bias -11.40 -> +0.85 (near-unbiased). Guards held: midband
+// (1.2-4.8 kHz) H2Δ 8.79 -> 8.50 (no regression, slight improvement), |H3Δ| 5.25 -> 5.30 (odd
+// harmonics untouched, even-only by construction), clean-FR shape rms 1.26 -> 1.26 (unchanged). A
+// wider grid search (a up to 40, k down to 0.05) found configs scoring marginally better on |H2Δ|
+// alone but with bias climbing to +12..+27 dB — a systematic overshoot across most captures to chase
+// the few that need the most (the WetHFCorrection "don't trade one capture off against another"
+// lesson) — a=5/k=0.15 was chosen for its near-zero bias over those higher-score-but-overshooting
+// points. Residual ~12 dB is documented best-effort: one memoryless HF-selective shaper cannot fully
+// close a shortfall that varies 15-23 dB across three revisions' captures.
+constexpr double kHFEvenA = 5.0;
+constexpr double kHFEvenK = 0.15;
+constexpr double kHFEvenHz = 5500.0;
+constexpr int kHFEvenStages = 4;
+
 // NO kDryGain — DO NOT REINTRODUCE A PER-PATH GAIN HERE (removed 2026-07-16, ISS-008).
 //
 // A `kDryGain[rev] = kInputRef / kOutputMakeup[rev]` scalar used to multiply the dry tap before it

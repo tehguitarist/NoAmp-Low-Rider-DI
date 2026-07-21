@@ -93,6 +93,9 @@ without images.
   - `zener_model_vs_datasheet.py` — zener knee r_dif vs the DZ23C3V3 datasheet (paper only)
   - `gapd_vzt_authority.py` — knee-softness ablation sweep with liveness + V1E controls
   - `gapd_locus_reachability.py` — ⚠ SUPERSEDED, do not cite (its own pooling control failed)
+  - `proto_hf_restore.py` — Gap D HF feasibility paper-test (no renders); superseded by the next one
+  - `gapd_hf_restore_fit.py` — ⭐ the shipped `HFEvenRestore` joint fit (11 captures × 3 revisions,
+    render-and-score harness mirroring `v1e_even_fit.py`; `--quick` for a fast 1-capture/rev grid)
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
 - **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
   `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).
@@ -262,6 +265,37 @@ without images.
 >   whether the 6–7.5 kHz H2 restore is audible enough to warrant shipping the layer.** The
 >   feasibility design (≥2-pole HP sidechain ~5.5 kHz, even-only H2-adding mirror of CHR) is proven
 >   and parked; the 9 kHz anchor stays discounted as a Farina-edge artefact regardless.
+>
+> **✅✅ GAP D HF — BUILT AND SHIPPED 2026-07-21 (same day, later session), per the user's listening-test
+> verdict ("worth doing").** `src/dsp/HFEvenRestore.h` — the feasibility design above, built as-is:
+> a 4-pole cascaded one-pole highpass sidechain at 5500 Hz feeding an even-only shaper
+> `y = x + a·xHF·tanh(xHF/k)` (xHF = the HP-filtered signal), on the wet leg before BLEND, **SHARED
+> across ALL THREE revisions with ONE set of params** (the deficit itself is revision-independent —
+> V1E, which has no clip element, shows it too — so guardrail #6 is a single joint fit, not per-rev).
+> Fitted `analysis/gapd_hf_restore_fit.py` (mirrors `v1e_even_fit.py`'s render-and-score harness,
+> extended to pool all 11 captures across all 3 revisions): **a=5.0, k=0.15, corner=5500 Hz,
+> stages=4**. Pooled |H2Δ| at the trustworthy 6/7.5 kHz anchors (11 captures × 3 levels) **13.17 →
+> 11.73 dB**, bias **−11.40 → +0.85** (near-unbiased — the fix isn't just louder, it's centred).
+> Guards held: midband (1.2-4.8 kHz) H2Δ **8.79 → 8.50** (no regression, slight improvement), |H3Δ|
+> (odd harmonics) **5.25 → 5.30** (untouched, confirming even-only-by-construction), clean-FR shape
+> rms **1.26 → 1.26** (unchanged). A wider grid (a to 40, k down to 0.05) found configs scoring
+> marginally better on |H2Δ| alone but with bias climbing to +12..+27 dB — systematically overshooting
+> most captures to chase the few needing the most, the same "don't trade one capture off against
+> another" failure mode `WetHFCorrection`'s refine already hit once — a=5/k=0.15 was chosen for its
+> near-zero bias instead. **Residual ~12 dB is real and documented best-effort**: one memoryless
+> HF-selective shaper cannot fully close a shortfall that itself varies 15–23 dB across three
+> revisions' captures at 7.5 kHz (see the per-revision table above) — closing it further would mean
+> either per-revision values (guardrail #6 violation) or a shape more complex than the feasibility
+> design called for.
+> Gated by a Hann-windowed-DFT H2 ablation check in all three `*IntegrationTest`s (mirrors the
+> V1EEvenShaper §5 gate; drives 7.5 kHz at low drive/full wet, measures H2, proves it collapses under
+> `setHFEvenRestore(0.0, ...)`) — measured deltas **V1E +34.3 dB, V1L +7.7 dB, V2 +10.7 dB**, all well
+> clear of their gate thresholds. 31/31 ctest green on a full `-j8` build. New calibration constants
+> `kHFEvenA/K/Hz/Stages` in `Calibration.h`; env overrides `NALR_HFEVEN_OFF/_A/_K/_HZ/_STAGES` for
+> tuning/ablation (mirrors `WetHFCorrection`'s convention). This closes out Item 1 of the two-item
+> "decide by ear, LAST" bucket — **Gap H err2 (V1L 10–16 kHz top octave) is the one remaining item**,
+> and unlike this one it has no design yet (no SPICE anchor exists in that band to arbitrate against;
+> see the bucket's own note below for what a first attempt would need to do).
 > - **Item 2 (Gap F cab-sim residual vs items 1/H-err2) — NOT the same mechanism, no new work
 >   justified.** Reasoned from existing evidence (`cascade_analysis.py`'s 2026-07-21 re-run, already
 >   in gap-audit §F), no new renders needed: Gap F's cab-sim excess is a POSITIVE (too HOT) delta
@@ -469,11 +503,15 @@ without images.
 >   judgement call is the actual tiebreaker. Do not re-open from the WetHFCorrection precedent
 >   alone before then — a future session would still need a fresh argument, not just "we did it for
 >   the neighbouring band."
->   **⚠ THIS "DECIDE BY EAR, LAST" BUCKET NOW HOLDS TWO ITEMS (user, 2026-07-21):** Gap H err2 (V1L
->   10–16 kHz top octave) AND Gap D's 6–7.5 kHz H2 shortfall (see Item 1 above). Both are HF, both are
->   near-inaudible-energy / unarbitrable-numerically, both have a parked build path, and both are
->   deferred to a final listening-test pass rather than more numeric arbitration or a speculative
->   build. Do them together at the very end of Phase 10.
+>   **⚠ THIS "DECIDE BY EAR, LAST" BUCKET ORIGINALLY HELD TWO ITEMS (user, 2026-07-21); ONE IS NOW
+>   CLOSED.** Gap D's 6–7.5 kHz H2 shortfall (Item 1 above) was built and shipped 2026-07-21 (same
+>   day, later session) after a listening pass confirmed it was worth doing — see the ✅✅ block above
+>   (`HFEvenRestore.h`). **Gap H err2 (V1L 10–16 kHz top octave) is the sole item left in this bucket**
+>   — it still has no design (no SPICE anchor exists in that band to arbitrate against, unlike Gap D's
+>   HF half which had a capture-fittable harmonic target), so a first attempt needs to originate a
+>   shape/corner/gain from ear + `analysis/topoct_analog_truth.py`/`hf_s1_check.py`'s existing top-
+>   octave measurements, then apply the same six-guardrail treatment (named layer, ablation gate,
+>   documented judgement call).
 > - **Gap F (V1L blend residual's cab-sim/HF component)** — re-checked 2026-07-21, "partially
 >   dissolved, not fully closed," parked for lack of a new idea. Check whether it's the same
 >   underlying HF droop as the two items above before treating it as a third, separate problem.
@@ -888,7 +926,16 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **Last change (2026-07-21, LATEST session): ✅ V1E EVEN-HARMONIC DEFICIT FIXED (from a Gap-D granular
+> **Last change (2026-07-21, LATEST session): ✅ GAP D HF (6-9 kHz H2 shortfall) BUILT AND SHIPPED**
+> — `src/dsp/HFEvenRestore.h`, an HP-sidechain-gated even-only shaper (4-pole @5500 Hz), ONE joint fit
+> (a=5.0/k=0.15) shared across all three revisions. Pooled |H2Δ| at 6/7.5 kHz 13.17→11.73 dB, bias
+> −11.40→+0.85 (near-unbiased), midband/odd/FR guards all held. Gated by a DFT H2 ablation check in
+> all three IntegrationTests (deltas +34.3/+7.7/+10.7 dB). 31/31 ctest green. Closes Item 1 of the
+> two-item "decide by ear, LAST" bucket — only Gap H err2 (V1L top octave) remains in it, and it still
+> has no design (see that bucket's note, "🆕 RECONSIDERATION SWEEP" section below). Full detail in the
+> ✅✅ block under "Item 1 (Gap D HF...)" further down this file.
+>
+> **Prior change (2026-07-21, earlier session): ✅ V1E EVEN-HARMONIC DEFICIT FIXED (from a Gap-D granular
 > map, user chose this target; artificial fix authorised).** A 24-anchor per-order harmonic map of all
 > 11 captures (`analysis/gapd_harmonic_map.py` + `gapd_harmonic_perband.py`, NEW) REFRAMED Gap D: away
 > from the twin-T notch (Gap-G zone, ~370–950 Hz, unarbitrable), V2's clean THD residual is only a
@@ -1470,7 +1517,7 @@ without images.
 > | **F** | V1L blend residual +6 dB @BL0.65 | OPEN — **probably the same phenomenon as H/J**; don't treat as separate until H err2 lands. |
 > | **I** | THD-vs-LEVEL slope wrong (V1E flat) | 🔄 **H2 remnant CHARACTERISED 2026-07-19 and confirmed NOT closable by the rail** (`analysis/h2_asym_perdrive.py`). Required asymmetry is **0.05 V at D0.50/0.60 but 0.60 V at D1.00 (12×)** ⇒ **guardrail #6 FAILS, do not ship a fixed OR drive-dependent asymmetry.** The mechanism is wrong in KIND: a real rail asymmetry is a fixed voltage, and the only drive-dependent candidate (CMOS output Ron) lacks authority — the stage drives 330k, so output current is ~µA (L-010). Shipped −4.10 STAYS (best single value, plausible magnitude). ⚠ **A SECOND L-009 DEFECT WAS FOUND AND FIXED HERE** — `--rail-vneg/--rail-vpos` treated ±4.2 as "unspecified", so the symmetric baseline silently rendered V1E's −4.10 default; every scan grid containing −4.2 duplicated the −4.10 column, incl. the fit that chose the shipped value. Now NaN-sentinel, verified per revision. Prior state: **UNWOUND 2026-07-18** — the level/taper half is FIXED & SHIPPED: `kInputRef` now PER-REV (V1E **7.0**, V1L/V2 1.3), `kDriveEndR=0`, V1E saturator OFF. V1E D1.00 THD 4.7/4.4/7.0→**9.9/10.3/11.0** (vs pedal 10.4/9.8/8.4), FR held 1.79→1.71. Done capture-only (external anchor confirmed gone). **H2 RESTORED** via a 0.10 V asymmetric rail (−4.10/+4.20): harmonic median 48.8→**6.5** (better than pre-unwind 12.0). Residual: onset floor + drive-dependent H2 spread (best-effort). See gap-audit §I. |
 > | **D-v1e** | V1E even harmonics (H2/H4/H6) −10..−40 dB LOW whole-band, all levels | ✅ **FIXED 2026-07-21**, found via a NEW granular per-order harmonic map (`analysis/gapd_harmonic_map.py`/`gapd_harmonic_perband.py`) built to broaden Gap-D work across all 3 revs. Was the LARGEST clean harmonic-magnitude error in the whole 11-capture matrix — bigger than V2's own "Gap D" residual once the notch (Gap G) is fenced off. Cause: pedal's H2 is a level-flat op-amp/VCOM-asymmetry FLOOR present BELOW the clip; the shipped asym rail only makes evens AT the clip. Fixed by `src/dsp/V1EEvenShaper.h` (even-only `y=x+a·x·tanh(x/k)`, wet path, zero odd-harmonic contamination by construction). Fit a=0.01/k=1.2: pooled \|H2Δ\| 18.0→8.9 dB, \|H3Δ\|/FR **unchanged**. Gated (windowed-DFT H2 ablation, `V1EarlyIntegrationTest` §5, verified to fail). **Checked V1L/V2 for the same pattern — neither has it**, not ported. See gap-audit §D-v1e. |
-> | **D** | V2 zener drive tracking (+ V1L) — **SPLIT 2026-07-19, no longer one item** | 🔄 **V1L drive axis SHIPPED (ClipDriveNormaliser); V2 LF SHIPPED (ClipHarmonicReducer, 2026-07-21); V2 HF + notch = best-effort/listening-bucket.** V1L: `src/dsp/ClipDriveNormaliser.h` (envelope-driven clip-drive normalisation) CLOSES V1L's drive axis (spread err +9.84 → **+1.58 dB**) — shipped + gated (`V1LateGapDTest`). **A drive normaliser was REFUTED for V2** (it moves compression, which already matches to 0.25 dB; V2 needs fewer harmonics at UNCHANGED compression). **✅ V2's LF (40–230 Hz) odd-harmonic overshoot IS NOW CLOSED by a DIFFERENT mechanism** — `src/dsp/ClipHarmonicReducer.h`, a level-dependent LF-selective HARMONIC REDUCER (restores a level-matched β of the pre-clip signal into the clipped signal → removes harmonics at ~fixed compression, sidestepping the refutation). Fitted `slope 0.03/env0 2.5/betaMax 0.4/τ30/sc250`, shipped ON V2 only, gated (`V2ClipHarmonicReducerTest`, 4 gates incl. ablation, fails on revert). On captures: −6 dBFS 110 Hz overshoot **+3.70 → +1.90 pp**, low level preserved (+0.53 → +0.41), pooled LF ~halved. 31/31 ctest green. **What's LEFT of Gap D V2:** the 370–950 Hz notch zone is Gap-G (permanently unarbitrable on the FINAL matrix); the 6–7.5 kHz H2 shortfall is in the "decide-by-ear, LAST" listening bucket (Item 1 / Gap H err2 above). ⚠ Only V2 can carry a two-freq THD argument (V1E/V1L bridged-T). ⚠ Zener knee still 2.4–3× harder than datasheet, NOT fixed, **Vzt stays 0.20**. See gap-audit §D head-of-section + ClipHarmonicReducer.h. |
+> | **D** | V2 zener drive tracking (+ V1L) — **SPLIT 2026-07-19, no longer one item** | 🔄 **V1L drive axis SHIPPED (ClipDriveNormaliser); V2 LF SHIPPED (ClipHarmonicReducer, 2026-07-21); V2 HF + notch = best-effort/listening-bucket.** V1L: `src/dsp/ClipDriveNormaliser.h` (envelope-driven clip-drive normalisation) CLOSES V1L's drive axis (spread err +9.84 → **+1.58 dB**) — shipped + gated (`V1LateGapDTest`). **A drive normaliser was REFUTED for V2** (it moves compression, which already matches to 0.25 dB; V2 needs fewer harmonics at UNCHANGED compression). **✅ V2's LF (40–230 Hz) odd-harmonic overshoot IS NOW CLOSED by a DIFFERENT mechanism** — `src/dsp/ClipHarmonicReducer.h`, a level-dependent LF-selective HARMONIC REDUCER (restores a level-matched β of the pre-clip signal into the clipped signal → removes harmonics at ~fixed compression, sidestepping the refutation). Fitted `slope 0.03/env0 2.5/betaMax 0.4/τ30/sc250`, shipped ON V2 only, gated (`V2ClipHarmonicReducerTest`, 4 gates incl. ablation, fails on revert). On captures: −6 dBFS 110 Hz overshoot **+3.70 → +1.90 pp**, low level preserved (+0.53 → +0.41), pooled LF ~halved. 31/31 ctest green. **✅ The 6–7.5 kHz H2 shortfall (all 3 revs, shared) IS NOW SHIPPED too** — `src/dsp/HFEvenRestore.h` (2026-07-21, later session), one joint fit a=5.0/k=0.15/5500 Hz/4-pole, pooled |H2Δ| 13.17→11.73 dB, bias near-zero, gated (DFT ablation check, all 3 IntegrationTests). **What's LEFT of Gap D V2:** the 370–950 Hz notch zone is Gap-G (permanently unarbitrable on the FINAL matrix); the ~12 dB HF residual after HFEvenRestore is documented best-effort (one shaper can't fully close a shortfall that varies 15–23 dB per revision). ⚠ Only V2 can carry a two-freq THD argument (V1E/V1L bridged-T). ⚠ Zener knee still 2.4–3× harder than datasheet, NOT fixed, **Vzt stays 0.20**. See gap-audit §D head-of-section + ClipHarmonicReducer.h + HFEvenRestore.h. |
 > | **H err1** | V1L cab-sim corner | ✅ **DONE 2026-07-18** (R48/R49 33k→22k §1-match override). |
 > | **G, M** | THD-vs-freq unusable / Farina artefact | ✅ Standing finding / metric fixed. Not gaps. |
 > | **A/A′, P3–P7** | (various) | ✅ DONE/VOID — see table below. |

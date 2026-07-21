@@ -33,6 +33,7 @@
 #include "DiagFlags.h"
 #include "WetLFCorrection.h"
 #include "WetHFCorrection.h"
+#include "HFEvenRestore.h"
 #include "DryTapDelay.h"
 #include "ToneWarpShelf.h"
 #include "ZenerDriveClipRecovery.h"
@@ -73,6 +74,10 @@ public:
         wetLFCorr.setParams(50.0, 4.0, 1.2); // V2 wet-path bass-bump calibration (WetLFCorrection.h)
         wetHFCorr.prepare(baseFs);
         wetHFCorr.setParams(3400.0, 3.0, 1.1); // V2 wet-path 3-4 kHz calibration (WetHFCorrection.h)
+        // Gap D HF: shared, revision-independent H2 shortfall at 6-9 kHz (HFEvenRestore.h). Same
+        // params as V1E/V1L — one joint fit, guardrail #6.
+        hfEvenRestore.prepare(baseFs);
+        hfEvenRestore.setParams(kHFEvenA, kHFEvenK, kHFEvenHz, kHFEvenStages);
         output.prepare(baseFs);
         dryTap.assign((size_t) juce::jmax(1, maxBlock), 0.0);
         // Gap J: the wet path runs through an OVERSAMPLED region whose FIRs add real latency, while
@@ -94,6 +99,7 @@ public:
         warpShelf.reset();
         wetLFCorr.reset();
         wetHFCorr.reset();
+        hfEvenRestore.reset();
         output.reset();
     }
 
@@ -150,6 +156,10 @@ public:
     void setRailVoltages(double vNeg, double vPos) noexcept { driveRegion.setRailVoltages(vNeg, vPos); }
     void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }
     void setSaturationOffset(double dcOffset) noexcept { driveRegion.setSaturationOffset(dcOffset); }
+    void setHFEvenRestore(double aWeight, double kneeVolts, double hpHz, int stages) noexcept
+    {
+        hfEvenRestore.setParams(aWeight, kneeVolts, hpHz, stages);
+    }
     // Gap D calibration layer (src/dsp/ClipDriveNormaliser.h). depth 0 = OFF and BIT-IDENTICAL to
     // the uncorrected chain — the shipping default until a joint fit across V1L AND V2 is committed
     // (guardrail #6; analysis/gapd_fit_harness.py enforces the one-fit constraint).
@@ -205,8 +215,9 @@ public:
         {
             const double wetLF = wetLFCorr.process(data[i]);                 // V2 wet-path bass-bump calibration
             const double wetHF = wetHFCorr.process(wetLF);                   // V2 wet-path 3-4 kHz calibration
+            const double wetHF2 = hfEvenRestore.process(wetHF);              // Gap D HF 6-9kHz even restore
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
-            const double bl = blendLevel.process(dry, wetHF);                // V6
+            const double bl = blendLevel.process(dry, wetHF2);               // V6
             const double midded = mid.process(bl);                           // V6: MID + MID SHIFT
             const double toned = warpShelf.process(tone.process(midded));    // V7 tone + base-rate warp trim
             data[i] = output.process(toned);                                 // V8 output
@@ -244,6 +255,7 @@ private:
     ToneWarpShelf warpShelf;   // base-rate tone-stack top-octave warp correction (calibration shelf)
     WetLFCorrection wetLFCorr; // wet-path bass-bump calibration (shipped ON, see header)
     WetHFCorrection wetHFCorr; // wet-path 3-4 kHz calibration (shipped ON, see header)
+    HFEvenRestore hfEvenRestore; // Gap D HF (6-9 kHz) even-harmonic restore, shared all revs
     V2OutputStage output;
 
     std::vector<double> dryTap;

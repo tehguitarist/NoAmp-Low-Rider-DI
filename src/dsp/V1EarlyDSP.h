@@ -26,6 +26,7 @@
 #include "V1EarlyDriveClipRecovery.h"
 #include "V1EarlyStages.h"
 #include "V1EEvenShaper.h"
+#include "HFEvenRestore.h"
 #include "DryTapDelay.h"
 #include "DiagFlags.h"
 #include "../utils/ChangeGate.h"
@@ -79,6 +80,11 @@ public:
         // (op-amp/VCOM asymmetry). This even-only shaper supplies that floor across all levels without
         // touching the already-matched ODD harmonics. Gap D granular map, 2026-07-21.
         evenShaper.setParams(kV1eEvenA, kV1eEvenK);
+        // Gap D HF: shared, revision-independent H2 shortfall at 6-9 kHz (HFEvenRestore.h). Applied
+        // after the broadband even shaper above — that one is frequency-flat and doesn't reach far
+        // enough into the top octave on its own (analysis/proto_hf_restore.py, gapd_harmonic_map.py).
+        hfEvenRestore.prepare(baseFs);
+        hfEvenRestore.setParams(kHFEvenA, kHFEvenK, kHFEvenHz, kHFEvenStages);
         blendLevel.prepare(baseFs);
         tone.prepare(baseFs);
         output.prepare(baseFs);
@@ -97,6 +103,7 @@ public:
         // their WDF caps; they self-settle within a few samples and expose no reset — matching how the
         // Phase-1 gates drove them, so nothing to clear there.)
         driveRegion.reset();
+        hfEvenRestore.reset();
         blendLevel.reset();
         dryDelay.reset();
         tone.reset();
@@ -140,6 +147,10 @@ public:
     void setDriveEndResistance(double ohms) noexcept { driveRegion.setDriveEndResistance(ohms); }
     void setSaturationOffset(double dcOffset) noexcept { driveRegion.setSaturationOffset(dcOffset); }
     void setEvenShaper(double aWeight, double kneeVolts) noexcept { evenShaper.setParams(aWeight, kneeVolts); }
+    void setHFEvenRestore(double aWeight, double kneeVolts, double hpHz, int stages) noexcept
+    {
+        hfEvenRestore.setParams(aWeight, kneeVolts, hpHz, stages);
+    }
 
     // Base-rate samples of latency this chain reports (only the OS region contributes; 0 at 1x).
     int getLatencySamples() const noexcept { return driveRegion.getLatencySamples(); }
@@ -170,7 +181,7 @@ public:
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
             // Even-harmonic restoration on the WET leg only (before BLEND), so it vanishes at
             // BLEND=dry exactly as the pedal's wet-path asymmetry does.
-            const double wet = evenShaper.process(data[i]);
+            const double wet = hfEvenRestore.process(evenShaper.process(data[i]));
             const double b = blendLevel.process(dry, wet);
             data[i] = output.process(tone.process(b));
         }
@@ -181,6 +192,7 @@ private:
     V1EarlyPresenceStage presence;
     V1EarlyDriveClipRecovery driveRegion; // E4 DRIVE + rail clip + E5 recovery (oversampled)
     V1EEvenShaper evenShaper;             // small-signal even-harmonic restoration (wet path)
+    HFEvenRestore hfEvenRestore;          // Gap D HF (6-9 kHz) even-harmonic restore, shared all revs
     V1EarlyBlendLevelStage blendLevel;
     V1EarlyToneStackStage tone;
     V1EarlyOutputStage output;
