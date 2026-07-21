@@ -134,6 +134,54 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
+> **🆕 FEASIBILITY PASSES ON THE 3-ITEM PUNCH LIST (2026-07-21, LATEST session) — NO C++ WRITTEN,
+> paper-tests only, per L-004/L-010 discipline. Rebuilt `OfflineRender` first (`cmake --build build
+> -j8`) — fresh, not stale; full `ctest` 31/31 green.**
+> - **Item 1 (Gap D HF, 6.4-8.1 kHz H2 shortfall) — RE-CONFIRMED CURRENT + FEASIBLE, design note
+>   found.** Re-ran `gapd_harmonic_map.py` fresh (post V1EEvenShaper + ClipHarmonicReducer) — the
+>   deficit is still live: H2Δ (plugin−pedal) at 7500/9000 Hz = V1E −15.4/−29.9, V1L −14.5/−35.9,
+>   V2 −23.0/−45.6 dB, consistent with the pre-fix 6.4/8.1 kHz numbers in shape/scale. **⚠ The 9000 Hz
+>   anchor's largest single-capture readings (V1L D0.65 BL1.00, V2 D0.90 BL1.00: pedal THD 22-23% at
+>   9 kHz) are almost certainly a Farina-near-edge measurement artefact, not a real deficit** — H2 at
+>   9 kHz sits at 18 kHz, close to the 20 kHz `SWEEP_F1` ceiling (same L-006/N-004 class of trap), and
+>   these two readings are wildly non-monotonic vs their sibling captures at the same anchor (2-3%).
+>   **Discount the 9 kHz anchor's magnitude before fitting anything; 6-7.5 kHz is the trustworthy
+>   target (~15-30 dB shortfall).** New paper-test `analysis/proto_hf_restore.py` (mirror of
+>   `ClipHarmonicReducer` — HIGHPASS sidechain instead of lowpass, ADDS H2 instead of subtracting,
+>   even-only `y=x+a·HP(x)·tanh(HP(x)/k)`): a ONE-POLE sidechain (CHR's own LF pattern) is **NOT
+>   selective enough** — it leaks −30..−40 dB of spurious H2 into the already-matched 1.2-4.8 kHz
+>   midband guard band, which would regress a closed item. A **≥2-pole (4-pole tested) sidechain at
+>   ~5.5 kHz** fixes this: midband leakage drops to <−60 dB (negligible) while still delivering
+>   +20..+35 dB of H2 at the 6-9 kHz anchors, with a healthy 29-51 dB margin against its own aliased
+>   H4 (4×8kHz folds to 16kHz, on top of the H2 we're adding — checked, not a problem at this `a`).
+>   **Verdict: feasible, but the sidechain must be steeper than CHR's precedent — flag this if
+>   building it.** Not yet fitted/built (tiny absolute energy, still last on this punch list per the
+>   project's own "midband before HF residual" ranking — a build decision, not a feasibility one).
+> - **Item 2 (Gap F cab-sim residual vs items 1/H-err2) — NOT the same mechanism, no new work
+>   justified.** Reasoned from existing evidence (`cascade_analysis.py`'s 2026-07-21 re-run, already
+>   in gap-audit §F), no new renders needed: Gap F's cab-sim excess is a POSITIVE (too HOT) delta
+>   measured RELATIVE TO V1L's own BL=1.00 baseline, confounded by drive/presence/bass/treble moving
+>   together with blend across only 3 captures (structural, matrix-final) — a different sign and a
+>   different (relative-to-self) measurement frame than item 1's absolute H2-generation shortfall or
+>   Gap H err2's absolute top-octave darkness. Sharing a frequency range is not sharing a mechanism
+>   here. Stays open/best-effort, unchanged disposition.
+> - **Item 3 (Gap I onset floor + drive-dependent H2 spread) — feasibility is WEAK without a genuinely
+>   new idea, per the user's own bar.** This session's earlier midband work already tested and
+>   REFUTED an envelope-gated correction for a closely-related question (targeting the saturator) on
+>   the grounds that the onset-floor mechanism is present with the saturator fully OFF — V1E ships
+>   with `setRecoverySaturation(0.0, ...)`, so the floor must live in the rail clip or be a property
+>   of the whole memoryless chain, not a bolt-on stage. The other established finding (`h2_asym_
+>   perdrive.py`, 2026-07-19) is that the needed correction varies with the DRIVE knob by 12× (0.05 V
+>   at D0.50/0.60 vs 0.60 V at D1.00) in a way that does not obviously collapse to one function of
+>   node envelope alone (envelope conflates "high level, low drive" with "low level, high drive," which
+>   the data says need different corrections) — the same structural problem that already failed
+>   guardrail #6 once here. Did not spend a new paper-test on this (the existing evidence already
+>   answers the "is this the same kind of problem" question); a real attempt would need to show the
+>   required correction DOES collapse onto a single clip-node-envelope variable across drive settings
+>   BEFORE proposing a shape, which nobody has yet demonstrated. Lowest-priority of the three, as
+>   already ranked.
+> - New keeper diagnostic: `analysis/proto_hf_restore.py` (indexed in `analysis/README.md`).
+>
 > **🆕 QUEUED ACTION ITEMS FROM A FULL THD BAND AUDIT (2026-07-21, NOT yet investigated or fixed).**
 > New script `analysis/thd_band_audit.py` (reads the existing `comprehensive_data.json`, no fresh
 > renders) aggregates THD(plugin−pedal), ranked by dB ratio (20·log10(plugin/pedal), the scale-
