@@ -439,13 +439,27 @@ without images.
 >   structurally-safe instrument is refuted by measurement; what remains is a blend-gated MAGNITUDE
 >   EQ fitted to the single capture that shows the null, with no capture-free arbiter and no
 >   cross-validation possible — the guardrail #6 failure mode, for a ~3 dB narrow-band prize.
->   **Recommend leaving it and documenting.** The remaining target is
+>   **Recommend leaving the ~4–6 kHz null and documenting.** The remaining target for THAT piece is
 >   narrow and specific: **what sets the wet leg's phase at 4–5 kHz** (the S-K cab-sim cascade corners
 >   and any residual dry/wet timing — note Gap J was itself a dry-tap alignment bug). **Do NOT fit an
->   EQ against the 1.6–5 kHz THD numbers** — above ~4 kHz they are a ratio artefact over a
->   sub-percent pedal THD, and the 1613–3225 Hz part is the skirt of the same misplaced null.
+>   EQ against the 4–5 kHz THD numbers** — above ~4 kHz they are a ratio artefact over a sub-percent
+>   pedal THD.
 >   ⚠ **Any future work here MUST use a complex transfer** — `analyze.transfer()` takes `np.abs`, so
 >   the standard toolchain cannot see the quantity that is actually wrong.
+> - **⚠ CORRECTION (same session): "the 1613–3225 Hz part is the skirt of the same misplaced null"
+>   was WRITTEN WITHOUT TESTING IT, and the data already gathered CONTRADICTS it — do not carry that
+>   claim forward.** `v1l_hf_fundamental_null.py`'s own table shows 1600/2560 Hz **monotonic in
+>   blend** ("no cancellation"; dip −1.33/−1.60 dB, i.e. below the >1 dB null threshold), against
+>   5120 Hz's genuine **+4.34 dB interior null**. `v1l_thd_blend_dilution.py`'s dilution table
+>   confirms it independently: at 1600/2560 Hz THD decreases **smoothly and monotonically** with
+>   blend all the way to 0 (18.5→17.6→15.9→13.5→10.7→6.6→2.6→0 at 1600 Hz) — no spike, no
+>   dip-and-recover. **⇒ 1613–3225 Hz is NOT explained by the HF null and is a SEPARATE, still-open
+>   question.** It is small but real (pp +1.3 to +4.8, coherent across BL1.00/BL0.65/BL0.30, 8-9/9
+>   cells hot — see `v1l_midhf_thd_premise_check.py`'s per-cell table) and, because it dilutes
+>   normally with blend, it behaves like genuine wet-path harmonic content, not a phase artefact —
+>   i.e. it may be exactly the kind of thing `WetHFCorrection`'s magnitude-only refutation was
+>   originally aimed at, just not yet re-examined with this cleaner premise. **NOT investigated this
+>   session — this gap is NOT exhausted; only the 4–6 kHz null sub-thread is.**
 > - **⚠ PARTIALLY REFUTED, same tool:** the parallel hypothesis for `WetLFCorrection` (V1L, 50 Hz/
 >   +7 dB/Q1.2) against the V1L 20 Hz overshoot below — predicted bell contribution is **+2.4 dB**
 >   against a measured ~+9 dB. Not the wrong sign this time, and not negligible, but explains only
