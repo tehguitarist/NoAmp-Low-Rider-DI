@@ -24,11 +24,16 @@ TWIN-T NOTCH band, where the wet path is ~-35 dB and the sum is dry-dominated --
 the spectrum where the pedal's own output is a near-direct read of its dry leg.  This is physical,
 not a curve fit, and it is what makes alpha identifiable from a single capture.
 
-CONTROLS (both must pass or the alpha rows are not evidence):
+CONTROLS (all three; the alpha rows are not evidence without them):
   1. reconstruction  -- dry+wet must rebuild the full render (proves the NALR_NODRY split is exact).
   2. wet dominance   -- |H_dry| must actually exceed |H_wet| inside the notch band at this blend,
                         otherwise G is not identifiable there and alpha is meaningless.
-Run V1E as a cross-revision control: it nulls deepest, so its alpha should sit near 0 dB / 0 deg.
+  3. --self-test     -- feed the plugin's OWN render in place of the capture; alpha must be exactly
+                        0 dB / 0 deg.  THIS CAUGHT A REAL BIAS: pinning G by treating the notch as
+                        pure dry ignores the wet leg still sitting only ~14 dB down there, leaking
+                        ~19% into G and biasing alpha by 1.0-1.6 dB / 12 deg.  Fixed by alternating
+                        G and alpha to convergence (alpha=G=1 is an exact fixed point), after which
+                        the self-test reads 0.00 dB / 0.0 deg at every anchor.
 
     python3.11 analysis/v1l_blend_balance.py [--rev V1L] [--os 8]
 """
@@ -66,7 +71,7 @@ def render(binpath, args, out_path, os_factor, nodry):
     return True
 
 
-def analyse(path, parsed, orig, binpath, os_factor):
+def analyse(path, parsed, orig, binpath, os_factor, self_test=False):
     cap = NC.load_capture(path)
     if not A.is_full_length(cap, orig):
         return None
@@ -92,7 +97,12 @@ def analyse(path, parsed, orig, binpath, os_factor):
     f, H_full = ctransfer(full_t, inp)
     _, H_wet = ctransfer(wet_t, inp)
     _, H_dry = ctransfer(dry_t, inp)
-    _, H_ped = ctransfer(A.seg_of(cap_al, seg), inp)
+    # SELF-TEST: substitute the plugin's OWN full render for the capture. alpha MUST come out
+    # 0 dB / 0 deg at every frequency -- it is the identity by construction. Any deviation is bias
+    # in the method itself (the notch G-pinning, the leg split, the assumed-correct dry leg), and
+    # would mean the real alpha rows are measuring the estimator, not the pedal.
+    ped_src = full_t if self_test else A.seg_of(cap_al, seg)
+    _, H_ped = ctransfer(ped_src, inp)
     sel = (f >= 30.0) & (f <= 8000.0)
     f, H_full, H_wet, H_dry, H_ped = f[sel], H_full[sel], H_wet[sel], H_dry[sel], H_ped[sel]
 
@@ -102,7 +112,17 @@ def analyse(path, parsed, orig, binpath, os_factor):
     nb = (f >= NOTCH[0]) & (f <= NOTCH[1])
     dom = 20 * np.log10(np.mean(np.abs(H_dry[nb])) / (np.mean(np.abs(H_wet[nb])) + 1e-30) + 1e-20)
 
-    G = complex(np.sum(H_ped[nb] * np.conj(H_dry[nb])) / (np.sum(np.abs(H_dry[nb]) ** 2) + 1e-30))
+    # G is pinned in the notch by treating the pedal's output there as its dry leg -- but the wet
+    # leg is only ~14 dB down, not absent, so ~19% of it leaks into that estimate and biases alpha
+    # (the --self-test mode measured that bias at 1.0-1.6 dB / 12 deg before this refinement).
+    # Alternate G and alpha to convergence; alpha=G=1 is an EXACT fixed point, so the self-test
+    # becomes a true identity check rather than a bias floor.
+    alpha_s = 1.0 + 0j
+    for _ in range(12):
+        model = H_dry[nb] + alpha_s * H_wet[nb]
+        G = complex(np.sum(H_ped[nb] * np.conj(model)) / (np.sum(np.abs(model) ** 2) + 1e-30))
+        alpha_full = (H_ped / G - H_dry) / (H_wet + 1e-30)
+        alpha_s = complex(np.median(np.real(alpha_full[nb])) + 1j * np.median(np.imag(alpha_full[nb])))
     alpha = (H_ped / G - H_dry) / (H_wet + 1e-30)
     return dict(parsed=parsed, path=path, f=f, alpha=alpha, rec=rec, dom=dom, G=G,
                 wet_db=20 * np.log10(np.abs(H_wet) + 1e-20),
@@ -114,6 +134,8 @@ def main():
     ap.add_argument("--bin", default=DEFAULT_BIN)
     ap.add_argument("--rev", default="V1L")
     ap.add_argument("--os", type=int, default=8)
+    ap.add_argument("--self-test", action="store_true",
+                    help="use the plugin's own render as the 'pedal' -- alpha must be 0 dB / 0 deg")
     a = ap.parse_args()
     if not os.path.exists(a.bin):
         sys.exit(f"OfflineRender not found at {a.bin}")
@@ -123,7 +145,7 @@ def main():
     print(f"  alpha 0 dB / 0° ⇒ balance already correct.  >0 dB ⇒ pedal carries MORE wet than we do.")
 
     for path, parsed in caps:
-        r = analyse(path, parsed, orig, a.bin, a.os)
+        r = analyse(path, parsed, orig, a.bin, a.os, a.self_test)
         if not r:
             continue
         p = r["parsed"]
