@@ -191,16 +191,31 @@ without images.
 >     leg still sitting ~14 dB down there (~19% leaks into G). Fixed by alternating G and α to
 >     convergence (α=G=1 is an exact fixed point); self-test now reads 0.00 dB / 0.0°. **Any future
 >     notch-pinned estimator needs that self-test — the bias is invisible without it.**
->   - **⇒ WHAT'S LEFT, and why ONE capture cannot settle it:** an absolute **wet-path gain** error and
->     a **BLEND taper/knob-mapping** error are *indistinguishable* at a single blend setting (they
->     predict identical α). Wet-gain is **disfavoured on independent evidence** — a ~5 dB hot wet leg
->     would put the clip node 5 dB hot, and the clip/compression work is heavily validated (V2 `dGain`
->     matches the pedal to 0.25 dB; V1L's drive axis closed by `ClipDriveNormaliser`). ⇒ leading
->     candidates: the **BLEND taper / knob→wiper mapping**, or an **unmodelled dry-leg series
->     impedance** — and netlists.md L1 records V1L's dry tap as a bare wire, so that is a SCHEMATIC
->     question (use `schematic-checker`), not something to fit.
->   - **⛔ DO NOT fit a blend taper to the single identifiable capture** — exactly guardrail #6's
->     failure mode. Either resolve it via the schematic, or it stays a documented lead.
+> - **✅ ALL REMAINING LEADS CLOSED (2026-07-21, same session) — EVERY MODELLED ELEMENT IN THE
+>   BALANCE CHAIN IS VERIFIED FAITHFUL. Disposition: best-effort, schematic-faithful, DO NOT "fix".**
+>   - **DRIVE taper — FAITHFUL.** `ZenerDriveModule::setDrive` implements the netlists.md L4 law
+>     exactly (`Rwa = d·Rpot`, `gainA = (R25+Rwa)/R23`, `RinB = Rwb+R17`): +12.9 dB at d=0 and
+>     +48.6 at d=1 vs §4's +12.5/+48, and **+25.8 dB at the capture's D0.40** — matching the closed
+>     form to the decimal. Not a mid-taper error (the `kDriveEndR`/L-008 pattern does NOT recur here).
+>   - **DRY TAP POINT — FAITHFUL.** Model taps `input.process()` (the buffer OUTPUT) straight into
+>     BLEND, matching netlists.md L1 ("direct wire, NO cap") and correction #6. circuit.md's `C1 2.2u`
+>     dry cap is **V1-EARLY ONLY** — no contradiction between the two docs, nothing unmodelled. (The
+>     only element in that path is `DryTapDelay`, the Gap J oversampler-latency fix, wire-equivalent.)
+>   - **⭐ AND THE WHOLE ~5 dB IS EXACTLY ONE CLOCK-HOUR OF BLEND KNOB.** Measured α maps to an
+>     equivalent blend of **0.172–0.215 = 8.7–9.1 o'clock, centred on 9:00**, against the **10:00**
+>     the filename records (`BL1000`; 0700=0.0 … 1700=1.0, so one hour = 0.10). A one-hour
+>     hand-setting/reading error on a single capture is a **fully sufficient and mundane explanation**
+>     — and with the matrix FINAL it is **unfalsifiable**, since no second identifiable capture exists
+>     to cross-check it (BL1.00 and BL0.65 both fail the identifiability control).
+>   - **⇒ CLOSED best-effort.** The residual is real as a measurement but **cannot be attributed**:
+>     every modelled element checks out by computation, and the two surviving explanations (absolute
+>     wet-path gain vs. the knob simply not being where the filename says) are indistinguishable from
+>     one capture. Wet-gain is independently disfavoured anyway — a ~5 dB hot wet leg would put the
+>     clip node 5 dB hot, and the clip/compression work is heavily validated (V2 `dGain` matches the
+>     pedal to 0.25 dB; V1L's drive axis closed by `ClipDriveNormaliser`).
+>   - **⛔ DO NOT fit a blend taper to this.** It would be guardrail #6's failure mode, and on the
+>     balance of evidence it would be fitting a knob-position error into the circuit model — the exact
+>     shape of the L-008 disaster (an unphysical constant absorbing someone else's measurement error).
 >
 > **🆕 FEASIBILITY PASSES ON THE 3-ITEM PUNCH LIST (2026-07-21, earlier session) — NO C++ WRITTEN,
 > paper-tests only, per L-004/L-010 discipline. Rebuilt `OfflineRender` first (`cmake --build build
