@@ -197,10 +197,16 @@ int main()
         std::printf("      HF -40 dB point = %.2f kHz (§1 target ~11 kHz; 22k override of 33k)\n", minus40Hz / 1000.0);
         check(lfEdge > -18.0 && lfEdge < 2.0, "§1 LF edge in range");
         check(lowBump > -5.0 && lowBump < 6.0, "§1 low bump in range");
-        // Wet-path bass-bump calibration gate (src/dsp/WetLFCorrection.h, guardrail #3): the ~55 Hz
-        // bell lifts the 70 Hz low bump from ~-1.7 dB (ablated) to ~+4.0 dB. Proven to FAIL under
-        // NALR_WETLF_OFF. Keep this ABOVE the "in range" upper bound so both stay meaningful.
-        check(lowBump > 1.5, "wet-LF bass-bump calibration active @70Hz (FAILS with NALR_WETLF_OFF)");
+        // Wet-path bass-bump calibration gate (src/dsp/WetLFCorrection.h, guardrail #3).
+        // ANCHORED TO §1's OWN TARGET (+0.5 dB), not merely to "the layer is switched on" — the
+        // previous form (lowBump > 1.5) was a one-sided presence detector calibrated against the old
+        // 7 dB bell, and it therefore CERTIFIED a value that overshot §1 by 3 dB. This window is
+        // strictly TIGHTER than what it replaces (it is not a loosening to accommodate the re-fit,
+        // L-001) and fails in BOTH directions. Measured @70 Hz:
+        //     ablated (NALR_WETLF_OFF) -1.7  |  4 dB (shipped) +1.4  |  old 7 dB +3.5
+        check(lowBump > 0.0 && lowBump < 2.6,
+              "wet-LF bass-bump lands on §1's +0.5 dB low bump "
+              "(FAILS ablated @-1.7 dB AND on a silent revert to the 7 dB overshoot @+3.5 dB)");
         check(notch < -15.0, "§1 deep notch present (< -15 dB)");
         check(highBump > -6.0 && highBump < 6.0, "§1 high bump in range");
         std::printf("      wet-HF bell boost (g@3400 - g@1050) = %.2f dB\n", bellBoost);

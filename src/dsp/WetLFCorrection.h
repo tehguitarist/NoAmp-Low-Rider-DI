@@ -37,7 +37,30 @@
 // case (the flagged D0.50/BL0.95) 1.98->1.85. Raising fc to 60 (the naive "move it up" instinct) was
 // tested and made every capture WORSE — the fix was reshaping (narrower Q, lower centre), not
 // shifting up. See analysis/v1l_wetlf_tune.py history / session record for the full sweep.
-// Gated by tests/WetLFBassBumpTest (ablate via NALR_WETLF_OFF => the §1 low bump collapses, L-003).
+// RE-FIT 2026-07-21 — V1L gain 7.0 -> 4.0 dB (V2 unchanged at 4.0). The 7 dB value came from the
+// 2026-07-20 per-capture FR-SHAPE-RMS refine above; a null-based re-measure showed it was 3 dB too
+// hot on the ONE reference §1 actually pins here, and that FR-shape rms never really supported it:
+//   §1 low bump @70 Hz (target ~+0.5 dB):  ablated -1.7 |  4 dB +1.4 |  7 dB +3.5  (7 OVERSHOOTS §1)
+//   V1L capture nulls (clean):  BL0.65  -9.3 -> -10.6   |  BL0.30 -10.0 -> -11.4   (both BETTER)
+//   V1L FR shape rms:  6.97/2.42/1.85 -> 7.04/2.43/1.74 (flat to 0.1 dB ⇒ this metric is INDIFFERENT
+//                      between 4 and 7 dB, so it cannot be cited as support for either)
+// Cost: the BL1.00 capture's null goes -5.8 -> -5.1. That capture is dominated by the parked Gap H
+// err2 top-octave item (-24 dB @12.5 kHz), so its null is not a clean read on THIS band.
+// ⇒ 4 dB is closer to analog truth (§1) AND closer to the captures; it is not a capture-vs-SPICE
+// trade. Found by analysis/v1l_null_budget.py + v1l_minphase_check.py -- the FR-shape metric that
+// chose 7 dB is MAGNITUDE-ONLY (analyze.transfer() takes np.abs), so it could not see the phase
+// half of the error at all. Sibling of L-011: a magnitude-only gate cannot see a phase defect.
+//
+// ⚠ WHAT THIS LAYER CANNOT DO (measured 2026-07-21, do not re-attempt with a wet-path filter):
+// V1L's residual LF/HF error FLIPS SIGN WITH BLEND -- at 50-80 Hz BL0.65/BL0.30 want ~-2 dB while
+// BL1.00 wants ~+2 dB; at 4 kHz the plugin is -2.9 dB (BL0.65) but +5.4 dB (BL0.30). This layer
+// sits on the WET path BEFORE the blend, so it cannot correct a blend-dependent error by
+// construction (guardrail #6) -- no value of fc/gain/Q fixes all three captures. The remaining
+// deficit is in the DRY/WET BALANCE, not this filter. Do not keep re-tuning it to chase that.
+//
+// Gated by the §1 low-bump window in tests/V1LateIntegrationTest / V2IntegrationTest, which is
+// anchored to §1's ~+0.5 dB target and FAILS BOTH ways (L-003): ablation (NALR_WETLF_OFF, -1.7 dB)
+// and a silent revert to the old 7 dB overshoot (+3.5 dB).
 //
 // RBJ peaking EQ (2nd-order), bilinear, recomputed per SR in setParams(). Env NALR_WETLF_OFF disables
 // it (ablation gate); NALR_WETLF_HZ/_DB/_Q override the shipped values (tuning). db<=0 => bypass.

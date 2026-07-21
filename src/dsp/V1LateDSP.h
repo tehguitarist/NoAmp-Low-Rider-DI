@@ -103,7 +103,7 @@ public:
         // lower-centred) beats 55Hz/Q1.0 on ALL 3 captures at once (mean RMS 2.04->1.74, none regress);
         // +7dB needed since D0.65/BL1.00 wants MORE lift than +6 gave even after reshaping (its hot-zone
         // delta stays negative -- undershot -- at every gain tested up to +7).
-        wetLFCorr.setParams(50.0, 7.0, 1.2); // V1L wet-path bass-bump calibration (WetLFCorrection.h)
+        wetLFCorr.setParams(50.0, 4.0, 1.2); // V1L wet-path bass-bump calibration (WetLFCorrection.h)
         wetHFCorr.prepare(baseFs);
         wetHFCorr.setParams(3400.0, 3.0, 1.1); // V1L wet-path 3-4 kHz calibration (WetHFCorrection.h)
         output.prepare(baseFs);
