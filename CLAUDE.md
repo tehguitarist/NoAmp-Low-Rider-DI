@@ -361,9 +361,91 @@ without images.
 >   higher anchors, since the fundamental itself sits nearer the bell's peak than its harmonics do).
 >   Measured deltas (+5 to +7 dB) are NOT explained by the bell. **⇒ the real cause is upstream of
 >   this EQ** — genuine clip/harmonic-generation behaviour, not a side effect of the 2026-07-21
->   correction. Needs its own investigation (not yet started); likely the same class of
->   drive-independent-memory issue as Gap D, just showing up at a frequency range Gap D's own
->   anchors (100/110/220/440 Hz) never sampled.
+>   correction. ~~Needs its own investigation (not yet started); likely the same class of
+>   drive-independent-memory issue as Gap D~~ — **INVESTIGATED 2026-07-22, AND IT IS NOT A
+>   HARMONIC-GENERATION PROBLEM AT ALL. See the ✅ block immediately below; the "same class as Gap D"
+>   guess was wrong and the "contiguous 1.6–5 kHz overshoot" framing is itself an artefact.**
+>
+> **✅ THE "V1L 1.6–5 kHz THD OVERSHOOT" IS A MISPLACED DRY/WET CANCELLATION NULL, NOT EXCESS
+> HARMONICS (2026-07-22). Reframed and sized; NO C++ written, no fix built — the physical cause is
+> localised but not yet attributed, per guardrail #2.** Four new capture-free diagnostics, each
+> answering the previous one's question. ⚠ First: the audit numbers were **STALE** —
+> `comprehensive_data.json` (Jul 21 12:57) predates BOTH `HFEvenRestore` (17:31) and
+> `WetTopOctaveRestore` (Jul 22 06:16), and the `OfflineRender` binary predated the latter too
+> (rebuilt before any measurement below — the recurring stale-binary trap).
+> - **THE PREMISE IS PARTLY A RATIO ARTEFACT** (`analysis/v1l_midhf_thd_premise_check.py`). The audit
+>   ranks on `20·log10(plugin/pedal)`, which explodes when the denominator is tiny. Above ~4 kHz the
+>   pedal's THD is a **fraction of a percent**, so +7 dB of ratio is **+0.76 pp** at 4064 Hz — and at
+>   **5120 Hz the two metrics have OPPOSITE SIGNS** (mean_pp **−0.81**, i.e. the plugin is absolutely
+>   COOLER, while mean_db reads **+4.82**). A band whose pp and dB disagree on direction is not one
+>   coherent defect. Only **1613–3225 Hz** is a coherent overshoot (pp +1.3 to +4.8, 9/0 cells hot).
+> - **⭐ AND IT IS ESSENTIALLY ONE CAPTURE.** The huge ratios are overwhelmingly **BL0.30**
+>   (2032 Hz: BL1.00 +4.0/+0.8/−3.1 dB, BL0.65 +0.0/+0.8/+1.9, **BL0.30 +11.9/+14.6/+19.1**).
+> - **⭐ THE MECHANISM: THD RISES AS YOU DILUTE WITH A CLEAN SIGNAL** — arithmetically impossible
+>   unless the FUNDAMENTAL is vanishing (`analysis/v1l_thd_blend_dilution.py`, blend swept at FIXED
+>   drive). At 5120 Hz plugin THD runs **1.75 → 1.92 → 2.43 → 4.72 → 6.57 %** across blend
+>   1.00→0.30, then collapses to 0.19 % at 0.05 and **0.000 at blend 0** (so the wet path is the sole
+>   harmonic source, exactly as the topology says — the dilution control PASSES).
+> - **⭐ CONFIRMED BY MONOTONICITY, WITH CLEAN CONTROLS** (`analysis/v1l_hf_fundamental_null.py`).
+>   The clean-sweep FUNDAMENTAL at 5120 Hz is **non-monotonic in blend** — falls to −12.20 dB at
+>   blend 0.15 and **recovers to −7.85 at 0.10**, i.e. **4.34 dB below both endpoints**. A same-phase
+>   sum can never dip and recover. All three control anchors (200/400/1000 Hz) stay monotonic ⇒ the
+>   measurement is sound. **This is L-014's class again: a null is a PHASE defect.**
+> - **⭐ SIZED AGAINST THE PEDAL: our null sits +0.27 OCTAVE TOO HIGH**
+>   (`analysis/v1l_hf_notch_locate.py`, dense CSD grid — the band table's ~⅓-oct grid can only say
+>   "different bin"). **BL0.30: pedal 4260 Hz vs plugin 5127 Hz.** BL1.00 and BL0.65 **AGREE**
+>   (+0.06/+0.00 oct) — correct, because at high blend there is almost no dry leg to cancel against,
+>   which is itself a consistency check on the whole story.
+> - **⛔ NONE OF THE FOUR NAMED WET-PATH LAYERS PLACES IT** (`analysis/v1l_hf_notch_ablate.py`, each
+>   flag verified LIVE per L-009). Shipped null 4898 Hz; ablating `WetHFCorrection` **+12 Hz**,
+>   `WetTopOctaveRestore` −88, `HFEvenRestore` **+0**, `WetLFCorrection` +6 — all ≪ the ~800 Hz gap.
+>   **⇒ the misplacement is in the CORE wet-path model, not the calibration layers.** Note
+>   `WetHFCorrection` off makes the null **DEEPER** (−15.58 vs −8.76) — the bell partially FILLS the
+>   null without moving it, which **extends its documented magnitude-only exoneration to PHASE**
+>   (the refutation above was computed on magnitude alone, and the whole FR toolchain is phase-blind).
+> - **⚠ THE ALREADY-CLOSED BLEND DISCREPANCY EXPLAINS ~44% OF IT, NOT ALL** (`--blend-sweep`). The
+>   null frequency is a SECOND, independent observable that also depends on blend, so it can test the
+>   previously **unfalsifiable** "pedal behaves like blend ≈0.19–0.21, not 0.30" lead. Rendering at
+>   blend 0.20 moves our null 5127 → **4746 Hz**, closing 381 of the 867 Hz gap; **+486 Hz (~0.16 oct)
+>   survives even at blend 0.15.** ⇒ the blend lead is corroborated as a real contributor but is
+>   **not sufficient**; a genuine wet-path phase/corner error remains.
+> - **⛔ IT IS THE MODELLED CIRCUIT, NOT NUMERICS (L-012, `analysis/v1l_hf_notch_os_invariance.py`).**
+>   Oversampling must not change the modelled circuit, so sweeping it separates "ours" from "the
+>   model". Null position across OS 1/2/4/8: **5238 / 5109 / 5156 / 5127 Hz — spread 129 Hz** (and
+>   2/4/8 agree within 47 Hz), with the 200 Hz control flat to **0.01 dB**. ⇒ **NOT the Gap J class**
+>   (there the null frequency tracked the latency, 359→320→285 Hz). There is no free timing fix.
+> - **⛔ BOTH PHASE-ONLY FIXES ARE REFUTED ON A PAPER-TEST — NO C++ WRITTEN, DO NOT RE-ATTEMPT**
+>   (`analysis/v1l_hf_notch_allpass_feasibility.py`; legs split exactly via `NALR_NODRY`,
+>   reconstruction error **0.00e+00**, identity control reproduces the shipped null 5127 Hz / rms
+>   2.19 dB exactly). An allpass looked structurally ideal — magnitude-neutral, so it **cannot**
+>   disturb BL1.00/BL0.65 which already agree (guardrail #6 by physics). It does not work:
+>   - **WET-leg allpass: DESTROYS the null instead of moving it.** At every corner 1.5-12 kHz and
+>     order 1-2 there is **no interior dip left at all**, and broadband shape rms worsens **+0.45 to
+>     +2.27 dB**. "Moved" and "filled" look identical to an argmin — they are not the same outcome.
+>   - **DRY-leg allpass: places the FREQUENCY perfectly and gets the DEPTH badly wrong.** order=1
+>     fc=12000 lands the null at **4283 Hz vs the pedal's 4260 (+0.01 oct)** — but **15.3 dB deep
+>     against the pedal's 3.6 dB**, and shape still worsens (+0.35 dB). ⚠ That config is
+>     algebraically `a=0`, i.e. **a pure ONE-SAMPLE dry delay** — a suspicious coincidence worth
+>     remembering, but the depth blow-up and the shape regression both argue it is NOT a latent
+>     alignment bug (a real alignment fix would improve broadband shape, not worsen it).
+> - **⚠ THE FEATURE IS SMALLER THAN THE EARLY NUMBERS SUGGESTED.** Measured as PROMINENCE (a local
+>   dip on a falling curve) rather than depth-vs-window-shoulders, the pedal's null is **3.6 dB** and
+>   ours **2.4 dB**. The defect is a ~⅓-octave misplacement of a **~3 dB** dip, on ONE capture.
+>   ⚠ **METHOD NOTE, cost two runs:** a plain `argmin` cannot locate this null — the wet path rolls
+>   off steeply above ~9 kHz, so the global minimum over any adequate window sits at the top EDGE,
+>   and WIDENING the window (the standard fix for an edge-optimum) made it strictly worse until even
+>   the identity control reported the edge. **Use `find_peaks` prominence for a dip on a slope.**
+> - **⇒ DISPOSITION: OPEN, best-effort, NOT worth a correction on current evidence.** Every
+>   structurally-safe instrument is refuted by measurement; what remains is a blend-gated MAGNITUDE
+>   EQ fitted to the single capture that shows the null, with no capture-free arbiter and no
+>   cross-validation possible — the guardrail #6 failure mode, for a ~3 dB narrow-band prize.
+>   **Recommend leaving it and documenting.** The remaining target is
+>   narrow and specific: **what sets the wet leg's phase at 4–5 kHz** (the S-K cab-sim cascade corners
+>   and any residual dry/wet timing — note Gap J was itself a dry-tap alignment bug). **Do NOT fit an
+>   EQ against the 1.6–5 kHz THD numbers** — above ~4 kHz they are a ratio artefact over a
+>   sub-percent pedal THD, and the 1613–3225 Hz part is the skirt of the same misplaced null.
+>   ⚠ **Any future work here MUST use a complex transfer** — `analyze.transfer()` takes `np.abs`, so
+>   the standard toolchain cannot see the quantity that is actually wrong.
 > - **⚠ PARTIALLY REFUTED, same tool:** the parallel hypothesis for `WetLFCorrection` (V1L, 50 Hz/
 >   +7 dB/Q1.2) against the V1L 20 Hz overshoot below — predicted bell contribution is **+2.4 dB**
 >   against a measured ~+9 dB. Not the wrong sign this time, and not negligible, but explains only
