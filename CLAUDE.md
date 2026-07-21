@@ -174,10 +174,33 @@ without images.
 >   self-rejects (wet dominates the notch by 28.5 dB), BL0.65 self-rejects (legs within 0.6 dB), and
 >   V1E can't cross-check (it has **no** BLEND<1.00 capture — documented permanent blind spot). ⇒ a
 >   **strong lead, NOT a fitting target**; fitting a blend taper to one point is the guardrail #6
->   failure mode. **NEXT (capture-free, where the schematic CAN arbitrate): audit the modelled BLEND
->   pot law + wiper loading against `netlists.md` L6** (VR6 wiper → VR4 → R4 100k into virtual
->   ground — the wiper is LOADED, so an ideal-crossfade or unloaded-taper implementation would
->   mis-weight the legs exactly like this).
+>   failure mode.
+> - **✅ BLEND POT LAW AUDITED (2026-07-21, same session) — THE POT IS NOT THE CAUSE, nor is C12.
+>   Two rule-outs by COMPUTATION, not fitting; do not re-check these.**
+>   - **⛔ WIPER LOADING CANNOT PRODUCE A RATIO ERROR.** The wiper weights the two ends by 1/R and
+>     R ∝ knob position, so the wet/dry ratio is **exactly `blend/(1−blend)`, INDEPENDENT of the
+>     load** — verified numerically, ratio = 0.4286 from a 1 kΩ load to a 1 GΩ load. The model's
+>     loaded-pot implementation (`V1LateBlendLevelStage`, netlists.md L6) is faithful; loading moves
+>     overall LEVEL, never the balance. **The "ideal-crossfade / unloaded-taper" suspicion was wrong.**
+>   - **⛔ C12 (47n wet coupling) is not it** — its impedance changes ~40× across 63 Hz–2.5 kHz while
+>     the measured α is flat there.
+>   - **α RE-MEASURED UNBIASED: −3.9..−6.3 dB, flat 50 Hz–2.5 kHz** (rising above 2.5 kHz: +0.5 @4k,
+>     +5.8 @6.3k) ⇒ **the pedal at BL 10 o'clock behaves like our blend ≈0.19–0.21, not 0.30.**
+>     ⚠ The first α numbers (−5.4..−7.0) were BIASED: `--self-test` (plugin vs itself, α must be 0 dB
+>     by construction) **FAILED at 1.0–1.6 dB / 12°**, because pinning G in the notch ignores the wet
+>     leg still sitting ~14 dB down there (~19% leaks into G). Fixed by alternating G and α to
+>     convergence (α=G=1 is an exact fixed point); self-test now reads 0.00 dB / 0.0°. **Any future
+>     notch-pinned estimator needs that self-test — the bias is invisible without it.**
+>   - **⇒ WHAT'S LEFT, and why ONE capture cannot settle it:** an absolute **wet-path gain** error and
+>     a **BLEND taper/knob-mapping** error are *indistinguishable* at a single blend setting (they
+>     predict identical α). Wet-gain is **disfavoured on independent evidence** — a ~5 dB hot wet leg
+>     would put the clip node 5 dB hot, and the clip/compression work is heavily validated (V2 `dGain`
+>     matches the pedal to 0.25 dB; V1L's drive axis closed by `ClipDriveNormaliser`). ⇒ leading
+>     candidates: the **BLEND taper / knob→wiper mapping**, or an **unmodelled dry-leg series
+>     impedance** — and netlists.md L1 records V1L's dry tap as a bare wire, so that is a SCHEMATIC
+>     question (use `schematic-checker`), not something to fit.
+>   - **⛔ DO NOT fit a blend taper to the single identifiable capture** — exactly guardrail #6's
+>     failure mode. Either resolve it via the schematic, or it stays a documented lead.
 >
 > **🆕 FEASIBILITY PASSES ON THE 3-ITEM PUNCH LIST (2026-07-21, earlier session) — NO C++ WRITTEN,
 > paper-tests only, per L-004/L-010 discipline. Rebuilt `OfflineRender` first (`cmake --build build
