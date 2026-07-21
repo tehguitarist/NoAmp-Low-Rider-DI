@@ -32,6 +32,11 @@ private:
     void layoutV1(juce::Rectangle<float> face, float sc);
     void layoutV2(juce::Rectangle<float> face, float sc);
 
+    // Applies the equal-and-opposite CHANGE to the other trim, preserving the pair's existing offset
+    // (delta-linked, so enabling the lock never snaps). No-op when off. `trimLinkBusy` breaks the
+    // A->B->A feedback loop the two parameter attachments would otherwise bounce through.
+    void mirrorTrim(bool sourceIsInput);
+
     NoAmpLowRiderDIAudioProcessor& processorRef;
     PedalLookAndFeel lookAndFeel;
 
@@ -48,6 +53,8 @@ private:
     static constexpr int kColGap = 8;   // gap between side panel and pedal face
     static constexpr int kOSH = 24;     // oversampling strip height
     static constexpr int kFaceGap = 10; // gap between pedal face and OS strip
+    // Trim knob range, +/- dB. Must match the trim NormalisableRange in createParameterLayout().
+    static constexpr double kTrimRange = 18.0;
     float currentScale = 1.0f;
     int lastRevision = -1;
     juce::Rectangle<int> faceBounds;
@@ -60,6 +67,13 @@ private:
     juce::Slider inputTrimSlider, outputTrimSlider;
     VUMeter inputVU, outputVU;
     std::unique_ptr<juce::SliderParameterAttachment> inputTrimAttach, outputTrimAttach;
+
+    // Ties the two trims together (delta-linked) while on — see mirrorTrim().
+    juce::TextButton trimLockButton{"LOCK"};
+    std::unique_ptr<juce::ButtonParameterAttachment> trimLockAttach;
+    bool trimLinkBusy{false};
+    double lastInputTrim{0.0};
+    double lastOutputTrim{0.0};
 
     // ── OS strip ─────────────────────────────────────────────────────────────
     juce::Label osLabel, osLiveLabel, osRenderLabel, uiSizeLabel, versionLabel;

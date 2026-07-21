@@ -6,7 +6,7 @@
 
 namespace
 {
-constexpr float kTrimRangeDb = 24.0f;
+constexpr float kTrimRangeDb = 18.0f;
 constexpr double kBypassRampSeconds = 0.005;        // ~5 ms crossfade, architecture.md "Bypass"
 constexpr double kRevisionCrossfadeSeconds = 0.030; // Phase 7: longer than bypass's 5ms — the three
                                                     // revisions differ enough in level/spectrum
@@ -55,6 +55,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcesso
                                                                   juce::StringArray{"1x", "2x", "4x", "8x"}, 3));
 
     params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{idBypass, 1}, "Bypass", false));
+
+    // Trim lock: while on, moving either trim applies the equal-and-opposite CHANGE to the other
+    // (delta-linked). UI-side coupling only — no DSP of its own — but lives in APVTS so it saves/
+    // restores with the session and is host-automatable. Defaults ON for fresh instances. Appended
+    // last so it doesn't shift existing sessions' automation indices.
+    params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{idTrimLock, 1}, "Trim Lock", true));
 
     return {params.begin(), params.end()};
 }

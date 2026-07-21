@@ -133,6 +133,19 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
         std::make_unique<juce::SliderParameterAttachment>(*apvts.getParameter(Proc::idInputTrim), inputTrimSlider);
     outputTrimAttach =
         std::make_unique<juce::SliderParameterAttachment>(*apvts.getParameter(Proc::idOutputTrim), outputTrimSlider);
+    inputTrimSlider.onValueChange = [this] { mirrorTrim(true); };
+    outputTrimSlider.onValueChange = [this] { mirrorTrim(false); };
+    // Seed the caches from the (possibly session-restored) attached values, after the attachments
+    // above have run — so a restored session with non-zero trims doesn't read as a jump on the
+    // first move.
+    lastInputTrim = inputTrimSlider.getValue();
+    lastOutputTrim = outputTrimSlider.getValue();
+
+    trimLockButton.setComponentID("os");
+    trimLockButton.setClickingTogglesState(true);
+    addAndMakeVisible(trimLockButton);
+    trimLockAttach =
+        std::make_unique<juce::ButtonParameterAttachment>(*apvts.getParameter(Proc::idTrimLock), trimLockButton);
 
     addAndMakeVisible(inputVU);
     addAndMakeVisible(outputVU);
@@ -290,6 +303,36 @@ NoAmpLowRiderDIAudioProcessorEditor::~NoAmpLowRiderDIAudioProcessorEditor()
     setLookAndFeel(nullptr);
 }
 
+void NoAmpLowRiderDIAudioProcessorEditor::mirrorTrim(bool sourceIsInput)
+{
+    juce::Slider& src = sourceIsInput ? inputTrimSlider : outputTrimSlider;
+    double& srcLast = sourceIsInput ? lastInputTrim : lastOutputTrim;
+    const double dstLast = sourceIsInput ? lastOutputTrim : lastInputTrim;
+
+    // Cache the new source value FIRST and unconditionally — the delta must be measured against the
+    // previous position even when the lock is off, otherwise the first move after enabling it would
+    // be computed from a stale reference and jump the other knob.
+    const double delta = src.getValue() - srcLast;
+    srcLast = src.getValue();
+
+    // trimLinkBusy: this call is the echo of our own write to the other parameter — its slider's
+    // onValueChange has just refreshed that side's cache above, which is all this pass needs to do.
+    if (trimLinkBusy || !trimLockButton.getToggleState() || delta == 0.0)
+        return;
+
+    // Equal and opposite CHANGE, relative to where the other knob already sits — so the pair's
+    // existing offset is preserved and the starting values don't matter. Clamped at the rails.
+    const auto target = (float) juce::jlimit(-kTrimRange, kTrimRange, dstLast - delta);
+
+    if (auto* param = processorRef.apvts.getParameter(sourceIsInput ? Proc::idOutputTrim : Proc::idInputTrim))
+    {
+        const juce::ScopedValueSetter<bool> guard(trimLinkBusy, true);
+        param->beginChangeGesture();
+        param->setValueNotifyingHost(param->convertTo0to1(target));
+        param->endChangeGesture();
+    }
+}
+
 void NoAmpLowRiderDIAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(PedalLookAndFeel::cBackground));
@@ -342,6 +385,8 @@ void NoAmpLowRiderDIAudioProcessorEditor::resized()
         osRenderLabel.setBounds(area.removeFromLeft(40.0f * sc).toNearestInt());
         area.removeFromLeft(5.0f * sc);
         osRenderBox.setBounds(area.removeFromLeft(36.0f * sc).toNearestInt());
+        area.removeFromLeft(12.0f * sc);
+        trimLockButton.setBounds(area.removeFromLeft(48.0f * sc).toNearestInt());
 
         auto rightGroup = area.removeFromRight(42.0f * sc + 5.0f * sc + 48.0f * sc);
         uiSizeLabel.setBounds(rightGroup.removeFromLeft(42.0f * sc).toNearestInt());

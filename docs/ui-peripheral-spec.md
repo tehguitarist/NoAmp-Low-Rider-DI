@@ -41,11 +41,15 @@ Each panel is identical in structure. The widths are your choice to suit the ped
 **Top-to-bottom within each panel:**
 
 1. **Section label** — "INPUT" / "OUTPUT". 8 pt, bold, letter-spacing ~0.20, colour `cTrimLabel`. Centred.
-2. **Halo trim knob** — 70×70 px at 1× scale. Rotary slider, `componentID = "trim"`. LookAndFeel draws it as: outer arc track (270° sweep, 5 px wide, `cTrimArcTrack`) + value arc (`cTrimArc`) + 36 px diameter cap with radial gradient (`cKnobHighlight` → `cKnobMid` → `cKnobShadow`) + 2.5 px indicator line (`cKnobIndicator`). Range −12 dB to +12 dB, default 0. If the pedal supplies a bitmap knob sprite via `setKnobImages()`, the sprite replaces only the cap+indicator — draw it centred in the same 70×70 rotary bounds so it still sits inside the vector arc track (ui.md "Optional bitmap asset overrides").
+2. **Halo trim knob** — 70×70 px at 1× scale. Rotary slider, `componentID = "trim"`. LookAndFeel draws it as: outer arc track (270° sweep, 5 px wide, `cTrimArcTrack`) + value arc (`cTrimArc`) + 36 px diameter cap with radial gradient (`cKnobHighlight` → `cKnobMid` → `cKnobShadow`) + 2.5 px indicator line (`cKnobIndicator`). Range −18 dB to +18 dB, default 0. If the pedal supplies a bitmap knob sprite via `setKnobImages()`, the sprite replaces only the cap+indicator — draw it centred in the same 70×70 rotary bounds so it still sits inside the vector arc track (ui.md "Optional bitmap asset overrides").
 3. **"TRIM" sub-label** — 7.5 pt, bold, `cTrimLabel` dimmed slightly. Centred below knob.
 4. **VU bar** — fills all remaining height. See VU spec below.
 
-APVTS parameter IDs: `"input_trim"` and `"output_trim"` (`AudioParameterFloat`, −12 to +12 dB).
+APVTS parameter IDs: `"input_trim"` and `"output_trim"` (`AudioParameterFloat`, −18 to +18 dB, range constant `kTrimRangeDb` in `PluginProcessor.cpp` / `kTrimRange` in `PluginEditor.h` — keep both in sync).
+
+### Trim lock
+
+A `"LOCK"` toggle button (`componentID = "os"`, same lit/dim style as the OS-strip controls) sits in the oversampling strip, between the RENDER box and the UI-size group. Backed by APVTS `"trim_lock"` (`AudioParameterBool`, default **on**). While on, moving either trim slider mirrors the **change** (not the absolute value) onto the other trim, equal and opposite, clamped to the ±18 dB rails — so raising input by 3 dB drops output by 3 dB regardless of where each knob already sits, and toggling the lock on never snaps a knob to a new position. While off, the two trims are fully independent. Implementation: `PluginEditor::mirrorTrim()`, hooked into each trim slider's `onValueChange`, with a re-entrancy guard (`trimLinkBusy`) so the two `SliderParameterAttachment`s don't feed back into each other.
 
 ---
 

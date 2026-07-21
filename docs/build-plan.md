@@ -66,7 +66,7 @@
 | DSP architecture | **Three DSP graph classes** (`V1EarlyDSP`, `V1LateDSP`, `V2DSP`) sharing helper primitives (op-amp stage helper, tone-stack helpers, zener module class). Rationale: topologies differ structurally (clip element presence, shelf vs peaking stack, extra V2 stage) — a single parametrised graph would be all special cases. Runtime `setSMatrixData()` swaps only *within* V2 (MID SHIFT, BASS SHIFT). |
 | Plugin identity | Company **Leigh Pierce**, mfr code **LPrc**, plugin code **NALR**, bundle `com.leighpierce.noamplowriderdi`, targets `NoAmpLowRiderDI_AU` / `_VST3` |
 | Out of scope | XLR/DI path, phantom power, LINE/+10dB throws (unity modelled), V1L C0 electrolytic sub-variant, NJM064/TL062 sub-variant. All documented in `circuit.md`. |
-| Params (superset) | `revision`(choice 3) `drive` `presence` `blend` `level` `bass` `treble` (0..1 float, linear pots — B100k everywhere, taper = identity) `mid`(V2) `mid_shift`(V2 choice) `bass_shift`(V2 choice) `input_trim` `output_trim` `oversampling` `render_oversampling` `bypass`. V2-only params inert on V1 revisions (UI hides them). |
+| Params (superset) | `revision`(choice 3) `drive` `presence` `blend` `level` `bass` `treble` (0..1 float, linear pots — B100k everywhere, taper = identity) `mid`(V2) `mid_shift`(V2 choice) `bass_shift`(V2 choice) `input_trim` `output_trim` (±18 dB) `trim_lock`(bool, default on — delta-links the two trims, UI-side coupling only, `PluginEditor::mirrorTrim()`) `oversampling` `render_oversampling` `bypass`. V2-only params inert on V1 revisions (UI hides them). |
 
 ---
 

@@ -73,6 +73,7 @@ public:
     static constexpr const char* idBassShift = "bass_shift";
     static constexpr const char* idInputTrim = "input_trim";
     static constexpr const char* idOutputTrim = "output_trim";
+    static constexpr const char* idTrimLock = "trim_lock";
     static constexpr const char* idOversampling = "oversampling";
     static constexpr const char* idRenderOversampling = "render_oversampling";
     static constexpr const char* idBypass = "bypass";

@@ -230,6 +230,36 @@ target_link_libraries(RevisionSwitchTest
 add_test(NAME RevisionSwitchTest COMMAND RevisionSwitchTest)
 set_tests_properties(RevisionSwitchTest PROPERTIES LABELS "CI")
 
+# 7b — Trim-lock acceptance gate (trim-lock-implementation.md): constructs the real editor so
+# mirrorTrim()'s slider.onValueChange wiring is live, drives input/output trim through APVTS, and
+# checks the delta-linked mirror behaviour (incl. the no-snap-on-enable and rail-clamp cases).
+juce_add_console_app(TrimLockTest PRODUCT_NAME "TrimLockTest")
+target_sources(TrimLockTest
+    PRIVATE
+        tests/TrimLockTest.cpp
+        src/PluginProcessor.cpp
+        src/PluginEditor.cpp
+        src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
+)
+target_compile_definitions(TrimLockTest
+    PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
+        JUCE_STANDALONE_APPLICATION=1
+)
+target_link_libraries(TrimLockTest
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        chowdsp::chowdsp_wdf
+        NoAmpAssets
+    PUBLIC
+        juce::juce_recommended_config_flags
+)
+add_test(NAME TrimLockTest COMMAND TrimLockTest)
+set_tests_properties(TrimLockTest PROPERTIES LABELS "CI")
+
 # 8 — Headless UI render probe (build.md's pattern): constructs the real editor off-screen and
 # paints it to PNGs at 1.0x/1.5x/2.0x scale x 3 revisions (9 renders) under build/ui-renders/, so
 # layout can be reviewed without a DAW/display. Gate is build+run succeeds; visual sign-off is the
