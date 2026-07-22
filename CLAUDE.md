@@ -134,7 +134,82 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-22).** All work is on **`main`**.
+> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-23).** All work is on **`main`**.
+>
+> ## ✅ START HERE — CONSOLIDATED ACTION ITEMS (2026-07-23, end of session)
+>
+> **Only TWO things are actionable. Everything else below is best-effort with no known lever —
+> do not chase those without a genuinely new idea.** This list was written at a clean stopping point
+> after the V1L 1613–3225 Hz band was closed; the rest of this file is history and reference.
+>
+> ### 🔴 1. REGENERATE `analysis/reports/` — DO THIS FIRST, BEFORE TRUSTING ANY REPORT-BASED NUMBER
+> `analysis/reports/comprehensive_data.json` was generated **2026-07-21 02:57** and **EIGHT DSP
+> commits have shipped since**: `HFEvenRestore` (all 3 revs), `WetTopOctaveRestore`, the
+> **`kInputRef[V1E]` 7.0 → 6.0 re-fit**, the **V1L saturator re-fit** (0.40/0.50 → 0.30/0.70),
+> `WetLFCorrection` 7 → 4 dB, `ClipHarmonicReducer`, `V1EEvenShaper`, and the V1e twin-T scale.
+> **20 analysis scripts read that JSON** and will silently report pre-2026-07-21 behaviour.
+> **This is not hypothetical — it bit this session:** a V1E co-variation claim was committed off that
+> JSON and had to be retracted the same day (commit `b3702d4`), because the `kInputRef` re-fit had
+> changed the very numbers it rested on. L-005, in a session that cites L-005.
+> ```bash
+> python3.11 analysis/comprehensive_report.py
+> ```
+> Mechanical, no decisions, ~tens of minutes. Until it is done, **prefer fresh renders** (the
+> `gapd_fit_harness` render path) over anything that reads the JSON, and treat any report-derived
+> figure written before 2026-07-23 as suspect.
+>
+> ### 🟡 2. GATE HOLE — `V1LateGapDTest` CANNOT SEE `makeup` (small, buildable, real)
+> It hardcodes `1.0` in its own `setClipDriveNormalisation` call (~line 74) instead of reading
+> `prepare()`'s shipped default, and its header says it gates the deficit, not the tuning. **A silent
+> change to `makeup` would NOT fail it** — proven this session: shipping `makeup 0.5` left
+> `V1LateGapDTest` green and was caught only by `V1LateIntegrationTest`'s §1 checks (six of them).
+> That accident is load-bearing, so it should be deliberate. Same class as the saturator hole that was
+> closed 2026-07-22 with a synthetic-tone probe. Either read `prepare()`'s default (mirroring the
+> `V1LateIntegrationTest` saturator gate's `useShippedDefault` pattern) or assert the §1 low-bump
+> consequence directly. **Verify it FAILS on a silent revert (L-003, both ways).**
+>
+> ### ⚪ OPEN, BEST-EFFORT — NO KNOWN LEVER. Do not re-open without a new mechanism.
+> Each of these has had its candidate levers refuted by measurement, not merely deprioritised:
+> - **V1L midband COMPRESSION deficit** (+3.1..+4.9 dB at 1613/2032 Hz on BL1.00/BL0.65) — **NEW
+>   2026-07-23**. It is the compression half of Gap D's **Finding 4**, proven to require MEMORY.
+>   `makeup` is REFUTED structurally (it leaks the normaliser's bidirectional boost ⇒ +10.9/+13.3 dB
+>   at the §1 reference). No lever known.
+> - **V1L 1613–3225 Hz THD overshoot** — CLOSED best-effort. All three levers refuted
+>   (`ClipDriveNormaliser` on authority, blend on magnitude, `ClipHarmonicReducer` on guardrail #6).
+> - **V1L 4–6 kHz null misplacement** (~⅓ octave, ~3 dB, one capture) — every structurally-safe
+>   instrument refuted; an EQ fitted to the single capture that shows it is the #6 failure mode.
+> - **Gap I** — V1E onset-shape floor + drive-dependent H2 spread. Unfixable by any memoryless
+>   nonlinearity (36-point scan).
+> - **Gap D (V2)** — the ~12 dB HF residual after `HFEvenRestore`, and the 370–950 Hz notch zone
+>   (Gap G, permanently unarbitrable on the FINAL matrix).
+> - **Gap F** — V1L blend residual's cab-sim component; survived every fix since 2026-07-17.
+> - **V1L blend/wet-level discrepancy** — closed best-effort, unattributed (wet-gain vs a misread
+>   knob are indistinguishable from one capture), and its measured authority is **< 0.5 dB**.
+> - **V2 `WetTopOctaveRestore`** — deliberately OFF (`kWetTopDbV2 = 0.0`); an EAR decision, not a
+>   numeric one (V2's energy above 9 kHz is 0.00% of the clean sweep, so no null/FR metric has power).
+>
+> ### 🆕 ⚠ THE "CAPTURE MATRIX IS FINAL AT 11 FILES" PREMISE IS UNDER REVISION — 19 NEW `V2-2`
+> ### CAPTURES ARRIVED 2026-07-23 06:43, MID-SESSION. VERIFY BEFORE RELYING ON EITHER CLAIM.
+> `analysis/captures/` now holds **30 wavs, 19 of them `V2-2 ...`** (V2, BLEND spanning 0900/1130/
+> 1200/1300 plus DRIVE/PRESENCE/MID variation) — added while the session below was running.
+> **⚠ THIS IS ANOTHER SESSION'S ACTIVE, UNFINISHED WORK and it is NOT validated yet.** Two intake
+> scripts sit UNCOMMITTED in the tree (`analysis/v22_intake_audit.py`,
+> `analysis/v22_blend_direction.py`) auditing structure/duplicates/level and testing whether the
+> **BLEND labels are MIRRORED** (0900 ↔ 1500) — an open question their own headers flag, along with
+> unknown pedal LEVEL and capture level. **Do not fit anything to this set until that audit lands.**
+> - **What it does NOT change:** everything in this session's V1L work below. The new files are V2;
+>   V1L still has exactly 3 captures and one identifiable low-blend file, so every V1L
+>   "unarbitrable / best-effort" verdict stands unaffected.
+> - **What it MAY change, once validated:** V2's documented permanent blind spots — "V2's blend
+>   captures are all ≥0.90" and "V2 BLEND=0.50 has none" (ISS-011) — are exactly what this set
+>   appears to fill. Several V2 items closed *because the matrix could not arbitrate them* may become
+>   arbitrable. **Re-read the ⛔ FINAL-matrix block and the ⚖ arbitration rule against the new set
+>   before treating any V2 "unarbitrable" verdict as still binding.**
+> - ⚠ The `.wav`s are gitignored, so the evidence of this set lives only on disk and in those two
+>   uncommitted scripts — do not `git clean` the tree.
+>
+> **Nothing is blocked on external input.**
+>
 > **Read the "📋 GAP STATUS AT A GLANCE" table and the "⛔ CAPTURE MATRIX IS FINAL" block below FIRST**
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
