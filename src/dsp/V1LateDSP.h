@@ -53,9 +53,43 @@ public:
         presence.prepare(baseFs);
         driveRegion.setDriveParams(ZenerDriveModule::v1LateParams());
         driveRegion.prepare(baseFs, maxBlock);
-        // Recovery saturator fit (Phase 10, 2026-07-17). Added late — V1L had none.
-        // sat_refine.py --rev V1L --os 4: gain=0.400 knee=0.500 offset=0.100 => RMS 11.1 (disabled was 102.1).
-        driveRegion.setRecoverySaturation(0.40, 0.50);
+        // Recovery saturator — RE-FIT 2026-07-22 (Phase 10). Added late (2026-07-17); V1L had none.
+        //
+        // WAS gain=0.400 knee=0.500, from sat_refine.py --rev V1L --os 4 ("RMS 11.1 vs 102.1
+        // disabled"). Two things invalidated that fit, neither of them a mistake at the time:
+        //   1. IT WAS AN LF-ONLY OBJECTIVE. sat_refine scores H2..H6 at 100/200/400 Hz only, so the
+        //      midband was never in it — nothing stopped the fit buying LF with midband error.
+        //      CLAUDE.md already flagged this ("Gap F's 9x was an LF-only score, ~22% on a joint one").
+        //   2. THE CHAIN CHANGED UNDERNEATH IT. Since 2026-07-17: ClipDriveNormaliser (V1L-specific),
+        //      DryTapDelay, two polarity-inversion fixes, WetLFCorrection, WetHFCorrection,
+        //      HFEvenRestore, WetTopOctaveRestore. A constant fitted against a chain that no longer
+        //      exists is not evidence (L-005's lesson, applied to a fitted parameter, not a metric).
+        //
+        // Re-fitted by analysis/v1l_sat_joint_refit.py on a JOINT objective — pooled |plugin-pedal|
+        // THD over all 3 V1L captures x 3 driven levels, three band groups scored SEPARATELY so a
+        // trade cannot hide inside one number:
+        //     band                     shipped 0.40/0.50   ->   0.30/0.70
+        //     TARGET   1613-3225 Hz          2.837 pp            2.178   (-0.659)
+        //     GUARD_LF  100-400  Hz          2.842 pp            2.771   (-0.071)
+        //     GUARD_HF 5120-6451 Hz          1.760 pp            1.711   (-0.049)
+        // This is a STRICT PARETO IMPROVEMENT — every band better, no trade. NOT the grid's best
+        // TOTAL (0.30/1.20 scored 2.284 vs this 2.322), and deliberately so: TOTAL collapsed onto a
+        // 0.069 pp plateau across the whole grid while the shipped-vs-plateau gap is ~0.3 pp, so
+        // ranking WITHIN the plateau is fitting noise — and the rank leader sat on a grid EDGE
+        // (the boundary trap this project has hit repeatedly). Dominance is the robust criterion here.
+        //
+        // GUARDED ON THE ORIGINAL OBJECTIVE. The saturator was bought for FR, not THD, so a THD-only
+        // re-fit would repeat the very sin above with the bands swapped. analysis/v1l_sat_refit_fr_
+        // guard.py scores FR shape + null depth: mean dFR +0.010 dB, mean dNull -0.01 dB across all
+        // three captures — flat. The THD win is not paid for in FR.
+        //
+        // ⚠ This does NOT close the 1613-3225 Hz overshoot. That band is TWO superimposed mechanisms
+        // (analysis/v1l_mid_sat_attribution.py): the upper part (2560-3225) is essentially all this
+        // saturator, but 1613-2032 survives ablation and is the Gap I ONSET FLOOR — it is largest on
+        // V1E, which ships with its saturator DISABLED, and shrinks with driven level on every V1E
+        // capture. Gap I is already characterised as unfixable by any memoryless nonlinearity; do not
+        // chase the remainder by pushing this element further.
+        driveRegion.setRecoverySaturation(0.30, 0.70);
         driveRegion.setSaturationOffset(0.100);
         // ⭐ GAP D CALIBRATION LAYER — ENABLED ON V1L ONLY (src/dsp/ClipDriveNormaliser.h).
         //

@@ -446,6 +446,42 @@ without images.
 >   pedal THD.
 >   ⚠ **Any future work here MUST use a complex transfer** — `analyze.transfer()` takes `np.abs`, so
 >   the standard toolchain cannot see the quantity that is actually wrong.
+> - **✅ THE 1613–3225 Hz BAND IS NOW SPLIT AND HALF OF IT IS SHIPPED (2026-07-22). It was TWO
+>   superimposed mechanisms, not one open question — that is the finding.**
+>   - **2560–3225 Hz = V1L's `RecoverySaturator`, and it was MIS-FIT.** Pedal-referenced ablation
+>     (`analysis/v1l_mid_sat_attribution.py` — note `sat_midband_ablation.py` only ever compared the
+>     plugin to ITSELF, which cannot say whether removing the element moves us TOWARD the pedal):
+>     turning it off takes 3225 Hz from +1.28/+1.13 pp to **+0.07/−0.31/−0.29** — essentially perfect.
+>     But it is LOAD-BEARING at 100–400 Hz (2.842 → 3.477 pp when ablated) ⇒ **ablation is wrong, a
+>     re-fit is right.**
+>   - **✅ SHIPPED: V1L saturator `gain 0.40 → 0.30`, `knee 0.50 → 0.70`** (offset unchanged 0.100).
+>     Re-fit by `analysis/v1l_sat_joint_refit.py` on a JOINT objective (3 captures × 3 levels, three
+>     band groups scored separately). **STRICT PARETO IMPROVEMENT — every band better, no trade:**
+>     TARGET 1613–3225 **2.837 → 2.178**, GUARD_LF 100–400 **2.842 → 2.771**, GUARD_HF **1.760 →
+>     1.711** pp. FR/null guarded on the objective the element was ORIGINALLY bought for
+>     (`v1l_sat_refit_fr_guard.py`): mean ΔFR **+0.010 dB**, mean Δnull **−0.01 dB** — flat. 32/32 green.
+>   - **⚠ DELIBERATELY NOT THE GRID'S BEST TOTAL** (0.30/1.20 scored 2.284 vs the shipped 2.322).
+>     TOTAL collapsed onto a **0.069 pp plateau** across the whole grid while the shipped-vs-plateau
+>     gap is ~0.3 pp ⇒ **ranking within the plateau is fitting noise**, and the rank leader sat on a
+>     grid EDGE (the recurring boundary trap). **Dominance, not rank, is the robust criterion when the
+>     objective plateaus** — a durable rule for any future fit here.
+>   - **⚠ WHY THE OLD FIT WAS STALE, and the general lesson:** it came from `sat_refine.py`, which
+>     scores **100/200/400 Hz ONLY**, and it predates `ClipDriveNormaliser`, `DryTapDelay`, two
+>     polarity fixes and four wet-path layers. **A constant fitted against a chain that no longer
+>     exists is not evidence** (L-005 applied to a fitted PARAMETER rather than to a metric). Worth
+>     sweeping other constants for the same staleness — V2's and V1E's saturators were fitted in the
+>     same era on the same LF-only objective.
+>   - **⛔ 1613–2032 Hz IS THE Gap I ONSET FLOOR — DO NOT CHASE IT WITH THIS ELEMENT.** It SURVIVES
+>     saturator ablation (+4.34/+2.87 pp residual), is **LARGEST on V1E — which ships with its
+>     saturator DISABLED** (+8.65 pp @1280 Hz at D0.50) — and **shrinks with driven level on every
+>     V1E capture** (+7.18 → +3.41 → +1.02), the exact onset-floor signature. V2 runs COLD there
+>     (−2.69), so it is not universal. Gap I is already characterised as unfixable by any memoryless
+>     nonlinearity ⇒ this remainder is **absorbed into Gap I, best-effort**, not a new gap.
+>   - ⚠ **NO GATE DISCRIMINATES THE NEW VALUES.** `V1LateIntegrationTest`'s §8 rows pass at BOTH
+>     0.40/0.50 and 0.30/0.70 (wide voiced windows), so a silent revert would NOT fail the suite —
+>     guardrail #3 is **not** satisfied for this parameter. The evidence is capture-based and the test
+>     suite is capture-free, so a real gate needs a synthetic-tone THD probe at ~2.5–3 kHz. Logged,
+>     not built.
 > - **⚠ CORRECTION (same session): "the 1613–3225 Hz part is the skirt of the same misplaced null"
 >   was WRITTEN WITHOUT TESTING IT, and the data already gathered CONTRADICTS it — do not carry that
 >   claim forward.** `v1l_hf_fundamental_null.py`'s own table shows 1600/2560 Hz **monotonic in

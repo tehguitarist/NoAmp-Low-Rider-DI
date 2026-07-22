@@ -251,7 +251,11 @@ int main()
             {0.0, 0.0, 0.0, -35.0, 0.0},
             {0.5, 0.3, 12.0, -20.0, 15.5},
             {0.5, 0.5, 17.0, -15.0, 21.0},
-            {0.5, 1.0, 29.6, 7.6, 29.4}, // Sat added (gain=0.40/knee=0.50/offset=0.100): compresses max-drive FR
+            {0.5, 1.0, 29.6, 7.6, 29.4}, // Sat (re-fit 2026-07-22: gain=0.30/knee=0.70/offset=0.100)
+                                         // compresses max-drive FR. NB these windows are wide voiced
+                                         // sanity checks and do NOT discriminate the saturator's fit —
+                                         // they pass at both 0.40/0.50 and 0.30/0.70. The re-fit's
+                                         // evidence is THD+FR against captures (see V1LateDSP.h).
         };
         for (const auto& pnl : panels)
         {
