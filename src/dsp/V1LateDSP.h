@@ -124,8 +124,17 @@ public:
         // nearly closes the compression error (+2.17 -> -0.45 dB) and tightens the spread, but costs
         // +5.35 dB of THD residual at D0.40 — a net loss, so the +2.17 dB compression deficit is
         // KNOWINGLY LEFT OPEN as the better side of a measured trade.
-        // ⚠ `tau` (30 ms) and `scHz` (200 Hz) were NEVER SWEPT and remain ClipDriveNormaliser
-        // defaults — do not cite them as fitted.
+        // ✅ `tau`/`scHz` CHECKED 2026-07-22 (analysis/v1l_gapd_tauscz_sweep.py) — CLOSED, no change.
+        // Swept independently of V2 (V2 never enables this layer — depth defaults to 0 and V2DSP's
+        // prepare() never calls setClipDriveNormalisation — so it is physically inert to tau/scHz
+        // regardless; no guardrail #6 conflict is possible here, unlike depth/target/makeup above).
+        // `tau` has NO leverage: flat across 10-90 ms at every fixed scHz. `scHz` has REAL leverage
+        // (~1.5 dB across 100-350 Hz, a genuine interior optimum, not a boundary artefact) — but the
+        // shipped 200 Hz sits within 0.017 dB of the grid's own best (220 Hz), below this project's
+        // 0.15 dB noise floor for a 3-capture axis. Verified the optimum is not a clamp-guard
+        // artefact: re-running at 4x-wider gain limits (--gapd-min-gain 0.03 --gapd-max-gain 32)
+        // reproduces every number bit-for-bit while the clamp fraction alone drops (23.5% -> 7.4% at
+        // 200 Hz). tau (30 ms) / scHz (200 Hz) stay UNCHANGED — checked, not a guess.
         // ⚠ Do NOT take gapd_fit_harness's "best JOINT" headline for a V1L-only decision: it pools
         // both axes with the layer ENABLED ON V2, which is not the shipping configuration, and on
         // that basis it recommends a makeup that loses on V1L's own metric. Read the per-axis columns.

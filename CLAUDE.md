@@ -96,6 +96,8 @@ without images.
   - `proto_hf_restore.py` — Gap D HF feasibility paper-test (no renders); superseded by the next one
   - `gapd_hf_restore_fit.py` — ⭐ the shipped `HFEvenRestore` joint fit (11 captures × 3 revisions,
     render-and-score harness mirroring `v1e_even_fit.py`; `--quick` for a fast 1-capture/rev grid)
+  - `v1l_gapd_tauscz_sweep.py` — `ClipDriveNormaliser` tau/scHz check, V1L-DRIVE axis only (V2 is
+    physically inert to this layer, so no guardrail #6 join needed); confirmed shipped values optimal
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
 - **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
   `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).
@@ -1065,7 +1067,22 @@ without images.
 > 6. **Gap D's ~11 dB intrinsic HF shortfall** (item 3, "▶ NEXT STEPS"). ✅ UNBLOCKED 2026-07-20 —
 >    #2 is done, so its premise (trusting HF THD numbers) now holds. Still flagged low-audibility by
 >    the project's own "work the midband before the HF residual" note; this ranking agrees with that.
-> 7. **V1L Gap D polish** (tau/scHz never swept, item 0(b) above) — explicitly low value, park.
+> 7. **V1L Gap D polish — ✅ CHECKED 2026-07-22, CLOSED.** `tau`/`scHz` (item 0(b) above) were never
+>    swept and shipped at `ClipDriveNormaliser`'s own class defaults. New paper-test
+>    `analysis/v1l_gapd_tauscz_sweep.py` (V1L-DRIVE axis only — V2 never enables this layer, depth
+>    defaults 0 and V2DSP's `prepare()` never calls `setClipDriveNormalisation`, so it is physically
+>    inert to tau/scHz and there is no guardrail #6 cross-axis conflict to enforce here, unlike
+>    depth/target/makeup). Result: **`tau` has NO leverage** (flat across 10-90 ms at every fixed
+>    `scHz`, a 49-point coarse grid at OS=4); **`scHz` has REAL leverage** (~1.5 dB across 100-350 Hz,
+>    a genuine interior optimum, not a boundary artefact) — but the **shipped 200 Hz sits within
+>    0.017 dB of the grid's own best (220 Hz)**, below this project's 0.15 dB noise floor for a
+>    3-capture axis. Confirmed the optimum is not a clamp-guard artefact: re-running at 4x-wider gain
+>    limits (`--gapd-min-gain 0.03 --gapd-max-gain 32`) reproduces every resid/spread/comp number
+>    bit-for-bit while only the clamp fraction drops (23.5% → 7.4% at 200 Hz — worth noting for its
+>    own sake: the shipped point runs the guard at a non-trivial 23.5% on its worst capture, a fact
+>    that was never previously measured, though it does not change this item's disposition). **tau
+>    (30 ms) / scHz (200 Hz) stay UNCHANGED — the "low value, park" call was correct, now for a
+>    checked reason instead of a guess.**
 > 8. **Housekeeping — ✅ DONE 2026-07-21.** `src/dsp/GbwCorrection.h` deleted (confirmed zero
 >    references first); `analysis/reports/*` predating 2026-07-19 removed (all gitignored scratch
 >    output, freely regenerable — kept everything 2026-07-19 onward, which is still-cited evidence
