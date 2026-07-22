@@ -145,6 +145,75 @@ without images.
 > V2 stays off (`kWetTopDbV2 = 0.0`), same status as before. Full detail in the gap table's H err2
 > row and in `WetTopOctaveRestore.h`'s own header. Do not re-open this for further magnitude tuning.
 >
+> **✅ THE V1L 1613–3225 Hz THD OVERSHOOT IS CLOSED BEST-EFFORT (2026-07-23). IT WAS NEVER ONE
+> DEFECT — IT SPLITS BY BLEND INTO TWO MECHANISMS, AND THE ONE REMAINING LEVER IS REFUTED BY
+> MEASUREMENT. NO C++ SHIPPED; V1L/V1E/V2 ALL BIT-IDENTICAL. Do not re-open without a new idea.**
+> The band was the last item CLAUDE.md still described as "a SEPARATE, still-open question... NOT
+> exhausted". It is now exhausted. Four capture-based diagnostics, each answering the previous one's
+> question; 33/33 ctest green.
+> - **⛔ `ClipDriveNormaliser` CANNOT DO IT — AN AUTHORITY RULE-OUT, so no grid refinement can rescue
+>   it** (`analysis/v1l_midband_drive_joint_refit.py`, a 20-point target×scHz joint search over V1L's
+>   OWN two axes). Across the whole grid the midband moves **0.84 dB** while its own 440 Hz axis moves
+>   **11.97 dB** — **14.3× less leverage on the band we want**. Its best-possible midband gain is
+>   **0.75 dB of a 7.56 dB residual (9.9%)** and costs **+11.94 dB** on the SHIPPED, GATED 440 Hz axis
+>   (`V1LateGapDTest`). Guardrail #6 regret fails (drive440 +2.47 dB). Same class of argument that
+>   killed C42 and PRESENCE in Gap H. ⚠ Note V2 is correctly **excluded by ARCHITECTURE** here, not by
+>   parameter matching — `V2DSP::prepare()` never calls `setClipDriveNormalisation`.
+> - **⛔ THE BLEND DISCREPANCY EXPLAINS ~20%, NOT THE BAND** (`analysis/v1l_midband_blend_decompose.py`).
+>   The residual DOES fall with blend and the sweep **turns** (a genuine interior optimum, not the
+>   documented edge non-result): 0.30→12.01, 0.15→7.65, 0.10→4.75, **0.07→2.93, 0.05→2.86**, 0.03→5.06.
+>   But nulling it needs **blend 0.30 → ~0.06 = −0.24 = 2.4 CLOCK-HOURS**, against the **−0.05..−0.10**
+>   that two independent estimators measured (`v1l_blend_knob_probe` null-based; `v1l_blend_balance`
+>   α ⇒ 0.19–0.21). At the corroborated shift it explains **~20%**, and **the level-GROWTH shape
+>   survives at every blend** (+4.90 dB even at 0.03) ⇒ blend shaves magnitude, it is not the
+>   mechanism. **🆕 A THIRD INDEPENDENT CORROBORATION OF THE MODEST WET-LEVEL EXCESS, though:** the
+>   BL0.65 capture shows an interior optimum at blend **0.55 (−0.10)**, matching `v1l_blend_knob_probe`'s
+>   null-derived −0.10 **exactly**, on a completely different observable (midband THD vs null depth).
+> - **⭐⭐ THE REAL FINDING — THE BAND SPLITS BY BLEND INTO TWO DIFFERENT MECHANISMS.** Compression read
+>   WITHIN each file (so NAM level normalisation cancels) against the THD residual:
+>
+>   | capture | compression resid | THD resid @−6 dBFS | reading |
+>   |---|---|---|---|
+>   | BL1.00 | **+4.53 / +3.13 dB** | +2.83 / −3.33 | we UNDER-COMPRESS; THD ~ok |
+>   | BL0.65 | **+4.91 / +4.73 dB** | +1.49 / +1.50 | we UNDER-COMPRESS; THD ~ok |
+>   | BL0.30 | **+0.32 / +0.23 dB** | **+11.71 / +18.79** | compression MATCHES, THD far too HOT |
+>
+>   BL1.00/BL0.65 carry **Gap I's onset floor** — and that half is now independently corroborated:
+>   on all three **V1E** captures (which have neither `ClipDriveNormaliser` nor `WetLFCorrection`, so
+>   nothing masks the LF marker) the **110 Hz Gap I anchor and the 1613/2032 Hz residual co-vary in
+>   sign, trend AND rank order** (D0.50 +11.7/+3.6 largest, D1.00 −0.0/+0.4 ~zero, D0.60 +4.1/+2.8).
+>   BL0.30 is the **memoryless-impossibility signature** instead — equal compression must imply equal
+>   THD for ANY memoryless element, so ~12–19 dB of excess harmonics at matched compression is Gap D's
+>   V2-half signature appearing on V1L.
+>   - **✅ AND THAT READING SURVIVED ITS OWN POWER CHECK — which is what makes it evidence.** BL0.30 is
+>     70% dry, so "compression matches" could just mean the dry leg pins `dGain`. It does not:
+>     perturbing the WET leg (gapd makeup 1.0→0.0) moves the same metric **4.82/4.73 dB at BL0.30** vs
+>     **5.19/5.18 at BL1.00** — ~93% of full-wet sensitivity retained, and the measured 0.23–0.32 dB
+>     match sits **~15–20× below it**. (Bounding the metric's power first is the Gap H err2 lesson.)
+> - **⛔ AND THE MECHANISM-MATCHED FIX IS REFUTED BY MEASUREMENT — `ClipHarmonicReducer` ON V1L. DO NOT
+>   BUILD IT** (`analysis/v1l_midband_chr_feasibility.py`; the layer already exists on the SHARED
+>   `ZenerDriveClipRecovery`, only the CLI gated it off V1L). It has **real authority at unchanged
+>   compression** — slope 0.3/betaMax 0.7/scHz 3000 closes **64%** of BL0.30's residual (12.01 → 4.31),
+>   compression moves **+0.03 dB**, and BOTH guards IMPROVE. **It still fails guardrail #6 outright on
+>   that same setting: BL1.00 3.18 → 5.91 (+2.73), BL0.65 0.85 → 7.66 (+6.81).** The reason is
+>   structural, not a tuning miss — the two regressing captures are exactly the ones WITHOUT the
+>   impossibility signature, so a harmonic reducer strips harmonics they NEED. **The required
+>   correction is ~0 for two captures and ~12 dB for one = a per-capture value by definition**, and a
+>   blend-tracking version is the per-KNOB form #6 also forbids. On the ONE capture that shows it, it
+>   is further confounded with the already-closed blend/wet-level discrepancy, and **the matrix is
+>   FINAL** (V1L has exactly one identifiable low-blend file) so the two can never be separated.
+> - **⚠ L-009 FIRED AND SAVED THE RESULT.** The first feasibility run reported `--chr-*` as a **DEAD
+>   SWITCH on V1L (max|delta| = 0.000e+00)** — `V1LateDSP` had no pass-through setter at all and
+>   `applyChr(d)` was only wired into OfflineRender's V2 branch, so every number would have been a
+>   silent no-op. Fixed, **re-verified live (6.75e-02)**, and V1L confirmed **BIT-IDENTICAL** without
+>   the flag. Third time this project has been bitten by this class — the guard is worth its cost.
+> - **⇒ DISPOSITION: CLOSED BEST-EFFORT.** BL1.00/BL0.65 → absorbed into **Gap I** (unfixable by any
+>   memoryless nonlinearity, already documented). BL0.30 → real, correctly diagnosed, and **not
+>   correctable within the guardrails on the evidence that exists**. The two diagnostic hooks added
+>   (`V1LateDSP::setClipHarmonicReduction`, the OfflineRender V1L ungate) are **inert and verified
+>   bit-identical** — kept so this is re-measurable, with the refutation recorded in
+>   `V1LateDSP.h`'s own header so it is not silently shipped.
+>
 > **⭐ GAP I / THE 1613–2032 Hz REMAINDER — INVESTIGATED 2026-07-22, REFRAMED, AND `kInputRef[V1E]`
 > RE-FIT 7.0 → 6.0 (SHIPPED). Four findings; read the last one before touching any V1E constant.**
 > - **❌ `V1EEvenShaper` REFUTED as the cause — do not re-run this.** It was the obvious suspect (it
@@ -604,6 +673,9 @@ without images.
 >     V1E capture** (+7.18 → +3.41 → +1.02), the exact onset-floor signature. V2 runs COLD there
 >     (−2.69), so it is not universal. Gap I is already characterised as unfixable by any memoryless
 >     nonlinearity ⇒ this remainder is **absorbed into Gap I, best-effort**, not a new gap.
+>     **⚠ AMENDED 2026-07-23 — TRUE FOR TWO OF THE THREE V1L CAPTURES, WRONG FOR THE ONE THAT
+>     DOMINATES THE BAND. See the ✅ CLOSED block immediately below; this row is kept as written
+>     because the onset-floor half of it still holds and is now independently corroborated.**
 >   - ⚠ **NO GATE DISCRIMINATES THE NEW VALUES.** `V1LateIntegrationTest`'s §8 rows pass at BOTH
 >     0.40/0.50 and 0.30/0.70 (wide voiced windows), so a silent revert would NOT fail the suite —
 >     guardrail #3 is **not** satisfied for this parameter. The evidence is capture-based and the test
@@ -621,8 +693,14 @@ without images.
 >   cells hot — see `v1l_midhf_thd_premise_check.py`'s per-cell table) and, because it dilutes
 >   normally with blend, it behaves like genuine wet-path harmonic content, not a phase artefact —
 >   i.e. it may be exactly the kind of thing `WetHFCorrection`'s magnitude-only refutation was
->   originally aimed at, just not yet re-examined with this cleaner premise. **NOT investigated this
->   session — this gap is NOT exhausted; only the 4–6 kHz null sub-thread is.**
+>   originally aimed at, just not yet re-examined with this cleaner premise. ~~**NOT investigated this
+>   session — this gap is NOT exhausted; only the 4–6 kHz null sub-thread is.**~~ **✅ SUPERSEDED
+>   2026-07-23 — IT IS NOW INVESTIGATED AND EXHAUSTED. See the ✅ CLOSED banner at the top of this
+>   file: the band splits by BLEND into Gap I's onset floor (BL1.00/BL0.65) plus a genuine
+>   memoryless-impossibility signature (BL0.30), and all three candidate levers —
+>   `ClipDriveNormaliser` (authority), the blend discrepancy (~20%, needs an implausible 2.4
+>   clock-hours), and `ClipHarmonicReducer` (guardrail #6) — are refuted by measurement. Closed
+>   best-effort.**
 > - **⚠ PARTIALLY REFUTED, same tool:** the parallel hypothesis for `WetLFCorrection` (V1L, 50 Hz/
 >   +7 dB/Q1.2) against the V1L 20 Hz overshoot below — predicted bell contribution is **+2.4 dB**
 >   against a measured ~+9 dB. Not the wrong sign this time, and not negligible, but explains only

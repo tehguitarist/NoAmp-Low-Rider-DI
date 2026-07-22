@@ -230,6 +230,44 @@ public:
         driveRegion.setClipDriveNormalisation(depth, targetV, tauMs, scHz, makeup);
     }
 
+    // Gap D harmonic reducer (src/dsp/ClipHarmonicReducer.h) — DIAGNOSTIC PASS-THROUGH ONLY on V1L.
+    //
+    // ⚠ V1L's prepare() DELIBERATELY NEVER CALLS THIS, so V1L audio is BIT-IDENTICAL with it present
+    // (slope 0 = OFF is the layer's own bit-identical default, and nothing sets a slope). It exists
+    // solely so the OfflineRender harness can MEASURE the layer on V1L; it is not a shipped feature
+    // and must not become one without the joint fit described below.
+    //
+    // WHY IT IS EXPOSED AT ALL (2026-07-23). V1L's BL0.30 capture shows the memoryless-impossibility
+    // signature in 1613-2032 Hz: COMPRESSION MATCHES the pedal to 0.23-0.32 dB while THD runs
+    // +11.7/+18.8 dB HOT. That is the one signature ClipDriveNormaliser provably cannot address (it
+    // moves compression and THD together by construction) and is exactly what this layer was built
+    // for on V2. The reading survived its own power check — perturbing the wet leg moves the same
+    // compression metric 4.8 dB at BL0.30, so the match is real, not dry-leg blindness.
+    //
+    // ⛔ MEASURED AND REFUTED FOR SHIPPING — DO NOT ENABLE THIS ON V1L. The layer has real authority
+    // (slope 0.3 / betaMax 0.7 / scHz 3000 closes 64% of BL0.30's 1613-2032 Hz residual, 12.01 ->
+    // 4.31 dB, with compression moving only +0.03 dB and both the 100-400 Hz and 440 Hz guards
+    // IMPROVING) — and it still FAILS GUARDRAIL #6 outright, on the same setting:
+    //
+    //     capture   TARGET base -> with CHR    delta
+    //     BL1.00        3.18  ->  5.91        +2.73   REGRESSION
+    //     BL0.65        0.85  ->  7.66        +6.81   SEVERE REGRESSION
+    //     BL0.30       12.01  ->  4.31        -7.70   the win
+    //
+    // The reason is structural, not a tuning miss: only BL0.30 carries the impossibility signature.
+    // BL1.00/BL0.65 have MISMATCHED compression (+3.1..+4.9 dB — we under-compress) with THD already
+    // near-correct, so a harmonic reducer strips harmonics they NEED. The required correction is ~0
+    // for two captures and ~12 dB for the third, which is a per-capture value by definition — exactly
+    // what guardrail #6 forbids, and a blend-tracking version would be the per-KNOB form it also
+    // forbids. On the ONE capture that shows the signature it is additionally confounded with the
+    // already-closed blend/wet-level discrepancy, and the matrix is FINAL (V1L has exactly one
+    // identifiable low-blend file), so the two can never be separated.
+    // Reproduce: analysis/v1l_midband_chr_feasibility.py (prints the guardrail #6 table and fails it).
+    void setClipHarmonicReduction(double slope, double env0, double betaMax, double tauMs, double scHz) noexcept
+    {
+        driveRegion.setClipHarmonicReduction(slope, env0, betaMax, tauMs, scHz);
+    }
+
     // Gap D calibration-layer clamp diagnostics (see ClipDriveNormaliser.h).
     void setClipDriveGainLimits(double minG, double maxG) noexcept { driveRegion.setClipDriveGainLimits(minG, maxG); }
     double getClipDriveClampedFraction() const noexcept { return driveRegion.getClipDriveClampedFraction(); }

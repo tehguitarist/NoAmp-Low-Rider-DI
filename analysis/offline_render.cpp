@@ -309,10 +309,18 @@ int main(int argc, char** argv)
                              "(0 = off). Refusing to render a silent no-op.\n");
         return 2;
     }
-    if (chrSlope >= 0.0 && revIdx != 2)
+    // ⚠ V1L WAS UNGATED 2026-07-23 FOR A FEASIBILITY MEASUREMENT, and the reason matters.
+    // The layer is SHIPPED on V2 only, but it lives on the SHARED ZenerDriveClipRecovery, so V1L can
+    // run it — only this CLI check stood in the way. The measurement that prompted it: at V1L's
+    // BL0.30 capture, 1613/2032 Hz COMPRESSION MATCHES the pedal to 0.23-0.32 dB (verified NOT metric
+    // blindness — perturbing the wet leg moves the same metric 4.8 dB) while THD runs +11.7/+18.8 dB
+    // HOT. Matched compression with far too many harmonics is the memoryless-impossibility signature
+    // — precisely what this layer was built for on V2, and it is exactly the case ClipDriveNormaliser
+    // provably CANNOT address (it moves both together by construction).
+    // V1E stays barred: it has no zener drive module at all.
+    if (chrSlope >= 0.0 && revIdx == 0)
     {
-        std::fprintf(stderr, "error: --chr-* is V2 only (V1L's Gap D half is ClipDriveNormaliser; "
-                             "V1E has no zener module).\n");
+        std::fprintf(stderr, "error: --chr-* needs the zener drive module; V1E has none.\n");
         return 2;
     }
     const double chrE0 = (chrEnv0 == chrEnv0) ? chrEnv0 : 0.0;
@@ -370,6 +378,7 @@ int main(int argc, char** argv)
                                        d.setParams(drive, presence, blend, level, bass, treble);
                                        d.setDriveParams(zp);
                                        applyGapD(d);
+                                       applyChr(d); // diagnostic only — no-op unless --chr-slope is passed
                                    },
                                    readGapD);
     }
