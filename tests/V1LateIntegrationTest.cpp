@@ -329,6 +329,79 @@ int main()
         check((h2On - h2Off) > 5.0, "Gap D HF H2 restore COLLAPSES when ablated (gate can fail)");
     }
 
+    // RecoverySaturator re-fit gate (guardrail #3 — CLAUDE.md "Item A", 2026-07-22 saturator re-fit).
+    // The existing Sec.8 FR panel above passes at BOTH the stale 2026-07-17 fit (gain=0.40/knee=0.50)
+    // and the current one (gain=0.30/knee=0.70) — it was shown NOT to discriminate this parameter
+    // (analysis/v1l_mid_sat_attribution.py). The re-fit's real evidence is capture-based and captures
+    // are unavailable in CI, so this is a SYNTHETIC-TONE probe instead: a 3225 Hz tone (the anchor
+    // where ablating the saturator closed the plugin-vs-pedal gap almost completely, per that same
+    // script's table) at the D0.40/BL0.30 capture's own knob settings (the setting with the largest,
+    // most robust separation of the three checked — analysis/v1l_sat_gate_probe.py: shipped-old
+    // dH2=-4.49 dB / dH3=-4.06 dB there, vs -1.90/-3.37 and -3.99/-4.16 at the other two captures —
+    // all three discriminate, this one by the widest margin). Verified BOTH ways (a silent revert to
+    // 0.40/0.50 fails this check, per L-003).
+    std::printf("V1L RecoverySaturator re-fit gate (guardrail #3):\n");
+    {
+        const double f = 3225.0, amp = 0.1995; // -14 dBFS, matches the project's standard tone level
+        // `useShippedDefault=true` reads WHATEVER V1LateDSP::prepare() actually sets (no override) —
+        // this is what makes the gate satisfy guardrail #3: a silent revert of the shipped constant
+        // (e.g. back to 0.40/0.50) changes what THIS branch measures, not just the explicit "stale"
+        // comparison branch, so the two would converge and the check below would fail. Do NOT pass
+        // (0.30, 0.70) explicitly here — that would hardcode the current fit into the test itself and
+        // make the gate untestable-by-revert (the exact defect this gate exists to avoid repeating).
+        auto measure = [&](bool useShippedDefault, double gain, double knee) -> std::pair<double, double>
+        {
+            nalr::V1LateDSP dsp;
+            dsp.prepare(kFs, 256);
+            // D0.40 / BL0.30 / P0.65 / B0.40 / T0.40 / L0.50 — the "V1L V1200 BL1000" capture's knobs.
+            dsp.setParams(0.40, 0.65, 0.30, 0.50, 0.40, 0.40);
+            if (! useShippedDefault)
+            {
+                dsp.setRecoverySaturation(gain, knee);
+                dsp.setSaturationOffset(0.100);
+            }
+            dsp.setOversamplingFactor(8);
+            dsp.reset();
+            int n = 0;
+            std::vector<double> buf(256), y;
+            const int warm = 30, take = 40;
+            y.reserve((size_t) (take * 256));
+            for (int b = 0; b < warm + take; ++b)
+            {
+                for (int i = 0; i < 256; ++i)
+                    buf[(size_t) i] = amp * std::sin(2.0 * kPi * f * (double) n++ / kFs);
+                dsp.processBlock(buf.data(), 256);
+                if (b >= warm)
+                    y.insert(y.end(), buf.begin(), buf.end());
+            }
+            const size_t N = y.size();
+            double reF = 0, imF = 0, re2 = 0, im2 = 0, re3 = 0, im3 = 0;
+            for (size_t i = 0; i < N; ++i)
+            {
+                const double w = 0.5 - 0.5 * std::cos(2.0 * kPi * (double) i / (double) (N - 1));
+                const double ph = 2.0 * kPi * f * (double) i / kFs;
+                const double yi = y[i] * w;
+                reF += yi * std::cos(ph);      imF += yi * std::sin(ph);
+                re2 += yi * std::cos(2 * ph);  im2 += yi * std::sin(2 * ph);
+                re3 += yi * std::cos(3 * ph);  im3 += yi * std::sin(3 * ph);
+            }
+            const double h1 = std::hypot(reF, imF);
+            const double h2 = std::hypot(re2, im2);
+            const double h3 = std::hypot(re3, im3);
+            return { 20.0 * std::log10(h2 / (h1 + 1e-20) + 1e-20),
+                     20.0 * std::log10(h3 / (h1 + 1e-20) + 1e-20) };
+        };
+        const auto shipped = measure(true, 0.0, 0.0);      // whatever prepare() ships
+        const auto stale = measure(false, 0.40, 0.50);     // explicit 2026-07-17 fit, for comparison
+        const double dH2 = shipped.first - stale.first;
+        const double dH3 = shipped.second - stale.second;
+        std::printf("      shipped (prepare() default): H2=%.2f dB  H3=%.2f dB\n", shipped.first, shipped.second);
+        std::printf("      stale   (0.40/0.50):         H2=%.2f dB  H3=%.2f dB\n", stale.first, stale.second);
+        std::printf("      delta shipped-stale: dH2=%.2f  dH3=%.2f\n", dH2, dH3);
+        check(std::abs(dH2) > 2.0, "saturator re-fit measurably changes H2 vs the stale fit (gate can fail)");
+        check(std::abs(dH3) > 2.0, "saturator re-fit measurably changes H3 vs the stale fit (gate can fail)");
+    }
+
     std::printf("%s\n", pass ? "V1LateIntegrationTest PASSED" : "V1LateIntegrationTest FAILED");
     return pass ? 0 : 1;
 }

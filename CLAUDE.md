@@ -132,41 +132,59 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-20).** All work is on **`main`**.
+> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-22).** All work is on **`main`**.
 > **Read the "📋 GAP STATUS AT A GLANCE" table and the "⛔ CAPTURE MATRIX IS FINAL" block below FIRST**
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
-> **🆕 TWO ITEMS QUEUED FROM THE SATURATOR RE-FIT (2026-07-22, LATEST session) — NOT started, but
-> each has a concrete first step so a fresh session can act immediately rather than re-deriving
-> context.** Background: `src/dsp/V1LateDSP.h`'s `RecoverySaturator` was just re-fit
+> **✅ TWO ITEMS QUEUED FROM THE SATURATOR RE-FIT (2026-07-22) — BOTH CLOSED (same day, later
+> session).** Background: `src/dsp/V1LateDSP.h`'s `RecoverySaturator` was just re-fit
 > (gain 0.40→0.30, knee 0.50→0.70, offset unchanged 0.100; commit `2f7253e`) after finding its old
 > values were fitted 2026-07-17 by `analysis/sat_refine.py` — which scores **100/200/400 Hz only** —
 > against a chain that has since gained `ClipDriveNormaliser`, `DryTapDelay`, two polarity fixes and
 > four wet-path layers. Two loose ends came out of that work:
 >
-> **Item A — the re-fit has no gate (guardrail #3 is not satisfied for this parameter).**
-> `V1LateIntegrationTest`'s existing §8 rows (`{0.5, 1.0, 29.6, 7.6, 29.4}` panel, ~line 254) pass at
-> **both** the old (0.40/0.50) and new (0.30/0.70) values — they're wide voiced sanity windows, not a
-> discriminating check — so a silent revert to the stale fit would NOT fail `ctest`. The evidence
-> that justifies 0.30/0.70 is entirely capture-based (`analysis/v1l_mid_sat_attribution.py`,
-> `v1l_sat_joint_refit.py`, `v1l_sat_refit_fr_guard.py` — all three are new this session, read their
-> docstrings first) and captures are gitignored/not available in CI, so the gate has to be a
-> **synthetic tone**, not a capture comparison.
-> - **First step:** render a synthetic sine at the frequency where the re-fit's effect is CLEANEST —
->   **3225 Hz**, where ablating the saturator entirely closed the plugin-vs-pedal gap from
->   +1.28/+1.13 pp to +0.07/−0.31/−0.29 (`v1l_mid_sat_attribution.py`'s own table) — at the three
->   knob settings the fit was validated against (D0.65/BL1.00, D0.45/BL0.65, D0.40/BL0.30, i.e. the
->   three V1L captures' own settings) and confirm gain=0.30/knee=0.70 measurably differs in H2/H3
->   from BOTH gain=0.40/knee=0.50 AND gain=0 (disabled). If the delta is measurable and consistent
->   across the three settings, that's the gate; if it washes out at some setting, that setting tells
->   you where the parameter has the least authority, which is useful either way.
-> - Do NOT gate on the §8 FR windows — they were shown NOT to discriminate (that's the whole reason
->   this item exists).
+> **✅ Item A — CLOSED 2026-07-22 (same day, later session). A synthetic-tone gate now exists and is
+> verified to fail on a silent revert.** New paper-test `analysis/v1l_sat_gate_probe.py` rendered a
+> 3225 Hz tone through `OfflineRender` at all three V1L captures' own knob settings, for shipped
+> (0.30/0.70), stale (0.40/0.50) and disabled (gain=0): **all three settings discriminate** —
+> shipped-vs-stale dH2/dH3 = −1.90/−3.37 (D0.65/BL1.00), −3.99/−4.16 (D0.45/BL0.65),
+> **−4.49/−4.06 dB (D0.40/BL0.30, the widest margin)** — so the §8 windows' failure to discriminate
+> was a property of THAT test's wide voicing, not of the parameter itself. Wired the D0.40/BL0.30
+> setting into `V1LateIntegrationTest.cpp` as a real ctest gate (mirrors the `HFEvenRestore`
+> ablation-gate pattern: `nalr::V1LateDSP` driven directly, Hann-windowed DFT at f/2f/3f). **Verified
+> both ways per L-003** — passes shipped (dH2=−5.09, dH3=−4.08, C++'s own render differs slightly
+> from the Python probe's OfflineRender round-trip but agrees in sign/magnitude) and was confirmed to
+> **FAIL** when `V1LateDSP.h`'s `prepare()` was temporarily reverted to 0.40/0.50 (dH2=dH3=0.00 —
+> the two branches converged exactly, as expected, since a silent revert makes them the same call).
+> The gate reads the SHIPPED value from `prepare()`'s own default (not a hardcoded 0.30/0.70) so a
+> future revert is actually caught, not just this session's revert. 32/32 ctest green on a full
+> `-j8` build. Item A's original text (for context, no longer actionable — do not re-derive):
+> `V1LateIntegrationTest`'s §8 rows (`{0.5, 1.0, 29.6, 7.6, 29.4}` panel, ~line 254) pass at both the
+> old and new values and remain non-discriminating BY DESIGN (wide voiced sanity windows) — that is
+> fine now that the new gate below them covers the parameter specifically.
 >
-> **Item B — check V2's `RecoverySaturator` (gain 0.04, knee 0.150, offset 0.080,
-> `src/dsp/V2DSP.h`) for the same kind of staleness.** It's a WEAKER lead than V1L's turned out to
-> be, and this needs to be checked, not assumed:
+> **✅ Item B — CLOSED 2026-07-22 (same day, later session). Checked, confirmed NOT worth re-fitting —
+> no C++ changed.** New paper-test `analysis/v2_sat_attribution.py` (adapts
+> `v1l_mid_sat_attribution.py`'s METHOD — pedal-referenced ablation, not self-referenced — to all 5
+> V2 captures, at GUARD_LF 100–400 Hz [what `sat_refine.py` actually fitted], MID 1613–3225 Hz [V1L's
+> target band, checked as a cross-reference], and GUARD_HF 5120–6451 Hz). L-009 flag-liveness proven
+> on every row first (max|diff| 0.03–0.06, all live). **Pooled net effect of ablation is a wash in all
+> three bands: GUARD_LF +0.05 pp, MID +0.02 pp, GUARD_HF +0.05 pp** — an order of magnitude below the
+> −0.2 pp threshold that flagged V1L's saturator as genuinely stale, and below the noise floor of this
+> metric. ⚠ **Nuance worth recording so a future session doesn't misread the per-cell table:** at LOW
+> drive (D0.25/D0.50, −18 dBFS) the saturator is NOT negligible in magnitude — it is the *sole* THD
+> source before the zener engages (ablating drops those cells to ~0.001–0.08%, the numerical floor),
+> and the current fit overshoots the pedal there by roughly the same amount ablation undershoots it
+> (e.g. D0.25 100 Hz −18 dBFS: pedal 0.244%, shipped 0.491% [+0.247], off 0.002% [−0.243]). That
+> symmetric over/undershoot is exactly why the POOLED (net-direction) metric reads as a wash despite
+> large per-cell swings — there is no consistent direction for a re-fit to move in, so chasing it
+> would just relocate the imbalance (the guardrail #6 failure mode), not close a gap. At higher drive
+> (D0.90, where the zener dominates) ablation is genuinely small either way, confirming the 2026-07-17
+> `sat_decision.py` "zener dominates THD; saturator negligible" note holds there specifically.
+> **Disposition: current V2 saturator values (0.04/0.150/0.080) stay as-is — checked, not stale in
+> the sense that matters (no coherent target to re-fit against), unlike V1L's.** Item B's original
+> text (for context, no longer actionable — do not re-derive):
 > - **Same era, same tool:** fit 2026-07-17 by the same `sat_refine.py` LF-only (100/200/400 Hz)
 >   objective, re-verified once on 2026-07-17 ("current (0.04, 0.150, 0.080) already at best") but
 >   never against anything past that date. Since then V2 has gained `ClipHarmonicReducer` (V2-only,
@@ -177,11 +195,6 @@ without images.
 >   no coherent pattern** — nothing like V1L's consistent, level-flat ~+5 pp. And it's already
 >   independently documented that "V2's zener dominates THD; saturator is negligible"
 >   (2026-07-17 `sat_decision.py` note). So there may be nothing to fix here even if the fit IS stale.
-> - **First step:** don't assume a re-fit will help. Run `analysis/v1l_mid_sat_attribution.py`'s
->   METHOD (pedal-referenced ablation, not self-referenced) adapted to V2's captures/bands first, to
->   see whether the saturator is contributing anything V2-specific at all before spending a grid
->   search on it. If ablation shows near-zero effect anywhere (plausible, given the "negligible"
->   note), this item closes as "checked, confirmed not worth re-fitting" rather than needing a re-fit.
 > - **V1E's saturator is OUT OF SCOPE for this item — do not re-enable it as a side effect.** It
 >   ships DISABLED (`gain=0.0`, `V1EarlyDSP.h` ~line 63) by a deliberate 2026-07-18 Gap I decision,
 >   with its own comment: "Re-enable via `setRecoverySaturation()` only with a level anchor to fit
