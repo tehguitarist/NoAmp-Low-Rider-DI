@@ -178,10 +178,24 @@ without images.
 >   | BL0.65 | **+4.91 / +4.73 dB** | +1.49 / +1.50 | we UNDER-COMPRESS; THD ~ok |
 >   | BL0.30 | **+0.32 / +0.23 dB** | **+11.71 / +18.79** | compression MATCHES, THD far too HOT |
 >
->   BL1.00/BL0.65 carry **Gap I's onset floor** — and that half is now independently corroborated:
->   on all three **V1E** captures (which have neither `ClipDriveNormaliser` nor `WetLFCorrection`, so
->   nothing masks the LF marker) the **110 Hz Gap I anchor and the 1613/2032 Hz residual co-vary in
->   sign, trend AND rank order** (D0.50 +11.7/+3.6 largest, D1.00 −0.0/+0.4 ~zero, D0.60 +4.1/+2.8).
+>   BL1.00/BL0.65 carry **Gap I's onset floor** — on the SHAPE evidence only. The midband residual
+>   shrinks with driven level on every V1E capture (fresh renders: −2.9 / −1.7 / −0.5 dB across
+>   −18→−6), which is the onset-floor signature in its own right.
+>   - **⚠ SELF-CORRECTION (2026-07-23, same session) — I FIRST CLAIMED A STRONGER CO-VARIATION
+>     COROBORATION AND IT DOES NOT HOLD ON THE CURRENT CHAIN. This is L-005, committed inside a
+>     session that cites L-005.** The claim ("110 Hz Gap I anchor and the 1613/2032 Hz residual
+>     co-vary in sign, trend AND rank across all three V1E captures") was read off
+>     `comprehensive_data.json` generated **2026-07-21 02:57**, which predates BOTH `HFEvenRestore`
+>     (shared by all three revisions) and — decisively — the **`kInputRef[V1E]` 7.0 → 6.0 re-fit of
+>     2026-07-22**. Re-measured on FRESH renders, **sign and trend agreement FAIL on 2 of 3 captures**
+>     (only rank order survives): 110 Hz now reads D0.50 +3.3→+0.6, **D0.60 −0.6→+0.4**, D1.00
+>     −0.1→+0.1, against the stale +11.7 / +4.1 / −0.0. **The staging re-fit largely CLOSED V1E's
+>     110 Hz onset floor while leaving the midband residual untouched** — which is *weaker* evidence
+>     for "one mechanism", not stronger: were they the same thing, fixing the staging should have
+>     moved both. ⇒ the Gap I attribution for BL1.00/BL0.65 rests on the level-trend SHAPE alone,
+>     and the cross-anchor unification is **NOT established on the current chain**. Do not re-quote
+>     the co-variation figures. Tool: **`analysis/v1e_midband_onset_covariation.py`** (fresh renders,
+>     reads no JSON by design — the whole point is that the JSON is not the chain).
 >   BL0.30 is the **memoryless-impossibility signature** instead — equal compression must imply equal
 >   THD for ANY memoryless element, so ~12–19 dB of excess harmonics at matched compression is Gap D's
 >   V2-half signature appearing on V1L.
