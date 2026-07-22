@@ -249,9 +249,33 @@ without images.
 >   BL0.65 makeup=0 lands within **0.3–0.4 dB** of the pedal against a +4.8 dB starting error.
 > - **⚠ AND THE OBSTACLE, WHICH IS THE SAME SHAPE THAT JUST REFUTED `ClipHarmonicReducer`:
 >   it REDISTRIBUTES rather than closes.** makeup=0 fixes the two captures that under-compress and
->   BREAKS the one that currently MATCHES (BL0.30 +0.2 → −4.5). Expect the same guardrail #6 tension;
->   do not get excited by the pooled mean alone. **Both values tested are grid ENDPOINTS** — an
->   interior makeup (~0.2–0.4) is unexplored and is the obvious first thing to scan.
+>   BREAKS the one that currently MATCHES (BL0.30 +0.2 → −4.5). Do not read the pooled mean alone.
+>   Scored: **13.89 dB fixed across 4 cells vs 8.46 dB broken across 2 = net +5.43 dB**, so it does
+>   fix ~1.6× more than it breaks — but see the next point before treating makeup=0 as the answer.
+> - **⭐ makeup=0 IS AN OVERSHOOT ON ALL THREE, NOT A FIX FOR TWO — SO THE OPTIMUM IS INTERIOR.**
+>   Every one of the six cells flips from POSITIVE (under-compressed) at makeup=1.0 to NEGATIVE
+>   (over-compressed) at makeup=0.0. Residual is **linear in `makeup`** (post-gain is
+>   `g_pre^(−makeup)`, so its dB contribution scales directly with it), which makes the per-cell null
+>   solvable rather than guessable:
+>
+>   | capture | makeup that NULLS it |
+>   |---|---|
+>   | BL0.65 | **0.06 – 0.08** |
+>   | BL1.00 | 0.13 – 0.40 |
+>   | BL0.30 | **0.93 – 0.95** (≈ the shipped 1.0) |
+>
+>   Pooled optimum **≈ makeup 0.14–0.20 → 1.64 dB** vs shipped 1.0's 2.97 dB (a 45% cut, and better
+>   than makeup=0's 2.07). At makeup 0.20, BL1.00/BL0.65 land within **±1 dB** while BL0.30 goes from
+>   ~perfect to **−3.5 dB**. ⚠ These are INTERPOLATED from the two measured endpoints — confirm with
+>   real renders before acting, the linearity is well-founded but `g_pre` is envelope-dependent.
+> - **⭐ TEST THIS BEFORE CALLING IT A GUARDRAIL #6 CONFLICT — THE OUTLIER MAY BE AN ARTEFACT.**
+>   BL0.30 is the ONE capture carrying the known blend/wet-level discrepancy (documented above: the
+>   pedal there behaves like our blend ≈0.19–0.21, not 0.30). If our wet leg is too hot at BL0.30
+>   then its MEASURED compression is contaminated by the same error, so its lone preference for
+>   makeup≈0.94 may be partly spurious rather than a genuine disagreement. **Cheap decisive check:
+>   re-render BL0.30 at blend ≈0.20 and re-read its makeup preference.** If it migrates toward the
+>   other two, the conflict largely dissolves and a single interior makeup may serve all three; if it
+>   stays at ~0.94, the conflict is real and guardrail #6 applies as usual.
 > - **⚠ IT IS A CROSS-FREQUENCY CONFLICT, NOT A FREE PARAMETER. `makeup` was fitted and validated at
 >   1.0 on the 440 Hz axis** (pooled V1L THD+compression: 1.0 = 2.819 dB vs 0.5 = 3.478 — i.e. moving
 >   it toward 0 was ALREADY scored worse there), and 440 Hz is the SHIPPED, GATED axis
