@@ -29,6 +29,7 @@
 #include "HFEvenRestore.h"
 #include "DryTapDelay.h"
 #include "DiagFlags.h"
+#include "RevisionLevelTrim.h"
 #include "../utils/ChangeGate.h"
 #include "Calibration.h"
 
@@ -182,12 +183,18 @@ public:
             // Even-harmonic restoration on the WET leg only (before BLEND), so it vanishes at
             // BLEND=dry exactly as the pedal's wet-path asymmetry does.
             const double wet = hfEvenRestore.process(evenShaper.process(data[i]));
-            const double b = blendLevel.process(dry, wet);
+            // Usability level trim (RevisionLevelTrim.h) — LAST on the wet leg, after every
+            // nonlinearity and every calibration layer, so it changes LEVEL ONLY. NOT a circuit
+            // element: it converges V1E on V2's loudness at matched knobs. Self-tapers with BLEND.
+            const double b = blendLevel.process(dry, wet * wetTrim);
             data[i] = output.process(tone.process(b));
         }
     }
 
 private:
+    // Usability wet-leg level trim (RevisionLevelTrim.h) — 0 dB on V2 (the reference).
+    // Read once at construction; NALR_REVTRIM_OFF forces it to unity for ablation.
+    const double wetTrim = nalr::wetLevelTrim(0);
     V1EarlyInputBuffer input;
     V1EarlyPresenceStage presence;
     V1EarlyDriveClipRecovery driveRegion; // E4 DRIVE + rail clip + E5 recovery (oversampled)

@@ -29,6 +29,7 @@
 #include "V1LateStages.h"
 #include "DryTapDelay.h"
 #include "DiagFlags.h"
+#include "RevisionLevelTrim.h"
 #include "ToneWarpShelf.h"
 #include "WetLFCorrection.h"
 #include "WetHFCorrection.h"
@@ -311,13 +312,19 @@ public:
             const double wetHF2 = hfEvenRestore.process(wetHF);              // Gap D HF 6-9kHz even restore
             const double wetTop = wetTopRestore.process(wetHF2);             // Gap H err2 top-octave lift
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
-            const double b = blendLevel.process(dry, wetTop);                // L6
+            // Usability level trim (RevisionLevelTrim.h) — LAST on the wet leg, after every
+            // nonlinearity and every calibration layer, so it changes LEVEL ONLY. NOT a circuit
+            // element: it converges V1L on V2's loudness at matched knobs. Self-tapers with BLEND.
+            const double b = blendLevel.process(dry, wetTop * wetTrim);      // L6
             const double toned = warpShelf.process(tone.process(b));         // L7 tone + base-rate warp trim
             data[i] = output.process(toned);                                 // L8 output
         }
     }
 
 private:
+    // Usability wet-leg level trim (RevisionLevelTrim.h) — 0 dB on V2 (the reference).
+    // Read once at construction; NALR_REVTRIM_OFF forces it to unity for ablation.
+    const double wetTrim = nalr::wetLevelTrim(1);
     V1EarlyInputBuffer input;
     V1LatePresenceStage presence;
     ZenerDriveClipRecovery<V1LateRecoveryStage> driveRegion; // L4 DRIVE + zener + L5 recovery (oversampled)

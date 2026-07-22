@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(NoAmpLowRiderDI VERSION 0.9.0)   # bump VERSION to force Logic to rescan the AU after changes
+project(NoAmpLowRiderDI VERSION 0.9.1)   # bump VERSION to force Logic to rescan the AU after changes
 
 # Fallback version string for console-app targets that source PluginEditor.cpp directly (e.g.
 # StateRoundTrip, UIRenderProbe) — they don't get juce_add_plugin's generated JucePlugin_VersionString.
@@ -395,6 +395,19 @@ target_link_libraries(V1LateGapDTest
     PUBLIC juce::juce_recommended_config_flags)
 add_test(NAME V1LateGapDTest COMMAND V1LateGapDTest)
 set_tests_properties(V1LateGapDTest PROPERTIES LABELS "CI")
+
+# Per-revision usability loudness match (src/dsp/RevisionLevelTrim.h) — the ONE test that drives all
+# three revisions together and compares them to EACH OTHER rather than to the pedal. L-003 gate:
+# proven to fail when the trims are reverted to {0,0,0} (NALR_REVTRIM_OFF reproduces that revert).
+juce_add_console_app(RevisionLevelTrimTest PRODUCT_NAME "RevisionLevelTrimTest")
+target_sources(RevisionLevelTrimTest PRIVATE tests/RevisionLevelTrimTest.cpp)
+target_compile_definitions(RevisionLevelTrimTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(RevisionLevelTrimTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME RevisionLevelTrimTest COMMAND RevisionLevelTrimTest)
+set_tests_properties(RevisionLevelTrimTest PROPERTIES LABELS "CI")
 
 # kInputRef[V1E] clip-onset staging — L-003 gate. Every other V1E test drives V1EarlyDSP in the
 # VOLTS domain, where kInputRef has already been applied and is invisible, so nothing gated this

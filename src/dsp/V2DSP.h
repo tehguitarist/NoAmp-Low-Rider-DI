@@ -31,6 +31,7 @@
 #include "V1LateStages.h"  // V1LatePresenceStage, reused verbatim (netlists.md reuse map)
 #include "V2Stages.h"
 #include "DiagFlags.h"
+#include "RevisionLevelTrim.h"
 #include "WetLFCorrection.h"
 #include "WetHFCorrection.h"
 #include "HFEvenRestore.h"
@@ -225,7 +226,10 @@ public:
             const double wetHF2 = hfEvenRestore.process(wetHF);              // Gap D HF 6-9kHz even restore
             const double wetTop = wetTopRestore.process(wetHF2);             // Gap H err2 top-octave lift
             const double dry = nalr::noDryDiag() ? 0.0 : dryTap[(size_t) i]; // diag: pure-wet measure
-            const double bl = blendLevel.process(dry, wetTop);               // V6
+            // Usability level trim (RevisionLevelTrim.h). V2 is the REFERENCE the other two converge
+            // on, so its trim is 0 dB and this multiply is an exact no-op — V2 stays bit-identical.
+            // Wired in anyway so the layer is visible and measurable here too, never silently V2-less.
+            const double bl = blendLevel.process(dry, wetTop * wetTrim);     // V6
             const double midded = mid.process(bl);                           // V6: MID + MID SHIFT
             const double toned = warpShelf.process(tone.process(midded));    // V7 tone + base-rate warp trim
             data[i] = output.process(toned);                                 // V8 output
@@ -233,6 +237,9 @@ public:
     }
 
 private:
+    // Usability wet-leg level trim (RevisionLevelTrim.h) — 0 dB on V2 (the reference).
+    // Read once at construction; NALR_REVTRIM_OFF forces it to unity for ablation.
+    const double wetTrim = nalr::wetLevelTrim(2);
     // Gap D V2 harmonic-reducer constants (ClipHarmonicReducer.h). Fitted 2026-07-21
     // (analysis/gapd_v2_chr_fit.py): two-stage grid search (coarse on 2 representative captures,
     // confirmed on all 5 V2 captures at OS=8, LF anchors 40-230 Hz). ⚠ Discovered mid-fit that the

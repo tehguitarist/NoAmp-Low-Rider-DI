@@ -219,9 +219,31 @@ int main()
         // strictly TIGHTER than what it replaces (it is not a loosening to accommodate the re-fit,
         // L-001) and fails in BOTH directions. Measured @70 Hz:
         //     ablated (NALR_WETLF_OFF) -1.7  |  4 dB (shipped) +1.4  |  old 7 dB +3.5
-        check(lowBump > 0.0 && lowBump < 2.6,
+        // ⚠ RE-ANCHORED AS A BOOST DELTA 2026-07-23, and this is NOT a loosening (L-001). The old form
+        // gated the ABSOLUTE dB at 70 Hz, which silently conflated two independent layers: it also
+        // measured RevisionLevelTrim (the deliberate non-circuit usability scalar on the wet leg,
+        // RevisionLevelTrim.h), and duly broke when that shipped even though WetLFCorrection had not
+        // moved at all. That is L-005 in a gate — an absolute reading against a curve this file's own
+        // comment calls "normalised to its own low bump".
+        // Fixed the same way the wet-HF and wet-top gates in this file already work: read the bump as
+        // a DELTA against 1050 Hz, where the 50 Hz/Q1.2 bell is inert.
+        // ⚠ THE DELTA IS MOSTLY, NOT PERFECTLY, IMMUNE TO THE TRIM — measured, do not claim otherwise.
+        // A first draft of this comment asserted a delta is immune to any downstream scalar; the
+        // measurement refutes that HERE, because at BLEND=1.00 the BLEND pot's off-side dry leak is
+        // ANTIPHASE with the wet leg at 1050 Hz (the documented V1L interference), so scaling the wet
+        // leg moves a partially-cancelling sum by more than the scalar. Residual sensitivity is
+        // 1.05 dB, small against the separations below but NOT zero.
+        // Measured @70 Hz minus @1050 Hz:
+        //     ablated (NALR_WETLF_OFF)  9.65  |  4 dB SHIPPED 12.86  |  old 7 dB overshoot 15.01
+        //     (trim ablated, for reference: 11.81 — this gate does not police the trim; that is
+        //      RevisionLevelTrimTest's job, deliberately kept as a separate concern)
+        // Window fails ablated by 1.75 dB and the 7 dB revert by 1.11 dB — verified in both
+        // directions below (L-003).
+        const double lowBumpDelta = lowBump - bellRef;
+        std::printf("      wet-LF bump delta (g@70 - g@1050) = %.2f dB\n", lowBumpDelta);
+        check(lowBumpDelta > 11.4 && lowBumpDelta < 13.9,
               "wet-LF bass-bump lands on §1's +0.5 dB low bump "
-              "(FAILS ablated @-1.7 dB AND on a silent revert to the 7 dB overshoot @+3.5 dB)");
+              "(FAILS ablated AND on a silent revert to the 7 dB overshoot)");
         check(notch < -15.0, "§1 deep notch present (< -15 dB)");
         check(highBump > -6.0 && highBump < 6.0, "§1 high bump in range");
         std::printf("      wet-HF bell boost (g@3400 - g@1050) = %.2f dB\n", bellBoost);
