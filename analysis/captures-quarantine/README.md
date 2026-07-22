@@ -63,3 +63,53 @@ HF essentially flat, exactly as the schematic predicts.
 Re-render this setting into the `_3` batch, then re-run `analysis/iss008_rate_check.py` and confirm
 its raw 8–16k energy is **above** the full-wet captures' (it must be — 50 % dry is in the mix). Until
 then **V2 BLEND=0.50 has no capture**, and nothing may be fitted to it.
+
+---
+
+## `V2-2 V1200 BL1300 T1100 B1200 D0900 P1400 M1400 MS1000 BS40_1.wav`
+## `V2-2 V1200 BL1300 T1100 B1200 D1100 P1400 M1400 MS1000 BS40_1.wav`
+
+Quarantined 2026-07-23, during the re-run of `v22_intake_audit.py` on the complete 21-file `V2-2`
+set (the punch-list item CLAUDE.md queued after the user added 2 more `.nam` renders on 2026-07-23).
+**⚠ CLAUDE.md's description of these two files as "`BL1300 T1300 B1300 D0900`" and "`…D1100…`" was
+wrong** — the actual filenames are `BL1300 T1100 B1200`, as above; a transcription error in that
+punch-list note, now corrected.
+
+### Why they are corrupt
+
+`v22_intake_audit.py`'s §2 duplicate scan found these two files — **labelled as two DIFFERENT DRIVE
+settings (0.20 vs 0.40)** — are **bit-identical to each other**: gain-matched null **−400 dB**, gain
+delta **0.00 dB**. Direct RMS check confirms it (`-11.79338 dBFS`, matching to 5 decimal places).
+
+Filesystem mtimes settle the timeline: the ORIGINAL (non-suffixed) `D0900`/`D1100` files at this same
+`BL1300 T1100 B1200` setting were rendered at **06:43:00 / 06:43:28**, inside the same continuous
+06:29–06:43 batch as the rest of the "first 19" `V2-2` files. The two `_1` files were rendered
+**40 minutes later, at 07:23:44 / 07:24:13** — 29 seconds apart, mirroring how close together the
+originals were — i.e. these ARE the "2 late renders" CLAUDE.md's punch list refers to, but they are
+NOT two new distinct drive settings: they are a **re-render of the same two already-covered
+settings**, and the re-render pass produced identical output for both, meaning at least one (likely
+both) does not represent its filename's claimed DRIVE value.
+
+Cross-check against the true originals: `D0900.wav` vs `D0900_1.wav` nulls at only **−0.66 dB**
+(essentially uncorrelated — NOT a duplicate export of the same setting), and `D1100.wav` vs
+`D1100_1.wav` likewise **−0.66 dB**. So the `_1` pair isn't "the same setting re-exported" either —
+it is two filenames pointing at ONE unidentified render, most likely an export-tool mistake (e.g. the
+`.nam` model state wasn't switched between the two intended exports).
+
+### The damage avoided
+
+Un-quarantined, these would have silently inflated the `V2-2` file count from 19 genuine settings to
+21, and — because `v22_intake_audit.py`'s §1 matrix and §3 level sections treat every file as
+independent evidence — corrupted the per-knob distinct-value counts and the level-offset spread with
+two copies of one unknown render mislabelled as two different DRIVE points. Caught before any fit or
+CLAUDE.md verdict was drawn from the post-quarantine state (the 2026-07-23 "V2-2 is audited and
+usable" writeup was itself produced BEFORE this quarantine and should be read as applying to the
+correct **19-file** set, not counting these two).
+
+### To un-quarantine
+
+Re-render `BL1300 T1100 B1200` at `D0900` and `D1100` again, verifying the two exports are NOT
+bit-identical to each other before trusting either (`gain_matched_null_db` in
+`v22_intake_audit.py` — anything near −400 dB is the tell). The base `D0900.wav`/`D1100.wav` files
+already in `analysis/captures/` are unaffected and remain the trusted representatives of this
+setting pair — nothing needs to un-quarantine for the `V2-2` set to stay usable.

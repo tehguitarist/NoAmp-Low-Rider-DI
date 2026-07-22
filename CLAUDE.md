@@ -136,6 +136,72 @@ without images.
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
 > **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-23).** All work is on **`main`**.
 >
+> ## ✅✅ PER-REVISION LOUDNESS MATCH SHIPPED (2026-07-23, later session) — THE FIRST DELIBERATELY
+> ## UN-FAITHFUL LAYER IN THE PROJECT. `src/dsp/RevisionLevelTrim.h`. V1E and V1L AUDIO CHANGE;
+> ## V2 IS BIT-IDENTICAL (verified, 0.000e+00). 34/34 ctest green.
+> **User request, explicitly authorised as a usability-over-accuracy trade** ("I know this breaks our
+> circuit accuracy, but this is more about real plugin useability"): converge all three revisions on
+> **V2** (the middle ground) so switching revisions in a DAW is not a level-matching chore.
+> - **THE MEASUREMENT THAT SIZED AND *LOCATED* IT** (`analysis/rev_level_match.py`, NEW — pink noise,
+>   all knobs noon, capture-free). At BLEND=1.00 the spread was **~14 dB**: V1E **−8.3 dB** vs V2,
+>   V1L **+5.7 dB**. That is circuit-faithful (V1E's DRIVE ceiling is +40 dB vs +48.6, and it lacks
+>   the +10.1 dB make-up buffer V1L/V2 have — netlists.md L5d/V6), hence not fixable by correcting
+>   anything.
+> - **⭐ THE KEY FINDING, WHICH CHOSE THE INSTRUMENT: AT BLEND=0 THE THREE ALREADY MATCH TO 0.38 dB**
+>   (kOutputMakeup is T-002-anchored to dry unity). ⇒ **the entire 14 dB lives in the WET leg**, so a
+>   post-DSP output scalar would have been wrong twice over — it would break the one thing already
+>   right (dry unity, and its gates) and over-correct at every partial blend. The trim therefore sits
+>   **LAST on the wet leg, after every nonlinearity and every calibration layer, immediately before
+>   BLEND** ⇒ it changes LEVEL ONLY (no clipping/harmonic/FR change upstream) and **self-tapers along
+>   the BLEND axis for free** — the measured required correction was already proportional to the wet
+>   contribution (V1E +8.26/+6.16/+3.54/+1.13/−0.38 dB at blend 1.00/0.75/0.50/0.25/0.00). Guardrail
+>   #6 by PHYSICS, not by knob-tracking — the same argument that justified `WetTopOctaveRestore`.
+> - **SHIPPED: `kWetLevelTrimDb = { +8.9, −5.3, 0.0 }`** (V1E/V1L/V2), fitted at the −18/−12 dBFS
+>   rows. Result through the shipped chain: **BLEND=1.00 V1E now −0.8..+1.2 dB of V2** (was +7.2..+9.0)
+>   and **V1L −3.3..+1.9** (was −3.4..−8.5); **BLEND=0.50 V1E −0.9..+0.3, V1L −0.9..+1.8**; blend=0
+>   unchanged.
+> - **⚠ THE HONEST LIMIT — V1L CANNOT BE FULLY MATCHED BY A SCALAR, AND THIS IS A MEASUREMENT NOT AN
+>   EXCUSE.** V1L's gap to V2 is **LEVEL-DEPENDENT** (3.44 dB at −24 dBFS → 8.49 dB at −6): that is a
+>   COMPRESSION difference — V2's zener clamps harder as it is driven, V1L's runs away — so a fixed
+>   scalar nulls mid-range and leaves ~±2 dB at the ends (worst residual +3.3 dB at −6 dBFS, full
+>   wet). V1E is well-behaved (spread 0.73 dB) and is essentially closed. **Closing V1L's remainder
+>   would mean an envelope-tracking gain, i.e. adding a compressor the pedal does not have — a much
+>   bigger departure, NOT authorised. Do not build it without asking.**
+> - **⚠ AND IT IS A BROADBAND-RMS MATCH, not a per-band or loudness-model match** — the three
+>   voicings genuinely differ, so residual character differences remain. The user pre-accepted these
+>   ("I'll take any other level discrepancies as revision dependent").
+> - **⚠ DO NOT READ THIS AS HAVING CLOSED THE V1L α / "wet leg too hot" LEAD.** Coincidence worth
+>   recording, NOT evidence: α was independently measured at **−3.9..−6.3 dB** and V2-2 corroborated
+>   the SIGN; this trim's V1L value (−5.3) lands inside that range. But α was closed best-effort as
+>   UNATTRIBUTABLE (a one-clock-hour knob error explains it equally well) with **< 0.5 dB** measured
+>   authority, and this layer was fitted to a completely different objective (V2 loudness parity). If
+>   a future session ever closes α physically, that correction belongs UPSTREAM and this trim should
+>   be re-fitted afterwards, never merged into it.
+> - **CAPTURE-HARNESS IMPACT IS SMALLER THAN IT LOOKS, and was checked not assumed:** the captures are
+>   level-normalised and every metric gain-matches or removes the median offset, so at BLEND=1.00 the
+>   trim is a global scalar and **invisible to every capture metric**. It is visible only at partial
+>   blend, where it moves dry/wet balance — and V2 (0 dB, bit-identical) plus V1E (**no** blend<1.00
+>   capture exists) are unaffected, leaving **only V1L's BL0.65/BL0.30** as the touched cells.
+> - **GATED: `tests/RevisionLevelTrimTest` (NEW)** — the only test that drives all three revisions and
+>   compares them to EACH OTHER. §1 full wet, §2 blend noon (proves the free taper rather than
+>   assuming it), §3 blend=0 invariance (this is what stops a future session "simplifying" it into an
+>   output scalar), §4 V2 exact-no-op. **Verified to FAIL (6 checks) on a silent revert to {0,0,0}**
+>   via `NALR_REVTRIM_OFF`, which `analysis/rev_trim_identity_check.py` separately proves is a LIVE
+>   switch per revision (L-009) and confirms V2 bit-identical.
+> - **⚠ ONE EXISTING GATE WAS RE-ANCHORED, AND IT WAS AN L-005 DEFECT, NOT AN ACCOMMODATION.**
+>   `V1LateIntegrationTest`'s wet-LF bump gate read the **ABSOLUTE** dB at 70 Hz, so it silently also
+>   measured this trim and broke even though `WetLFCorrection` had not moved. Re-anchored as a BOOST
+>   DELTA (g@70 − g@1050), matching the pattern its two neighbours in the same file already use;
+>   window still fails ablation (by 1.75 dB) and the old 7 dB overshoot (by 1.11 dB) — **tighter in
+>   substance, not loosened** (L-001). ⚠ Its own comment now records that the delta is **mostly, not
+>   perfectly, trim-immune** (1.05 dB residual): at BLEND=1.00 the dry leak is ANTIPHASE at 1050 Hz,
+>   so scaling the wet leg moves a partially-cancelling sum by more than the scalar. A first draft
+>   claimed full immunity; the measurement refuted it.
+> - **⚠ AND THE TRIM IS NOT *EXACTLY* SILENT AT BLEND=0 — faithful, not a bug.** The BLEND pot's
+>   off-side isolation is cap-limited (−22..−56 dB), so the wet leg leaks at full dry and the trim
+>   scales that leak (−53 dB re peak on V1E). **Dry-path LEVEL moves 0.0001 dB.** Do not "fix" this by
+>   gating the trim on blend — that models an ideal crossfade the pedal does not have.
+>
 > ## ✅ START HERE — CONSOLIDATED ACTION ITEMS (2026-07-23, end of session)
 >
 > **Only TWO things are actionable. Everything else below is best-effort with no known lever —
@@ -168,6 +234,37 @@ without images.
 > `V1LateIntegrationTest` saturator gate's `useShippedDefault` pattern) or assert the §1 low-bump
 > consequence directly. **Verify it FAILS on a silent revert (L-003, both ways).**
 >
+> ### 🟡 3. `V2-2` — PUNCH LIST CLOSED OUT 2026-07-23 (later session); STILL DO NOT FIT ANYTHING TO IT
+> Both queued follow-ups from the earlier pass are now done. Full detail in the "✅ THE `V2-2` SET IS
+> AUDITED AND USABLE" block below (now itself corrected — read it, not this summary, for numbers).
+> - **(a) DONE, and it caught a real defect.** Re-running `v22_intake_audit.py` on the "complete"
+>   21-file set found the 2 late-added files are bit-identical to each other despite different DRIVE
+>   labels — a corrupt duplicate export, not new coverage. Quarantined. **True count: 19 `V2-2` files
+>   (30 total), not 21/32** — every stale "21"/"32" elsewhere in this doc predates this fix.
+> - **(b) THE BLOCKING QUESTION — TESTED, RESULT IS "NO MECHANISM IN THIS MODEL."** Ran
+>   `v22_notch_drive_fill.py`: swept the plugin's own DRIVE at fixed BLEND, capture-free. At the
+>   blends the matched pairs use, the plugin's notch DEEPENS (not fills) as drive rises; only a small,
+>   drive-top-only fill exists at full wet. **Reading (a) — "hard clip fills its own notch, our model
+>   under-does it" — has no in-model mechanism at these settings.** That doesn't refute it for the
+>   real pedal, but it means the model can't corroborate it, so reading (b) — a labelling problem — is
+>   now the comparatively better-supported lead. **⚠ But a follow-up overall A/B match-quality check
+>   (plugin vs all 19 `V2-2` files, `ab_report.py`) found V2-2 matches notably worse than both the
+>   trusted original V2 set AND V1L's own trusted low-blend capture, with NO knob-specific signature
+>   (checked by BLEND, by MID_SHIFT) — so (b) is not confirmed either. Net: still open, on a sharper
+>   footing than before, not settled.** The BLEND-labels-not-mirrored finding was also re-examined in
+>   this pass and downgraded from "settled" to "moderately supported" (one of its two metrics is weak,
+>   r=0.17) — see the corrected bullet in the audit block below.
+> - **(c) INPUT-LEVEL CALIBRATION CHECKED (user-prompted) AND REFUTED as the cause of (b)'s poor
+>   match.** `v22_inref_check.py`: a 5× `--in-ref` sweep (0.5–2.5 V) against the same fr_check/
+>   null_check metrics found the match is essentially FLAT across the whole range (null_clean −3.48
+>   to −3.65 dB, no optimum) — a real input-level confound would show a sharp improvement at the
+>   correct value. **⇒ V2-2's poor overall match is not a global input-gain-staging artefact.**
+> - **⛔ STILL do not fit anything to `V2-2`.** The tempting target is the measured **slope 0.37** (the
+>   plugin needs less blend than labelled — same sign as V1L's "wet leg too hot"). Resist it: `V2-2`
+>   is a **different physical unit**, so fitting a blend taper to it is the L-008 shape — an unphysical
+>   constant absorbing another unit's tolerance. Its legitimate use is **corroborating a direction**,
+>   which it already did.
+>
 > ### ⚪ OPEN, BEST-EFFORT — NO KNOWN LEVER. Do not re-open without a new mechanism.
 > Each of these has had its candidate levers refuted by measurement, not merely deprioritised:
 > - **V1L midband COMPRESSION deficit** (+3.1..+4.9 dB at 1613/2032 Hz on BL1.00/BL0.65) — **NEW
@@ -188,31 +285,171 @@ without images.
 > - **V2 `WetTopOctaveRestore`** — deliberately OFF (`kWetTopDbV2 = 0.0`); an EAR decision, not a
 >   numeric one (V2's energy above 9 kHz is 0.00% of the clean sweep, so no null/FR metric has power).
 >
-> ### 🆕 ⚠ THE "CAPTURE MATRIX IS FINAL AT 11 FILES" PREMISE IS UNDER REVISION — 19 NEW `V2-2`
-> ### CAPTURES ARRIVED 2026-07-23 06:43, MID-SESSION. VERIFY BEFORE RELYING ON EITHER CLAIM.
-> `analysis/captures/` now holds **30 wavs, 19 of them `V2-2 ...`** (V2, BLEND spanning 0900/1130/
-> 1200/1300 plus DRIVE/PRESENCE/MID variation) — added while the session below was running.
-> **⚠ THIS IS ANOTHER SESSION'S ACTIVE, UNFINISHED WORK and it is NOT validated yet.** Two intake
-> scripts sit UNCOMMITTED in the tree (`analysis/v22_intake_audit.py`,
-> `analysis/v22_blend_direction.py`) auditing structure/duplicates/level and testing whether the
-> **BLEND labels are MIRRORED** (0900 ↔ 1500) — an open question their own headers flag, along with
-> unknown pedal LEVEL and capture level. **Do not fit anything to this set until that audit lands.**
-> - **What it does NOT change:** everything in this session's V1L work below. The new files are V2;
->   V1L still has exactly 3 captures and one identifiable low-blend file, so every V1L
->   "unarbitrable / best-effort" verdict stands unaffected.
-> - **What it MAY change, once validated:** V2's documented permanent blind spots — "V2's blend
->   captures are all ≥0.90" and "V2 BLEND=0.50 has none" (ISS-011) — are exactly what this set
->   appears to fill. Several V2 items closed *because the matrix could not arbitrate them* may become
->   arbitrable. **Re-read the ⛔ FINAL-matrix block and the ⚖ arbitration rule against the new set
->   before treating any V2 "unarbitrable" verdict as still binding.**
-> - ⚠ The `.wav`s are gitignored, so the evidence of this set lives only on disk and in those two
->   uncommitted scripts — do not `git clean` the tree.
+> ### ✅ THE `V2-2` SET IS AUDITED AND USABLE — WITH FOUR HARD LIMITS (2026-07-23, corrected later
+> ### the same day). THE MATRIX IS NOW **11 + 19 = 30 FILES**, AND STILL PERMANENTLY CLOSED TO NEW
+> ### SETTINGS. (Was briefly recorded as 32/21 — corrected below; the file count is 30/19, not 32/21.)
+> `analysis/captures/` holds the original **11** plus **19 `V2-2 ...`** files (not 21 — see the
+> quarantine note immediately below). The intake audit that the earlier placeholder here demanded has
+> LANDED — all three unknowns the user flagged (pedal LEVEL knob, capture level, possibly-MIRRORED
+> blend labels) got a first pass; **the blend-label question was RE-OPENED the same day and is now
+> honestly "moderately supported," not settled — see the corrected bullet below.** **No C++ was
+> written or changed; this was a capture-qualification session only, in both passes.** Tools (all
+> keepers, indexed in `analysis/README.md`): `analysis/v22_intake_audit.py`, `v22_blend_direction.py`,
+> `v22_pair_curves.py`, `v22_notch_drive_fill.py`.
+>
+> **⛔ 2026-07-23, LATER SESSION — 2 OF THE 21 FILES WERE A CORRUPT DUPLICATE, NOW QUARANTINED.**
+> Re-running `v22_intake_audit.py` on what was believed to be the complete 21-file set caught it: the
+> two most-recently-added files (nominally `BL1300 T1100 B1200 D0900 …_1.wav` and `… D1100 …_1.wav` —
+> **not** `T1300 B1300` as an earlier draft of this note said, a transcription error, now fixed) are
+> **bit-identical to each other** (§2 duplicate scan, −400 dB null, 0.00 dB gain; RMS matches to 5
+> decimal places) despite claiming two different DRIVE settings. Filesystem mtimes show the ORIGINAL
+> (non-suffixed) `D0900`/`D1100` files at this same setting were already rendered 40 minutes earlier,
+> inside the normal 19-file batch — so these two `_1` files were a **re-render of already-covered
+> settings**, not new coverage, and the re-render pass produced one unidentified render exported twice
+> under two names. Quarantined per the ISS-011 precedent (`analysis/captures-quarantine/README.md`
+> has the full proof); the original `D0900.wav`/`D1100.wav` are unaffected and remain trusted. **⇒ the
+> true count is 19 `V2-2` settings, not 21, and every "32 files" / "21 files" reference elsewhere in
+> this doc that predates this note is off by 2 — read it as 30/19.**
+>
+> **⛔ WHAT `V2-2` IS, AND THE LIMIT THAT GOVERNS EVERYTHING ELSE: IT IS A *SECOND PHYSICAL V2 UNIT*
+> (user, 2026-07-23), NOT a re-capture of the pedal behind the original five `V2 ` files.** The pedal
+> is gone; what survives is `.nam` models in `~/Downloads/Tech 21 Sansamp Driver V2/`, so files can
+> be **RE-RENDERED** but **no new knob setting is obtainable, ever** — the FINAL-matrix doctrine below
+> is unchanged in substance, only in file count. **These 30 files are the complete and permanent
+> evidence base. Do not ask for more.**
+>
+> - **⚠ CORRECTED (2026-07-23, same day) — BLEND LABELS: MODERATELY, NOT CONCLUSIVELY, SUPPORTED AS
+>   NOT MIRRORED. The earlier "✅ Settled, do not re-open" overstated this — read the numbers below
+>   before citing it.** The hypothesised fault was a reflection about noon (0900↔1500, i.e. x→1−x),
+>   which predicts **exactly the negated slope** of fitted-vs-labelled blend — so the SIGN decides it,
+>   using every capture at once with no grouping or threshold to tune. Measured: **null-depth slope
+>   +0.370 (r=+0.70, n=17)** — a real signal — and **FR-shape slope +0.139 (r=+0.17, n=18)** — barely
+>   above noise on its own. Both agree on SIGN (not-mirrored), which is genuine evidence, but one of
+>   the two metrics is weak, and the grid (0.10 spacing) is coarse enough that CLAUDE.md's own
+>   resolution-floor note says a single pair can't resolve direction at all. **Do not call this
+>   "confirmed."** It was re-examined (not re-opened as "maybe mirrored after all," but stress-tested)
+>   after `v22_notch_drive_fill.py` found the leading physical explanation for the blocking notch
+>   anomaly (below) has no mechanism in this model — which reopens the field for a labelling
+>   explanation generally. Two follow-up checks, neither of which moved the needle either way:
+>   (1) an overall plugin-vs-V2-2 A/B match-quality comparison (`ab_report.py --filter "V2-2"`, n=19,
+>   OS=8) found the set matches notably WORSE than the trusted original V2 (FR-shape rms 5.62 dB vs
+>   2.24 dB; null_clean −3.56 dB vs −13.70 dB) and worse than V1L's own trusted low-blend (0.30)
+>   capture (−10.8 dB null) — i.e. by the "does it match reasonably closely" test, V2-2 does NOT
+>   clear the bar cleanly. (2) grouping that same A/B data by BLEND and by MID_SHIFT found **no
+>   knob-specific signature** — the degraded match is spread fairly uniformly across the set, not
+>   concentrated where a mislabeled BLEND (or MID_SHIFT) would predict. **⇒ Net: inconclusive.** The
+>   poor overall match doesn't specifically indict BLEND (no blend-dependent trend), but it also means
+>   "the captures match closely" cannot be used to vouch for the labels being right — V2's own model
+>   has zero low-blend coverage on the ORIGINAL unit to cross-check against, so poor V2-2 match is
+>   equally consistent with (i) genuine second-unit acoustic variance, (ii) V2's already-documented
+>   open gaps (Gap D, the untested-at-low-blend wet/dry balance) biting harder in this untested
+>   territory, or (iii) a labelling problem — and this data cannot separate the three.
+>   **⚠ (3) INPUT-LEVEL CALIBRATION CHECKED AND REFUTED AS A CONFOUND (2026-07-23, same day) —
+>   user-prompted.** `null_check`/`fr_check` already gain-match/offset-remove a pure OUTPUT scalar per
+>   file, but neither can undo a pre-clip INPUT-level mismatch (a SHAPE, not scale, effect on a
+>   nonlinear stage) — worth checking directly since V2-2 is an independently-produced NAM capture
+>   chain that could plausibly have been reamped at a different absolute level than the original V2
+>   unit. `analysis/v22_inref_check.py` reruns the SAME fr_check/null_check metrics across a 5×
+>   `--in-ref` sweep (0.5–2.5 V, OfflineRender's kInputRef override, Calibration.h untouched) on all 19
+>   `V2-2` files: FR-shape rms drifts only mildly (6.14→5.18 dB) and **null_clean is essentially FLAT
+>   (−3.48 to −3.65 dB across the whole 5× range)** — no sharp optimum anywhere near the shipped
+>   `kInputRef[V2]=1.3` or elsewhere. A genuine input-level confound would show a real null-depth
+>   improvement at the correct value; this shows none. **⇒ input-level miscalibration is REFUTED as
+>   the explanation.** Narrows the field back to (i) and (ii)/(iii) above.
+>   ⚠ **The CONTROL (original 5 V2 files) validates REGION, not slope** — they span BL1600–1700, a 0.10
+>   range, far too narrow to fit a slope. All it establishes is that the probe lands optima near 1.0
+>   rather than 0.0, i.e. that the metric can see blend at all. An earlier draft of the script drew a
+>   *direction* verdict from that control off an n=1, 0.10-separation comparison and reported
+>   "MIRRORED"; that was a defect in the test, now removed. **Do not re-derive a direction from the
+>   control.**
+> - **⭐ THE SLOPE IS 0.37, NOT 1.0 — AND THIS IS THE SET'S REAL VALUE.** The plugin consistently needs
+>   **LESS** blend than labelled to match (labels 0.20→0.60, fitted optima 0.14→0.32), and the original
+>   V2 set shows the same direction (labels 0.90–1.00, optima 0.6–0.9). That is the same sign as V1L's
+>   documented "our wet leg is ~5–6 dB too hot relative to dry" finding — and CLAUDE.md records that
+>   lead as **unfalsifiable on the old matrix** ("α is measurable on EXACTLY ONE capture… V1E can't
+>   cross-check… V2's are all ≥0.90"). **`V2-2` is the cross-check that was declared impossible, and it
+>   agrees.** ⚠ It agrees on a DIFFERENT UNIT, so it corroborates the *direction* of a model error; it
+>   does not license fitting a blend taper (see the next two bullets).
+> - **✅ NO DUPLICATES.** Gain-matched pairwise null across all 30 rendered wavs; closest pair
+>   **−23.2 dB**, nowhere near a duplicate. Nothing is double-captured or misnamed onto itself.
+>   (Gain-matching matters: NAM output is per-model normalised, so a pure scalar could otherwise hide
+>   one.)
+> - **⛔ LEVELS ARE PER-FILE NORMALISED ⇒ THE SET IS SHAPE-ONLY. There is NO single global level
+>   constant.** Plugin-referenced offset (`cal_1k(capture) − cal_1k(plugin)` at each file's own
+>   settings, so the circuit's own gain cancels): mean +4.20 dB, **spread 13.56 dB**. Regressing on
+>   DRIVE explains only **35%** (slope −7.67 dB/unit drive); the **residual is still 11.11 dB**. So the
+>   spread is genuine per-file NAM normalisation, not one mis-set knob. Treat exactly as V1L.
+>   ⚠ **A RAW cal_1k spread across this set is NOT a staging measurement** — the files pin LEVEL at
+>   noon but sweep DRIVE 0900–1700 and vary TREBLE/BASS/PRESENCE/MID, so their raw levels differ for a
+>   real circuit reason. Reading that raw spread as "capture level" is L-005 in a new place; the first
+>   draft of `v22_intake_audit.py` §3 did exactly that and was corrected.
+>   ⚠ The −7.67 dB/unit DRIVE slope is itself a MODEL finding: the plugin is loudest relative to the
+>   pedal at LOW drive, i.e. it over-delivers before the clip engages — the **Gap-I onset signature**,
+>   surfaced independently by a second unit.
+> - **⛔ DO NOT POOL `V2-2` WITH THE ORIGINAL `V2` FILES FOR ANY FIT.** Different physical unit, and
+>   the two sets **share no common knob setting**, so unit-to-unit variation cannot be separated from
+>   model error even in principle. This also means **V2's documented blind spots are NOT filled**: the
+>   old note that "V2's blend captures are all ≥0.90 / BLEND=0.50 has none" still binds *for the
+>   original unit*. `V2-2` gives blend coverage 0.20–0.60 on a **different** pedal — corroborating, not
+>   arbitrating. Any V2 verdict closed as "unarbitrable on the matrix" **stays closed**.
+> - **⚠⚠ UNEXPLAINED AND BLOCKING — THE PEDAL'S NOTCH DOES NOT TRACK BLEND THE WAY THE MODEL SAYS IT
+>   MUST. Resolve this before fitting ANYTHING to `V2-2`.** A pure blend change must move the twin-T
+>   notch and the HF tilt in the SAME direction (dry is flat/bright and fills the notch; wet is
+>   notched/dark). The PLUGIN does exactly that at these settings — which is what makes it a control.
+>   The captures do not (`v22_pair_curves.py`, both blend-only matched pairs):
+>
+>   | pair | notch Δ cap / plug | HF Δ cap / plug |
+>   |---|---|---|
+>   | D1230 (BL0900→1200) | **+6.32** / −7.31 | −5.54 / −8.03 |
+>   | D1700 (BL0900→1130) | **+0.02** / −5.86 | −21.66 / −9.29 |
+>
+>   At D1700 the pedal's notch does not move **at all** across a blend change while the plugin's moves
+>   5.9 dB. Two candidate readings were logged, NOT separated: (a) real — a hard-clipping pedal FILLS
+>   its own notch and our model under-does that (Gap D), so at max drive the wet leg has no deep notch
+>   left to dilute; (b) a labelling problem beyond the mirror question.
+>   **✅ (a) TESTED 2026-07-23 (later session), capture-free, per the queued "honest next move" —
+>   `analysis/v22_notch_drive_fill.py`: sweep the PLUGIN's own DRIVE knob at fixed BLEND (0.20, 0.60,
+>   1.00) and watch whether ITS OWN ~715 Hz notch shallows (fills) the way (a) needs.** At the two
+>   blends the matched pairs actually use, it does NOT fill — it **DEEPENS by 13–14 dB** as drive rises
+>   0.20→1.00 (opposite of filling; likely because the twin-T sits BEFORE the clip element, so raising
+>   DRIVE barely puts more 715 Hz content INTO the clip to begin with — what actually grows is the
+>   215 Hz reference band and shoulders, from the wet leg's rising overall gain, which makes an
+>   unchanged near-zero notch read as relatively deeper once normalised). Only at full wet (BLEND=1.00)
+>   is there a genuine fill, and it is small (+2.0 dB) and confined to the very top of the drive range
+>   — nowhere near the ~6 dB the pedal's D1700 anomaly would need. **⇒ Reading (a) has NO mechanism in
+>   this model at the blends that matter here.** This does not refute (a) for the REAL pedal (a
+>   different/memory-bearing clip could still do it) — it means the model cannot corroborate it.
+>   **On the strength of this alone, (b) — a labelling issue — becomes the comparatively better-
+>   supported lead, BUT a follow-up overall A/B match-quality check (see the corrected BLEND-LABELS
+>   bullet above) found no knob-specific signature to confirm (b) either, and is itself inconclusive
+>   for structural reasons (V2 has zero low-blend coverage on the original unit to arbitrate against).
+>   ⇒ Net disposition: BOTH (a) and (b) remain open; (a) is now the WEAKER of the two (no in-model
+>   mechanism), (b) is UNPROVEN (no specific culprit found). The matrix has exactly 2 blend-only
+>   matched pairs on this unit and both show the anomaly, so it cannot be fully settled with what
+>   exists — but "cannot be settled" is now a sharper statement than it was, not a dead end.**
+> - **📐 MATCHED PAIRS — the audit's structural payoff, and its ceiling.** `V2-2` adds **2** blend-only
+>   matched pairs (every other knob identical): BL0900-vs-1200 @D1230 and BL0900-vs-1130 @D1700. The
+>   whole original matrix had only two. ⚠ **Re-rendering cannot add more** — all 21 `.nam` settings were
+>   enumerated and no further pair exists, including the 2 late-rendered files. ⚠ Also note only the
+>   **BL0900 and BL1300 groups can discriminate the mirror at all**: the reflection sends 1130→1230 (a
+>   0.10 move) and 1200→1200 (a no-op), so those groups carry ~no discriminating power by construction.
+> - **⚠ RESOLUTION FLOOR — do not over-read a single pair.** With the measured slope 0.37 and a 0.10
+>   blend grid, a 0.30 label difference predicts only ~0.11 of optimum shift ≈ **one grid step**. So
+>   individual pairs sit at the noise floor; only GROUP means (BL0900 → 0.143 vs BL1300 → 0.320)
+>   resolve the direction. This is why the per-pair proxies scattered and the pooled slope did not.
+> - **📄 FORMAT NOTE:** the `V2-2` wavs are genuinely **48 kHz**, unlike the original 11 (44.1 kHz data
+>   in a 48 kHz header, silently resampled by `noamp_captures.load_capture`'s cal-tone rate-fix). Both
+>   load correctly; worth knowing when comparing export paths.
+> - ⚠ The `.wav`s are **gitignored** — this set's evidence lives on disk plus the three analysis
+>   scripts. **Do not `git clean` the tree.** The `.nam` sources are in `~/Downloads/`.
 >
 > **Nothing is blocked on external input.**
 >
 > **Read the "📋 GAP STATUS AT A GLANCE" table and the "⛔ CAPTURE MATRIX IS FINAL" block below FIRST**
-> — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
-> now best-effort (schematic-faithful) because no capture can arbitrate them.
+> — they are the complete current state. The matrix is permanently **30 files** (11 original + 19
+> `V2-2`, second unit, shape-only — 2 more were rendered but proved a corrupt duplicate, quarantined,
+> see above); several gaps remain best-effort (schematic-faithful) because no capture can arbitrate
+> them.
 >
 > **✅ GAP H err2 CLOSED 2026-07-22 (later session, no code change) — the "decide by ear, LAST" bucket
 > is now fully empty.** The shipped `WetTopOctaveRestore.h` value (V1L-only, 13 kHz/+6 dB/Q0.9) was
@@ -1874,12 +2111,30 @@ without images.
 > **Say so in the release notes/docs** — a documented deliberate correction is honest; one that reads
 > like a measurement is the L-008 failure mode.
 
-> ## ⛔ THE CAPTURE MATRIX IS FINAL — 11 FILES, NO MORE ARE OBTAINABLE (user, 2026-07-17)
+> ## ⛔ THE CAPTURE MATRIX IS FINAL — 30 FILES, NO MORE ARE OBTAINABLE
+> ## (user, 2026-07-17; AMENDED 2026-07-23 — count only, doctrine unchanged; RE-AMENDED same day
+> ## later session — 2 of the 21 `V2-2` files were a corrupt duplicate export, quarantined, true
+> ## count is 19 `V2-2` = 30 total, not 21/32. See the quarantine note in the audit block above.)
 >
-> **The pedal is gone. No new capture, no re-capture, no matched pair, no new test signal — EVER.**
-> `analysis/captures/*.wav` (11 files) is the complete and permanent evidence base. Do not write a
-> plan, a "next step", or a gap resolution that depends on a capture we do not already have; do not
-> ask for one. **This is not a scheduling constraint — it is a permanent property of the project.**
+> **The pedal is gone. No new capture, no new knob setting, no new matched pair, no new test signal —
+> EVER.** `analysis/captures/*.wav` is the complete and permanent evidence base: the original **11**
+> plus **19 `V2-2`** files (2 more exist as exports but are quarantined as a corrupt duplicate — see
+> `analysis/captures-quarantine/README.md`). Do not write a plan, a "next step", or a gap resolution
+> that depends on a capture we do not already have; do not ask for one. **This is not a scheduling
+> constraint — it is a permanent property of the project.**
+>
+> **⚠ THE 2026-07-23 AMENDMENT IS NARROW — READ IT BEFORE ASSUMING ANYTHING LOOSENED.** The file count
+> rose from 11 to 30 and V2-2 adds two blend-only matched pairs, but:
+> - **`V2-2` IS A SECOND PHYSICAL V2 UNIT**, so it does NOT arbitrate anything about the original V2
+>   unit — the two sets share no common knob setting and unit variation cannot be separated from model
+>   error. **Every V2 verdict closed as "unarbitrable on the matrix" stays closed.**
+> - The only new capability is **RE-RENDERING**: `.nam` models survive in `~/Downloads/Tech 21
+>   Sansamp Driver V2/`, so an export mistake is fixable (as it was for the quarantined pair — the
+>   underlying `D0900.wav`/`D1100.wav` renders from the original batch are fine and needed no
+>   re-render). A new SETTING is not. All settings were enumerated — **re-rendering cannot produce
+>   another matched pair.**
+> - `V2-2` is **SHAPE-ONLY** (per-file NAM normalisation, 11.1 dB residual level spread).
+> Full audit + the three limits: the "✅ THE `V2-2` SET IS AUDITED AND USABLE" block near the top.
 >
 > **What it changes, concretely:**
 > - **Some gaps are now UNRESOLVABLE and must be closed as "best effort, documented".** Where the
@@ -1896,8 +2151,12 @@ without images.
 > - **Permanent blind spots, by matrix design — do not re-discover these:** V1E has **no BLEND<1.00
 >   capture at all**; V2's are all **≥0.90**; V2 **BLEND=0.50 has none** (its only file was quarantined,
 >   ISS-011); only V1L sweeps blend (1.00/0.65/0.30), and its three files move DRIVE and BASS at the
->   same time. There are exactly **two blend-matched pairs** in the whole matrix (V1L 0.30-vs-0.65,
+>   same time. There are exactly **two blend-matched pairs** on the ORIGINAL units (V1L 0.30-vs-0.65,
 >   V2 0.90-vs-1.00) and both already PASS (`capture_outlier_scan.py`).
+>   ⚠ **`V2-2` DOES NOT LIFT ANY OF THESE.** It sweeps blend 0.20–0.60 and adds two more blend-only
+>   matched pairs, but on a **SECOND PHYSICAL UNIT** — so it corroborates a model DIRECTION (it
+>   independently reproduces the "our wet leg is too hot" sign) without arbitrating any original-unit
+>   question. V1E's blind spot is untouched; V1L's three files are untouched.
 > - **Guessing is now legitimate — but label it.** Where a value is chosen without evidence to
 >   arbitrate, mark it in the code as a JUDGEMENT CALL with the reasoning and the alternative that was
 >   not ruled out. A documented guess is honest; a guess that reads like a measurement is the L-008

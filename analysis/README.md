@@ -8,10 +8,27 @@ constants mean). Circuit truth: `.claude/rules/circuit.md` / `netlists.md`; FR t
 
 ## What the captures are (READ THIS — it dictates the method)
 
-The 12 files in `captures/` are **NAM-model output**, not direct pedal reamps: the real pedal was
+The files in `captures/` are **NAM-model output**, not direct pedal reamps: the real pedal was
 captured into a Neural Amp Modeler profile per setting, then our reference signal
-(`test_signal_48k.wav`, from `gen_test_signal.py`) was rendered through each trained model. Two
-consequences that shape everything:
+(`test_signal_48k.wav`, from `gen_test_signal.py`) was rendered through each trained model.
+
+**Two units, 30 files, and they must not be pooled.** The set is the original **11** (`V1E `/`V1L `/
+`V2 ` prefixes) plus **19 `V2-2 `** files added 2026-07-23 (2 more were rendered the same day but
+turned out to be a corrupt duplicate export — bit-identical to each other under different DRIVE
+labels — and are quarantined in `analysis/captures-quarantine/`; do not restore them without
+re-verifying they're actually distinct). **`V2-2` is a SECOND PHYSICAL V2 pedal**, not a re-capture
+of the unit behind the five `V2 ` files — and the two sets share **no common knob setting**, so
+unit-to-unit variation can never be separated from model error. Use `V2-2` to corroborate a model
+*direction*; never pool it into a V2 fit. Both pedals are gone; only the `.nam` models survive (in
+`~/Downloads/`), so files can be **re-rendered** but no new setting is obtainable.
+⚠ **`V2-2`'s overall A/B match quality is notably worse than the trusted matrix** (FR-shape rms ~5.6
+dB / null ~−3.6 dB vs ~2–4 dB / ~−9 to −14 dB elsewhere) — checked for input-level miscalibration
+(`v22_inref_check.py`, refuted, essentially flat across a 5× `kInputRef` sweep) and for a
+knob-specific mislabeling signature (none found), so the cause is still open. Treat every `V2-2`
+number as corroborating-evidence-only, not as validated ground truth. See CLAUDE.md's `V2-2` audit
+block for the full limit summary.
+
+Two consequences that shape everything:
 
 1. **Absolute level is normalized away.** NAM standardizes input level in training, so our signal's
    dBFS maps to an *unknown* voltage at the modeled clipper, and the output carries an unknown
@@ -20,10 +37,18 @@ consequences that shape everything:
 2. **Staging trust is split.** **V1E + V2 were identically staged** → relative levels *between those
    files* are real (this is why they anchor input calibration, and why the V1E drive pair yields a
    true level delta). **V1L was variably staged** → treat V1L as **shape/THD/FR only**; do not read
-   its absolute level or use it for `kInputRef`.
+   its absolute level or use it for `kInputRef`. **`V2-2` is variably staged too** — measured
+   2026-07-23: plugin-referenced level offset spreads **13.6 dB**, of which only 35% is a
+   drive-dependent model error, leaving an **11.1 dB residual**. ⇒ **shape-only, per-file
+   normalisation, no global constant.** ⚠ Do not measure this from a raw `cal_1k` spread across the
+   set — those files sweep DRIVE, so their raw levels differ for a real circuit reason (an L-005
+   trap; `v22_intake_audit.py` §3 does it plugin-referenced for exactly this reason).
 
-The matrix is all multi-knob (no one-knob sweeps, no bypass anchor) **except one clean pair**: the
-two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob differential.
+The matrix is all multi-knob (no one-knob sweeps, no bypass anchor) **except four clean pairs**: the
+two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob differential — and, on the
+`V2-2` unit, **two BLEND-only matched pairs** (BL0900-vs-1200 @D1230, BL0900-vs-1130 @D1700). All 19
+genuine `V2-2` settings were enumerated: **no further matched pair exists, and re-rendering cannot
+create one.**
 
 ## Filename convention
 
@@ -125,6 +150,15 @@ two V1E files identical but for DRIVE (0.50 vs 1.00) — a real single-knob diff
 | `v1e_even_fit.py` | Fits V1E's `V1EEvenShaper` (a, k) against all 3 V1E captures — scores pooled \|H2Δ\|+0.5\|H4Δ\| with GUARDS that H3Δ and clean-FR rms don't regress vs a=0. Pattern to copy for fitting any future even/odd-only shaper on V1L or V2. | `--os` |
 | `proto_hf_restore.py` | Pure-shaper (no render) feasibility test for a Gap-D-HF-restoring layer — the mirror image of `ClipHarmonicReducer` (HIGHPASS sidechain, ADDS H2 instead of a lowpass sidechain that subtracts). Found a one-pole sidechain (CHR's LF pattern) leaks unacceptably into the already-matched 1.2-4.8 kHz midband; a ≥2-pole (4-pole tested) sidechain at ~5.5 kHz gets authority (+20..+35 dB deliverable H2 boost @6-9 kHz) with midband leakage <-60 dB and >29 dB alias margin. 2026-07-21 feasibility pass, no C++ written yet — see CLAUDE.md Current Step. | none |
 | `notch_depth_measure.py` | Twin-T notch DEPTH + CENTRE, plugin vs pedal on all 11 captures, plus a capture-free §1 block. Depth is read as PROMINENCE (min of the two shoulder maxima, minus the argmin dip) WITHIN each curve, so it survives the captures' NAM level normalization; §1 is compared re §1's OWN passband anchors, because every §1 dB is per-curve normalized. **Built 2026-07-22 to close the "V2 notch ~3 dB too shallow" item and REFUTED it** — that premise was an absolute-dB level confound (the model's whole §1 V2 curve sits ~+9.4 dB hot, uniformly) plus a fixed-750 Hz probe on a notch whose argmin is elsewhere (costs 2.8 dB on V2). Use this, not an absolute notch dB, for any notch question. Flags and excludes DRIVE≥0.75 rows (a clipping pedal fills its own notch). | none |
+
+| `v22_intake_audit.py` | **`V2-2` capture qualification — run this pattern on ANY new capture set before fitting.** §1 tabulates the matrix and finds BLEND-ONLY MATCHED PAIRS; §2 scans all captures pairwise for duplicates via GAIN-MATCHED null (a pure level difference must not hide a double-capture); §3 asks "is this set uniformly staged?" **plugin-referenced** (`cal_1k(capture) − cal_1k(plugin)` at each file's own settings, so the circuit's gain cancels), then **regresses the offset on DRIVE to split systematic MODEL error from capture-level scatter** before judging it — only the residual should drive the verdict. **2026-07-23 (later session): re-run on the full 21-file set caught a real defect** — the 2 late-added `_1`-suffixed files (nominally `D0900`/`D1100` at `BL1300 T1100 B1200`) are bit-identical to each other (§2, −400 dB null) despite claiming different DRIVE values; quarantined (`analysis/captures-quarantine/README.md`). Corrected set is 19 files, closest pair `−23.2 dB`, no further duplicates. | `--prefix`, `--dup-thresh`, `--os`, `--jobs` |
+| `v22_blend_direction.py` | Tested whether `V2-2`'s BLEND labels were MIRRORED (0900↔1500). Part A is capture-intrinsic (no plugin, so no model gap can contaminate it — the L-007 standard) using three topology-derived wetness proxies on the matched pairs. Part B sweeps the RENDERED blend per capture and fits the **SLOPE of optimum vs labelled blend**: since the mirror is `x→1−x` it predicts *exactly the negated slope*, so the SIGN decides it with no grouping or threshold to tune. Measured **+0.370 (r=+0.70, n=17)** on null (a real signal), +0.139 (r=+0.17, barely above noise) on FR-shape — both agree on sign (not-mirrored), only one is individually strong. ⚠ Its CONTROL (original V2 files) validates **REGION only, never slope** — those span BL1600-1700, a 0.10 range. **⚠ 2026-07-23: NOT re-opened, but "settled" overstated the certainty — see `v22_notch_drive_fill.py` and CLAUDE.md's V2-2 section for the honest confidence level (moderately, not conclusively, supported).** Guards: EDGE optima excluded as non-results; blend overridden by editing the PARSED dict, never a second `--blend` (L-009). | `--prefix`, `--os`, `--steps`, `--jobs`, `--skip-render` |
+| `v22_pair_curves.py` | Dumps the clean-sweep FR of the `V2-2` blend-only matched pairs, capture **and plugin side by side**, normalised to each curve's own 200 Hz value. Built because Part A's summary proxies disagreed on one pair — a disagreement between statistics is a reason to look at the curve, not to average them. **Found the open anomaly: a pure blend change must move the twin-T notch and the HF tilt the SAME way (the plugin does, which is what makes it a control) and the captures do NOT** — at D1700 the pedal's notch moves +0.02 dB where the plugin's moves −5.86. Unresolved; blocks fitting to `V2-2`. | none |
+| `v22_notch_drive_fill.py` | **Capture-free**: does the PLUGIN's own twin-T notch fill (shallow) with DRIVE at fixed BLEND, the mechanism `v22_pair_curves.py`'s open anomaly would need? 2026-07-23. At the blends the matched pairs actually use (0.20, 0.60) the notch DEEPENS by ~13-14 dB as drive rises — the opposite of filling. Only at full wet (1.00) is there a small (+2 dB), drive-top-only genuine fill. **Verdict: this model has no mechanism supporting "the pedal fills its own notch" at the tested settings** — doesn't refute it for the real pedal, but the model can't corroborate it, leaving a labelling explanation comparatively better-supported (though not proven — see the overall A/B match-quality comparison in CLAUDE.md, which is also inconclusive). | none |
+| `v22_inref_check.py` | User-prompted (2026-07-23): does `V2-2` (an independently-produced NAM capture chain, different physical unit) simply want a different effective INPUT level than the shipped `kInputRef[V2]=1.3`, confounding the overall A/B match-quality comparison? `null_check`/`fr_check` already remove a per-file OUTPUT scalar, but neither can undo a pre-clip input-level SHAPE error. Reruns those same metrics across a 5× `--in-ref` sweep (0.5–2.5 V) on all 19 `V2-2` files. **Result: FR-shape rms drifts only mildly (6.14→5.18 dB) and null_clean is essentially FLAT (−3.48 to −3.65 dB) across the whole range — no optimum anywhere.** A real input-level confound would show a sharp null-depth improvement at the correct value; refuted. | `--values`, `--os`, `--bin` |
+
+| `rev_level_match.py` | **The per-revision USABILITY loudness measurement** (2026-07-23) — the one tool here that compares the three revisions to EACH OTHER rather than to the pedal, so it needs no captures at all. Pink noise (equal energy per octave ⇒ broadband RMS is a fair loudness proxy across three similar voicings), all knobs noon, swept over BLEND × input level. Found V1E **8.3 dB below** V2 and V1L **5.7 dB above** at full wet — a ~14 dB spread — and, crucially, that the gap is **zero at BLEND=0** (kOutputMakeup is T-002-anchored to dry unity), proving the whole gap lives in the WET leg. That is what sized and located `src/dsp/RevisionLevelTrim.h`. ⚠ **READ THE SPREAD COLUMN**: V1L's gap moves 3.4→8.5 dB across an 18 dB input range (a COMPRESSION difference, not a level one), so a fixed scalar can only null it mid-range. | `--os`, `--blends`, `--levels`, `--seconds` |
+| `rev_trim_identity_check.py` | Proves `RevisionLevelTrim`'s two structural claims by measurement (2026-07-23): **(1)** V2 is BIT-IDENTICAL (max\|diff\| exactly 0.000e+00 at every blend — its trim is 0 dB by definition, it is the reference); **(2)** `NALR_REVTRIM_OFF` is genuinely LIVE on V1E and V1L, per revision (L-009 — the ablation used to prove the gate has teeth must itself be proven live). ⚠ Its blend=0 control is a **LEVEL** check, not bit-identity, and deliberately so: the BLEND pot's off-side leaks the wet leg (cap-limited isolation, −22..−56 dB), so the trim does move that leak (−53 dB re peak on V1E) while the dry-path level changes by **0.0001 dB**. A first draft asserted bit-identity there and failed — correctly. | none |
 
 **ALWAYS write new analysis commands as scripts in `analysis/`** — never as inline Python in a
 tool call. Inline commands block the terminal on long-running harmonic/THD scans and the output
