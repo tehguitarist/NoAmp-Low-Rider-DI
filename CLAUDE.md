@@ -228,6 +228,48 @@ without images.
 >   bit-identical** — kept so this is re-measurable, with the refutation recorded in
 >   `V1LateDSP.h`'s own header so it is not silently shipped.
 >
+> **🆕 QUEUED, NOT INVESTIGATED — `ClipDriveNormaliser`'s `makeup` vs the MIDBAND COMPRESSION HALF
+> (surfaced 2026-07-23 while closing the band above; measured enough to be worth checking, NOT enough
+> to act on).** The close-out above split the band into a THD half (BL0.30, refuted) and a
+> COMPRESSION half (BL1.00/BL0.65 under-compress by **+3.1..+4.9 dB**). That compression half was
+> characterised and then left alone. `makeup` is a live lever on it — and it comes with its own
+> obstacle, recorded here so the next session gets both at once.
+> - **THE LEAD.** `makeup` spans "undo the pre-clip gain change after the clip" (1.0, shipped on V1L)
+>   to "let it survive to the output as real compression" (0.0). Measured compression residual
+>   (plugin − pedal, read WITHIN each file so NAM normalisation cancels), at the shipped
+>   depth 0.5 / target 2.0 / tau 30 / scHz 200:
+>
+>   | capture | anchor | resid @ makeup=1.0 (shipped) | resid @ makeup=0.0 |
+>   |---|---|---|---|
+>   | BL1.00 | 1613 / 2032 | **+4.53 / +3.13** | −0.66 / −2.05 |
+>   | BL0.65 | 1613 / 2032 | **+4.90 / +4.73** | −0.29 / −0.40 |
+>   | BL0.30 | 1613 / 2032 | +0.32 / +0.22 | **−4.50 / −4.50** |
+>
+>   Mean |compression resid| **2.97 → 2.07 dB**. So there IS a net win at the endpoint, and on
+>   BL0.65 makeup=0 lands within **0.3–0.4 dB** of the pedal against a +4.8 dB starting error.
+> - **⚠ AND THE OBSTACLE, WHICH IS THE SAME SHAPE THAT JUST REFUTED `ClipHarmonicReducer`:
+>   it REDISTRIBUTES rather than closes.** makeup=0 fixes the two captures that under-compress and
+>   BREAKS the one that currently MATCHES (BL0.30 +0.2 → −4.5). Expect the same guardrail #6 tension;
+>   do not get excited by the pooled mean alone. **Both values tested are grid ENDPOINTS** — an
+>   interior makeup (~0.2–0.4) is unexplored and is the obvious first thing to scan.
+> - **⚠ IT IS A CROSS-FREQUENCY CONFLICT, NOT A FREE PARAMETER. `makeup` was fitted and validated at
+>   1.0 on the 440 Hz axis** (pooled V1L THD+compression: 1.0 = 2.819 dB vs 0.5 = 3.478 — i.e. moving
+>   it toward 0 was ALREADY scored worse there), and 440 Hz is the SHIPPED, GATED axis
+>   (`V1LateGapDTest`). So this is 440 Hz vs 1613/2032 Hz, and nobody has scored them jointly. Also
+>   note `makeup` moves THROUGH-LEVEL, so it is not FR-neutral — any scan must guard the null/FR too,
+>   not just THD and compression.
+> - **REALISTIC CEILING, so nobody over-invests:** this is the compression half of Gap D's **Finding
+>   4** ("the pedal compresses ~5 dB more than its own harmonic content justifies"), which is PROVEN
+>   to require MEMORY. A partial improvement is the honest best case; a full close is not on offer
+>   from one scalar.
+> - **FIRST STEP (cheap, capture-based, no C++):** scan `--gapd-makeup` 0.0/0.2/0.4/0.6/0.8/1.0 with
+>   a joint objective over **both** anchor sets (440 Hz tone + 1613/2032 Hz sweep) across all three
+>   V1L captures, scoring THD **and** compression, with FR-shape/null as guards. `gapd_fit_harness.py`
+>   already scores THD+compression and enforces regret — but ⚠ **read its PER-AXIS columns, not the
+>   pooled headline** (its own documented trap: the headline pools an axis configuration that is not
+>   what ships). If the midband and 440 Hz argmins disagree beyond the regret threshold, that is
+>   guardrail #6 again ⇒ record and stop, do not ship a per-band value.
+>
 > **⭐ GAP I / THE 1613–2032 Hz REMAINDER — INVESTIGATED 2026-07-22, REFRAMED, AND `kInputRef[V1E]`
 > RE-FIT 7.0 → 6.0 (SHIPPED). Four findings; read the last one before touching any V1E constant.**
 > - **❌ `V1EEvenShaper` REFUTED as the cause — do not re-run this.** It was the obvious suspect (it
@@ -1754,8 +1796,16 @@ without images.
 > drive normaliser is REFUTED for it (it breaks the compression: −0.25 → +2.48 dB) and must not be
 > re-run. Start from the ⭐ block's two measured reasons, not from a fresh sweep.
 > **(b) V1L polish, low value.** `makeup` is now fitted and validated; only `tau`/`scHz` were never
-> swept, and V1L knowingly keeps a +2.17 dB compression deficit as the better side of a measured
-> trade (closing it costs +5.35 dB at D0.40). Do not reopen without a reason.
+> swept (**✅ both CHECKED 2026-07-22 and left unchanged** — see priority item 7), and V1L knowingly
+> keeps a +2.17 dB compression deficit as the better side of a measured trade (closing it costs
+> +5.35 dB at D0.40). ~~Do not reopen without a reason.~~ **⚠ THERE IS NOW A REASON, 2026-07-23 —
+> but it is a NEW axis, not a re-litigation of the 440 Hz fit.** `makeup` was only ever fitted
+> against **440 Hz**; the 2026-07-23 close-out of the 1613–3225 Hz band measured a **+3.1..+4.9 dB
+> midband compression deficit** on BL1.00/BL0.65 that `makeup` demonstrably moves (makeup=0 lands
+> within 0.3–0.4 dB of the pedal on BL0.65). It is queued, NOT actioned, and it carries a known
+> obstacle (it redistributes — it breaks BL0.30, which currently matches). **Full entry with the
+> measured table, the guards, the cross-frequency conflict and the first step: see the "🆕 QUEUED —
+> `ClipDriveNormaliser`'s `makeup` vs the MIDBAND COMPRESSION HALF" block near the top of this file.**
 > **(c) ⚠ When using `gapd_fit_harness.py`, read the PER-AXIS columns for any per-revision decision.**
 > Its "best JOINT" headline pools both axes with the layer ENABLED ON V2, which is not the shipping
 > configuration — that is how it recommended a `makeup` that loses on V1L's own metric.
