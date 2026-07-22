@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "PluginProcessor.h"
 #include "ui/DualValueLabel.h"
 #include "ui/LEDIndicator.h"
@@ -7,6 +9,20 @@
 #include "ui/PedalLookAndFeel.h"
 #include "ui/ThreePositionSwitch.h"
 #include "ui/VUMeter.h"
+
+// Subclass so textWasEdited() — which fires AFTER hideEditor has copied the raw user text into the
+// label — is the hook for parsing, clamping, and applying the typed value through the APVTS
+// parameter (never the slider directly). Matches Monarch of Tone's EditableTrimLabel pattern.
+struct EditableTrimLabel : public juce::Label
+{
+    void textWasEdited() override
+    {
+        juce::Label::textWasEdited();
+        if (onTrimEdit)
+            onTrimEdit();
+    }
+    std::function<void()> onTrimEdit;
+};
 
 // NoAmp Low Rider DI — pedal-face editor. Three-column layout (input panel / pedal face / output
 // panel) + OS strip, per ui.md + docs/ui-peripheral-spec.md. The centre pedal face is asset-driven
@@ -64,11 +80,15 @@ private:
     // ── Side panels ──────────────────────────────────────────────────────────
     juce::Label inputPanelLabel, outputPanelLabel;
     juce::Label inputTrimLabel, outputTrimLabel;
+    // Live dB readout under each trim knob; double-click to type an exact value (EditableTrimLabel
+    // above routes the typed text through the APVTS parameter, same path as a knob drag).
+    EditableTrimLabel inputTrimValue, outputTrimValue;
     juce::Slider inputTrimSlider, outputTrimSlider;
     VUMeter inputVU, outputVU;
     std::unique_ptr<juce::SliderParameterAttachment> inputTrimAttach, outputTrimAttach;
 
     // Ties the two trims together (delta-linked) while on — see mirrorTrim().
+    juce::Label trimLockLabel;
     juce::TextButton trimLockButton{"LOCK"};
     std::unique_ptr<juce::ButtonParameterAttachment> trimLockAttach;
     bool trimLinkBusy{false};

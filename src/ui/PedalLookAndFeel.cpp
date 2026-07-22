@@ -117,9 +117,12 @@ void PedalLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, 
     const float valAngle = startAngle + sliderPos * (endAngle - startAngle);
 
     // Bitmap override: the sprite's indicator is baked in pointing straight up (valAngle == 0),
-    // so a plain rotation about the knob centre reproduces every position (PedalAssets.h).
+    // so a plain rotation about the knob centre reproduces every position (PedalAssets.h). For the
+    // trim knob specifically, the sprite replaces only the cap+indicator (ui.md "Optional bitmap
+    // asset overrides"; ui-peripheral-spec.md's Side Panels section) — the halo arc track/value arc
+    // are still vector-drawn around it below, so a bitmap trim knob never loses its halo indicator.
     const juce::Image& knobImage = isTrim ? trimKnobImage : pedalKnobImage;
-    if (knobImage.isValid())
+    if (knobImage.isValid() && !isTrim)
     {
         const float knobR = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f;
         const auto dest = juce::Rectangle<float>(cx - knobR, cy - knobR, knobR * 2.0f, knobR * 2.0f);
@@ -131,7 +134,8 @@ void PedalLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, 
 
     if (isTrim)
     {
-        // Halo-style trim knob: outer arc track + value arc + small knob cap
+        // Halo-style trim knob: outer arc track + value arc + a cap (bitmap sprite if supplied,
+        // else the vector gradient cap + indicator line).
         const float outer = juce::jmin(bounds.getWidth(), bounds.getHeight()) * 0.5f - 3.0f;
         const float arcW = 5.0f;
         const float knobR = outer * 0.60f;
@@ -150,6 +154,17 @@ void PedalLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int w, 
             g.setColour(juce::Colour(cTrimArc));
             g.strokePath(arc, juce::PathStrokeType(arcW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
+
+        if (knobImage.isValid())
+        {
+            // Bitmap cap, centred in the same halo bounds, rotated about the knob centre.
+            const auto dest = juce::Rectangle<float>(cx - knobR, cy - knobR, knobR * 2.0f, knobR * 2.0f);
+            g.drawImageTransformed(knobImage, juce::RectanglePlacement(juce::RectanglePlacement::stretchToFit)
+                                                  .getTransformToFit(knobImage.getBounds().toFloat(), dest)
+                                                  .followedBy(juce::AffineTransform::rotation(valAngle, cx, cy)));
+            return;
+        }
+
         // Knob cap with radial gradient
         {
             juce::ColourGradient grad(juce::Colour(cKnobHighlight), cx - knobR * 0.3f, cy - knobR * 0.35f,
@@ -326,10 +341,12 @@ void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
             g.drawEllipse(b.withSizeKeepingCentre(r * 2.0f, r * 2.0f), 1.0f);
         }
     }
-    else if (button.getComponentID() == "os")
+    else if (button.getComponentID() == "os" || button.getComponentID() == "scale")
     {
-        // Segmented OS button — toggle state drives active appearance
-        const bool active = button.getToggleState();
+        // Segmented OS button — toggle state drives active appearance. The UI-size button
+        // ("scale") is momentary, not a toggle, but should always read as highlighted like the
+        // OS/trim-lock controls it sits beside — so it's always drawn "active".
+        const bool active = button.getToggleState() || button.getComponentID() == "scale";
         const float corner = 4.0f;
 
         g.setColour(active ? juce::Colour(cOSBtnActiveBg) : juce::Colour(0xFF0C1828u));
@@ -348,10 +365,13 @@ void PedalLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& but
 
 void PedalLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button, bool, bool down)
 {
-    const bool active = button.getToggleState();
+    const bool active = button.getToggleState() || button.getComponentID() == "scale";
     const juce::Colour col = active ? juce::Colour(cOSBtnActive) : juce::Colour(cOSLabel);
     g.setColour(col);
-    g.setFont(juce::Font(juce::FontOptions(8.0f, juce::Font::bold)));
+    // Same formula as getComboBoxFont() so the LOCK/scale button text scales with the strip and
+    // matches the OS selector boxes' text size exactly, instead of a fixed size that only matched
+    // the boxes by coincidence at one particular UI scale.
+    g.setFont(juce::Font(juce::FontOptions(juce::jmax(7.0f, (float) button.getHeight() * 0.38f), juce::Font::bold)));
 
     auto area = button.getLocalBounds();
     if (down)

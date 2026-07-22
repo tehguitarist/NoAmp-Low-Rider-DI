@@ -7,6 +7,36 @@ using Proc = NoAmpLowRiderDIAudioProcessor;
 constexpr float kRotaryStart = juce::MathConstants<float>::pi * -0.75f;
 constexpr float kRotaryEnd = juce::MathConstants<float>::pi * 0.75f;
 
+// Rejects any string that isn't a bare float literal (optional leading sign, digits, at most one
+// dot, at least one digit). String::getFloatValue() returns 0.0 for junk, so gate on this before
+// parsing to avoid slamming the trim to 0 dB on a typo (matches Monarch of Tone's helper).
+bool isPlainNumber(const juce::String& s)
+{
+    if (s.isEmpty())
+        return false;
+    const char* ptr = s.toRawUTF8();
+    if (*ptr == '+' || *ptr == '-')
+        ++ptr;
+    if (*ptr == '\0')
+        return false;
+    bool hasDot = false, hasDigit = false;
+    while (*ptr != '\0')
+    {
+        if (*ptr == '.')
+        {
+            if (hasDot)
+                return false;
+            hasDot = true;
+        }
+        else if (*ptr >= '0' && *ptr <= '9')
+            hasDigit = true;
+        else
+            return false;
+        ++ptr;
+    }
+    return hasDigit;
+}
+
 // Every position/size below comes from ui/positions.csv — the user's exact centre-pixel
 // measurements against the 1900x1450 texture canvas (docs/ui-noamp-assets.md), not estimates.
 // Positions: fx = x/1900 (used with face.getWidth()), fy = y/1450 (used with face.getHeight()).
@@ -119,12 +149,66 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
     setupPanelLabel(inputTrimLabel, "TRIM", PedalLookAndFeel::cTrimLabel);
     setupPanelLabel(outputTrimLabel, "TRIM", PedalLookAndFeel::cTrimLabel);
 
+    auto setupTrimValueLabel = [this](juce::Label& l)
+    {
+        l.setJustificationType(juce::Justification::centred);
+        l.setColour(juce::Label::textColourId, juce::Colour(PedalLookAndFeel::cTrimLabel));
+        addAndMakeVisible(l);
+    };
+    setupTrimValueLabel(inputTrimValue);
+    setupTrimValueLabel(outputTrimValue);
+
+    // Double-click the dB readout to type an exact value. Applied through the APVTS parameter
+    // (not Slider::setValue) so trim lock and host automation see the change — the attachment ->
+    // onValueChange -> mirrorTrim chain is the single path for both knob drags and typed entries.
+    auto setupEditableTrim = [this](EditableTrimLabel& l, const char* paramID, juce::Slider& s)
+    {
+        l.setEditable(false, true, false);
+        l.setColour(juce::Label::backgroundWhenEditingColourId, juce::Colour(PedalLookAndFeel::cOSBtnActiveBg));
+        l.setColour(juce::Label::textWhenEditingColourId, juce::Colour(PedalLookAndFeel::cOSBtnActive));
+        l.setColour(juce::Label::outlineWhenEditingColourId, juce::Colour(PedalLookAndFeel::cOSBtnActiveBdr));
+        l.onEditorShow = [&l]
+        {
+            if (auto* ed = l.getCurrentTextEditor())
+                ed->setJustification(juce::Justification::centred);
+        };
+
+        l.onTrimEdit = [this, &l, paramID, &s]
+        {
+            juce::String typed = l.getText().trim();
+            if (typed.endsWithIgnoreCase("dB"))
+                typed = typed.dropLastCharacters(2).trim();
+
+            float v = 0.0f;
+            const bool valid = isPlainNumber(typed);
+            if (valid)
+                v = juce::jlimit((float) -kTrimRange, (float) kTrimRange, typed.getFloatValue());
+
+            if (valid)
+                if (auto* param = processorRef.apvts.getParameter(paramID))
+                {
+                    param->beginChangeGesture();
+                    param->setValueNotifyingHost(param->convertTo0to1(v));
+                    param->endChangeGesture();
+                }
+
+            // Re-render the canonical "<v> dB" text in every case — accepted, clamped, or
+            // rejected. By this point hideEditor has already copied the raw user text into the
+            // label, so the formatted value is pushed afterwards via onValueChange (the slider is
+            // at its final value; mirrorTrim sees a zero delta and no-ops).
+            s.onValueChange();
+        };
+    };
+    setupEditableTrim(inputTrimValue, Proc::idInputTrim, inputTrimSlider);
+    setupEditableTrim(outputTrimValue, Proc::idOutputTrim, outputTrimSlider);
+
     auto setupTrimSlider = [this](juce::Slider& s)
     {
         s.setComponentID("trim");
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         s.setRotaryParameters(kRotaryStart, kRotaryEnd, true);
+        s.setDoubleClickReturnValue(true, 0.0); // 0 dB
         addAndMakeVisible(s);
     };
     setupTrimSlider(inputTrimSlider);
@@ -133,19 +217,25 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
         std::make_unique<juce::SliderParameterAttachment>(*apvts.getParameter(Proc::idInputTrim), inputTrimSlider);
     outputTrimAttach =
         std::make_unique<juce::SliderParameterAttachment>(*apvts.getParameter(Proc::idOutputTrim), outputTrimSlider);
-    inputTrimSlider.onValueChange = [this] { mirrorTrim(true); };
-    outputTrimSlider.onValueChange = [this] { mirrorTrim(false); };
+
+    auto formatTrim = [](double dB) { return juce::String(dB, 1) + " dB"; };
+    inputTrimValue.setText(formatTrim(inputTrimSlider.getValue()), juce::dontSendNotification);
+    outputTrimValue.setText(formatTrim(outputTrimSlider.getValue()), juce::dontSendNotification);
+    inputTrimSlider.onValueChange = [this, formatTrim]
+    {
+        inputTrimValue.setText(formatTrim(inputTrimSlider.getValue()), juce::dontSendNotification);
+        mirrorTrim(true);
+    };
+    outputTrimSlider.onValueChange = [this, formatTrim]
+    {
+        outputTrimValue.setText(formatTrim(outputTrimSlider.getValue()), juce::dontSendNotification);
+        mirrorTrim(false);
+    };
     // Seed the caches from the (possibly session-restored) attached values, after the attachments
     // above have run — so a restored session with non-zero trims doesn't read as a jump on the
     // first move.
     lastInputTrim = inputTrimSlider.getValue();
     lastOutputTrim = outputTrimSlider.getValue();
-
-    trimLockButton.setComponentID("os");
-    trimLockButton.setClickingTogglesState(true);
-    addAndMakeVisible(trimLockButton);
-    trimLockAttach =
-        std::make_unique<juce::ButtonParameterAttachment>(*apvts.getParameter(Proc::idTrimLock), trimLockButton);
 
     addAndMakeVisible(inputVU);
     addAndMakeVisible(outputVU);
@@ -161,7 +251,14 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
     setupStripLabel(osLabel, "OS", juce::Justification::centredLeft);
     setupStripLabel(osLiveLabel, "LIVE", juce::Justification::centredRight);
     setupStripLabel(osRenderLabel, "RENDER", juce::Justification::centredRight);
+    setupStripLabel(trimLockLabel, "TRIM", juce::Justification::centredRight);
     setupStripLabel(uiSizeLabel, "UI SIZE", juce::Justification::centredRight);
+
+    trimLockButton.setComponentID("os");
+    trimLockButton.setClickingTogglesState(true);
+    addAndMakeVisible(trimLockButton);
+    trimLockAttach =
+        std::make_unique<juce::ButtonParameterAttachment>(*apvts.getParameter(Proc::idTrimLock), trimLockButton);
 
     for (auto* box : {&osRealtimeBox, &osRenderBox})
     {
@@ -195,7 +292,7 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
     else
         currentScale = (float) appProps.getUserSettings()->getDoubleValue("defaultScale", 1.0);
 
-    scaleButton.setComponentID("os");
+    scaleButton.setComponentID("scale");
     scaleButton.setButtonText(juce::String(juce::roundToInt(currentScale * 100.0f)) + "%");
     scaleButton.onClick = [this]
     {
@@ -250,8 +347,12 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
         s.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         s.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
         s.setRotaryParameters(kRotaryStart, kRotaryEnd, true);
+        s.setPopupDisplayEnabled(true, false, this); // small value tooltip (0.00-1.00) while dragging
         addAndMakeVisible(s);
         attach = std::make_unique<juce::SliderParameterAttachment>(*apvts.getParameter(paramId), s);
+        // The attachment's default text formatting falls back to 7 decimal places (no
+        // NormalisableRange interval on these 0..1 pot params) — constrain to 2 for the tooltip.
+        s.textFromValueFunction = [](double v) { return juce::String(v, 2); };
     };
     setupKnob(levelSlider, Proc::idLevel, levelAttach);
     setupKnob(blendSlider, Proc::idBlend, blendAttach);
@@ -351,10 +452,13 @@ void NoAmpLowRiderDIAudioProcessorEditor::refreshFonts(float sc)
     outputPanelLabel.setFont(bold(8.0f * sc).withExtraKerningFactor(0.20f));
     inputTrimLabel.setFont(bold(7.5f * sc).withExtraKerningFactor(0.15f));
     outputTrimLabel.setFont(bold(7.5f * sc).withExtraKerningFactor(0.15f));
+    inputTrimValue.setFont(bold(8.5f * sc));
+    outputTrimValue.setFont(bold(8.5f * sc));
 
     osLabel.setFont(bold(8.0f * sc).withExtraKerningFactor(0.15f));
     osLiveLabel.setFont(bold(7.0f * sc).withExtraKerningFactor(0.15f));
     osRenderLabel.setFont(bold(7.0f * sc).withExtraKerningFactor(0.15f));
+    trimLockLabel.setFont(bold(7.0f * sc).withExtraKerningFactor(0.15f));
     uiSizeLabel.setFont(bold(7.0f * sc).withExtraKerningFactor(0.15f));
     versionLabel.setFont(juce::Font(juce::FontOptions(7.0f * sc)).withExtraKerningFactor(0.1f));
 
@@ -370,28 +474,39 @@ void NoAmpLowRiderDIAudioProcessorEditor::resized()
     refreshFonts(sc);
     processorRef.apvts.state.setProperty("uiScale", (double) currentScale, nullptr);
 
-    auto bounds = getLocalBounds().toFloat();
+    // Inset the whole content area by kMargin on every side (top/left/right/bottom) — matches
+    // Monarch of Tone's peripheral shell, and kBaseH's own derivation already assumes 2*kMargin
+    // of vertical margin (see the comment on kBaseH above). Previously only the OS strip got a
+    // (horizontal-only) margin, so the strip sat flush against the left/right/bottom window edges
+    // and the whole layout had no top margin either.
+    auto bounds = getLocalBounds().toFloat().reduced((float) kMargin * sc);
 
-    // ── OS strip — full width, bottom (kOSH/kMargin match Monarch of Tone's peripheral shell) ──
-    osStripArea = bounds.removeFromBottom((float) kOSH * sc).reduced((float) kMargin * sc, 0.0f).toNearestInt();
+    // ── OS strip — full width, bottom (kOSH matches Monarch of Tone's peripheral shell) ───────
+    osStripArea = bounds.removeFromBottom((float) kOSH * sc).toNearestInt();
     {
-        auto area = osStripArea.toFloat();
+        // Inset from the strip's own border so "OS" and "100%" don't sit flush against it.
+        auto area = osStripArea.toFloat().reduced(6.0f * sc, 0.0f);
+        // Small vertical inset for the boxes/buttons so they don't fill the strip edge-to-edge.
+        const float boxVPad = 2.0f * sc;
         osLabel.setBounds(area.removeFromLeft(20.0f * sc).toNearestInt());
         area.removeFromLeft(8.0f * sc);
         osLiveLabel.setBounds(area.removeFromLeft(26.0f * sc).toNearestInt());
         area.removeFromLeft(5.0f * sc);
-        osRealtimeBox.setBounds(area.removeFromLeft(36.0f * sc).toNearestInt());
+        osRealtimeBox.setBounds(area.removeFromLeft(36.0f * sc).reduced(0.0f, boxVPad).toNearestInt());
         area.removeFromLeft(12.0f * sc);
         osRenderLabel.setBounds(area.removeFromLeft(40.0f * sc).toNearestInt());
         area.removeFromLeft(5.0f * sc);
-        osRenderBox.setBounds(area.removeFromLeft(36.0f * sc).toNearestInt());
+        osRenderBox.setBounds(area.removeFromLeft(36.0f * sc).reduced(0.0f, boxVPad).toNearestInt());
         area.removeFromLeft(12.0f * sc);
-        trimLockButton.setBounds(area.removeFromLeft(48.0f * sc).toNearestInt());
+        trimLockLabel.setBounds(area.removeFromLeft(24.0f * sc).toNearestInt());
+        area.removeFromLeft(5.0f * sc);
+        // LOCK button matches the OS-selector boxes for width and font size.
+        trimLockButton.setBounds(area.removeFromLeft(36.0f * sc).reduced(0.0f, boxVPad).toNearestInt());
 
         auto rightGroup = area.removeFromRight(42.0f * sc + 5.0f * sc + 48.0f * sc);
         uiSizeLabel.setBounds(rightGroup.removeFromLeft(42.0f * sc).toNearestInt());
         rightGroup.removeFromLeft(5.0f * sc);
-        scaleButton.setBounds(rightGroup.toNearestInt());
+        scaleButton.setBounds(rightGroup.reduced(0.0f, boxVPad).toNearestInt());
 
         versionLabel.setBounds(area.toNearestInt()); // whatever's left between OS controls and UI SIZE
     }
@@ -405,14 +520,18 @@ void NoAmpLowRiderDIAudioProcessorEditor::resized()
     bounds.removeFromRight((float) kColGap * sc);
 
     auto layoutSidePanel = [sc](juce::Rectangle<float> panel, juce::Label& title, juce::Label& trimLabel,
-                                juce::Slider& trimSlider, VUMeter& vu)
+                                juce::Label& trimValue, juce::Slider& trimSlider, VUMeter& vu)
     {
         title.setBounds(panel.removeFromTop(14.0f * sc).toNearestInt());
         panel.removeFromTop(2.0f * sc);
-        const float knobD = juce::jmin(42.0f * sc, panel.getWidth()); // 70px halo knob, reduced 40%
+        // 70px halo knob, reduced 40% (42px), then bumped 30% back up per the user's request (~55px)
+        // — still comfortably short of the 70px full-size Monarch of Tone knob.
+        const float knobD = juce::jmin(42.0f * 1.3f * sc, panel.getWidth());
         auto knobArea = panel.removeFromTop(knobD);
         trimSlider.setBounds(knobArea.withSizeKeepingCentre(knobD, knobD).toNearestInt());
         trimLabel.setBounds(panel.removeFromTop(14.0f * sc).toNearestInt());
+        // Live dB readout, double-click to type an exact value.
+        trimValue.setBounds(panel.removeFromTop(12.0f * sc).toNearestInt());
         panel.removeFromTop(2.0f * sc);
         // VU bar stays a narrow centred strip (~34/74 of the column, matching Monarch of Tone)
         // rather than filling the whole column edge-to-edge — keeps it visually consistent with
@@ -420,8 +539,8 @@ void NoAmpLowRiderDIAudioProcessorEditor::resized()
         const float vuW = juce::jmin(34.0f * sc, panel.getWidth());
         vu.setBounds(panel.withSizeKeepingCentre(vuW, panel.getHeight()).toNearestInt());
     };
-    layoutSidePanel(leftPanel, inputPanelLabel, inputTrimLabel, inputTrimSlider, inputVU);
-    layoutSidePanel(rightPanel, outputPanelLabel, outputTrimLabel, outputTrimSlider, outputVU);
+    layoutSidePanel(leftPanel, inputPanelLabel, inputTrimLabel, inputTrimValue, inputTrimSlider, inputVU);
+    layoutSidePanel(rightPanel, outputPanelLabel, outputTrimLabel, outputTrimValue, outputTrimSlider, outputVU);
 
     // ── Centre pedal face ─────────────────────────────────────────────────────
     faceBounds = bounds.toNearestInt();
