@@ -35,14 +35,48 @@ namespace nalr
 // three). The alternative not ruled out: the 13 dB is a V1E chain bug this masks. The cheapest arbiter
 // (each revision's NAM capture input level) is EXTERNAL and permanently unavailable (user, 2026-07-18).
 //
-// PROVEN on the captures we have (no external level needed): with V1E kInputRef=7 AND kDriveEndR->0
-// (V1EarlyStages.h) AND the recovery saturator OFF (V1EarlyDSP.h), the plugin now COMPRESSES on the
-// clean sweep like the pedal — V1E D1.00 FR SHAPE 5.71 -> 1.68 dB (analysis/v1e_unwind_fr.py), THD
-// D1.00 slope 5.55 -> 1.25, D0.50 slope 6.45 -> 3.66 (the residual ~3.7 is the onset SHAPE floor a
-// memoryless clip cannot beat — analysis/proto_v1e_nonlin.py; documented best-effort, Gap I). Value
-// pinned at 7.0 by analysis/v1e_pin_inref.py (6 -> D0.50 slope 11.7, 8 -> 5.2; 7 threads the needle).
+// PROVEN on the captures we have (no external level needed): with kDriveEndR->0 (V1EarlyStages.h)
+// AND the recovery saturator OFF (V1EarlyDSP.h), the plugin now COMPRESSES on the clean sweep like
+// the pedal — V1E D1.00 FR SHAPE 5.71 -> 1.68 dB (analysis/v1e_unwind_fr.py). That unwind is intact;
+// only the staging VALUE below has moved.
+//
+// ⭐ RE-FIT 7.0 -> 6.0 (2026-07-22, analysis/v1e_inref_joint_refit.py). The 7.0 pin was STALE and was
+// made on ONE objective. It came from analysis/v1e_pin_inref.py on the D0.50 THD-vs-level SLOPE
+// alone ("6 -> 11.7, 8 -> 5.2; 7 threads the needle"), on the 2026-07-18 chain — since when V1E has
+// gained V1EEvenShaper, HFEvenRestore, the twin-T 1.05 notch rescale, the C12 47n restoration,
+// DryTapDelay and two polarity inversions. A constant fitted against a chain that no longer exists
+// is not evidence (L-005 applied to a fitted PARAMETER — the same staleness that caught V1L's
+// RecoverySaturator on 2026-07-22). The doc's recorded slope ordering does NOT reproduce on the
+// current chain.
+//
+// The re-fit scored SIX metrics jointly (3 captures x 3 levels, notch-free anchors only), 7.0 -> 6.0:
+//     THD magnitude        2.730 -> 2.081 pp     (-24%)
+//     THD-vs-level slope   2.597 -> 1.397 dB     (-46%)   <- the ONSET SHAPE, Gap I's own complaint
+//     harmonic magnitudes  3.595 -> 2.868 dB     (-20%)
+//     driven null         -16.40 -> -17.83 dB    (1.43 dB deeper)
+//     clean null          -17.00 -> -17.26 dB    (0.25 dB deeper)
+//     clean-sweep FR SHAPE 1.005 -> 1.107 dB     (+0.10 dB — the ONLY cost)
+//
+// ⚠ THIS IS A TRADE, NOT A DOMINANCE, AND THE TRADE ITSELF IS THE INTERESTING PART. FR SHAPE on the
+// clean sweep is a COMPRESSION measure at D1.00 (the -30 sweep is itself compressed there), and it is
+// the only metric that wants a HOTTER staging — it kept improving to the top of the swept range.
+// So compression wants more clipping while every harmonic metric wants less: the pedal compresses
+// more than its own harmonic content justifies. That is Gap D's Finding 4 signature, which on V2 was
+// PROVEN to require memory (gapd_memoryless_impossibility.py) — so no staging constant can satisfy
+// both, and "7 threads the needle" was a compromise between these two, not an optimum. 6.0 is chosen
+// as a JUDGEMENT CALL: 0.10 dB of FR shape (still far inside the project's own 1.5 dB acceptance
+// target) bought a 46% cut in the onset-shape error that Gap I is actually about.
+// The alternative not ruled out: that the compression metric should outrank the harmonic ones, in
+// which case 7.0 (or hotter) is right and the harmonic error is the one to absorb.
+//
+// V1EEvenShaper was checked for coupling and needs NO re-fit: an 8x sweep of kV1eEvenA (0.005-0.04)
+// moves every pooled metric by <0.2 at any staging.
+//
+// GATED by tests/V1EarlyInputRefTest (verified to FAIL at 7.0). Note every OTHER V1E test runs in the
+// VOLTS domain, where kInputRef has already been applied and is therefore invisible — before that
+// gate existed, this constant could be reverted silently with all 32 tests green.
 // Full forensics: phase10-gap-audit.md section I.
-constexpr double kInputRef[3] = { 7.0, 1.3, 1.3 };
+constexpr double kInputRef[3] = { 6.0, 1.3, 1.3 };
 
 // Per-revision output makeup (calibration doc §2). kOutputMakeup[revision] where revision indices are:
 //   0 = V1 Early

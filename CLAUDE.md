@@ -137,6 +137,68 @@ without images.
 > — they are the complete current state. The capture matrix is permanently 11 files; several gaps are
 > now best-effort (schematic-faithful) because no capture can arbitrate them.
 >
+> **✅ GAP H err2 CLOSED 2026-07-22 (later session, no code change) — the "decide by ear, LAST" bucket
+> is now fully empty.** The shipped `WetTopOctaveRestore.h` value (V1L-only, 13 kHz/+6 dB/Q0.9) was
+> accepted as final by the user without running the prepared `wet_top_audition.py` listening pass.
+> V2 stays off (`kWetTopDbV2 = 0.0`), same status as before. Full detail in the gap table's H err2
+> row and in `WetTopOctaveRestore.h`'s own header. Do not re-open this for further magnitude tuning.
+>
+> **⭐ GAP I / THE 1613–2032 Hz REMAINDER — INVESTIGATED 2026-07-22, REFRAMED, AND `kInputRef[V1E]`
+> RE-FIT 7.0 → 6.0 (SHIPPED). Four findings; read the last one before touching any V1E constant.**
+> - **❌ `V1EEvenShaper` REFUTED as the cause — do not re-run this.** It was the obvious suspect (it
+>   shipped 2026-07-21, AFTER the onset-floor characterisation, and is a broadband always-on
+>   memoryless shaper — the class that manufactures a floor; CLAUDE.md's "V1E ships with its
+>   saturator disabled ⇒ it can't be a bolt-on stage" argument has a hole, since the saturator is no
+>   longer V1E's only memoryless stage). **Ablation moves THD by −0.000 pp.** The per-order control
+>   is decisive and worth keeping: EVEN orders get **4.86 dB WORSE** without it while ODD move
+>   **+0.004 dB** — so it is doing real work here, just not the work that makes the overshoot, and
+>   its even-only-by-construction property is now verified empirically rather than assumed.
+>   Tool: `analysis/v1e_mid_even_attribution.py`.
+> - **✅ NOT a notch/denominator artefact.** Referenced to the 110 Hz control (⚠ the ABSOLUTE
+>   fundamental comparison is an L-005 violation — NAM captures are level-normalized and it reads as
+>   a fake uniform +5..+10 dB offset at every anchor, controls included), the plugin's fundamental is
+>   **0.6–2.0 dB LOW** at driven levels ⇒ roughly **1–2 dB of the measured 6.8 dB ratio overshoot is
+>   denominator**, the rest genuine harmonic generation. Tool: `analysis/v1e_onset_decompose.py`.
+> - **⭐ IT IS AN ONSET-POSITION ERROR, NOT A SHAPE ERROR.** Signed per-order deltas: at **D1.00
+>   (deep in clip) H3 +0.21, H5 +1.37 dB — odd orders essentially PERFECT** (evens deficient, H2 −9.4);
+>   at **D0.50/−18 (onset) everything is too high** (H3 +6.8, H4 +9.4, H5 +9.1, H6 +15.3). Corroborated
+>   from the FR side: −30 → −18 dBFS at D0.50 the plugin loses **3.6 dB** of fundamental relative to
+>   the pedal ⇒ it compresses EARLIER. The model is right once both clip; the error is all at onset.
+> - **⭐⭐ `kInputRef[V1E]` 7.0 → 6.0 SHIPPED — the 7.0 pin was STALE AND SINGLE-OBJECTIVE.** It came
+>   from `v1e_pin_inref.py` on the D0.50 THD-vs-level SLOPE alone, on the 2026-07-18 chain, since when
+>   V1E gained `V1EEvenShaper`, `HFEvenRestore`, the twin-T 1.05 rescale, the C12 47n restoration,
+>   `DryTapDelay` and two polarity fixes — and **the doc's recorded slope ordering does not reproduce
+>   on the current chain.** (L-005 applied to a fitted PARAMETER; the same staleness that caught V1L's
+>   saturator the same day, and CLAUDE.md had already flagged that other constants of that era were
+>   worth sweeping.) New JOINT fit over 6 metrics × 3 captures × 3 levels, notch-free anchors
+>   (`analysis/v1e_inref_joint_refit.py`): THD magnitude **2.730 → 2.081 pp**, THD-vs-level slope
+>   **2.597 → 1.397 dB**, harmonic magnitudes **3.595 → 2.868 dB**, driven null **−16.40 → −17.83**,
+>   clean null **−17.00 → −17.26**; sole cost clean-sweep FR SHAPE **1.005 → 1.107 dB**.
+>   - **⚠ A TRADE, NOT A DOMINANCE — AND THE TRADE IS THE REAL FINDING. `fr_clean` is a COMPRESSION
+>     measure at D1.00 and is the ONLY metric wanting a hotter staging (it improved to the top of the
+>     swept range, an edge non-result). So compression wants MORE clipping while every harmonic
+>     metric wants LESS ⇒ the pedal compresses more than its own harmonic content justifies. That is
+>     Gap D's Finding 4 signature, PROVEN on V2 to require MEMORY** — so no staging constant can
+>     satisfy both, "7 threads the needle" was a compromise rather than an optimum, and this
+>     **independently corroborates Gap I's "unfixable by any memoryless nonlinearity" verdict.**
+>     6.0 is a documented JUDGEMENT CALL (guardrail #4); the alternative not ruled out is that
+>     compression should outrank the harmonic metrics, in which case 7.0 or hotter is right.
+>   - **`kV1eEvenA` needs NO re-fit** — an 8× sweep (0.005–0.04) moves every pooled metric by <0.2 at
+>     any staging, so the coupling that would have forced a 2-D fit does not exist.
+>   - **🆕 GATED AT LAST — `tests/V1EarlyInputRefTest` (33/33 green).** ⚠ **Before this, NOTHING in the
+>     suite gated `kInputRef`**: every V1E test drives `V1EarlyDSP` in the VOLTS domain, where the
+>     constant has already been applied and is invisible, so it could be changed or silently reverted
+>     with the whole suite green — which is how 7.0 survived six chain changes unexamined. The gate
+>     applies the staging itself (as `processBlock` does) and reads THD at **daw amp 0.125, where the
+>     KNEE falls**: shipped 0.603 % vs stale-7.0 1.977 % (**10.3 dB separation**). Verified to FAIL at
+>     7.0 as the SOLE failure (L-003, both ways). Window [0.30, 1.50] deliberately tolerates an honest
+>     re-fit anywhere in 5.0–6.5 rather than freezing 6.0 to a precision the FINAL matrix cannot
+>     deliver. ⚠ The 0.25/0.50 rows are printed to show why no other amplitude works — both stagings
+>     are deep in clip there and read ~0 dB apart (Gap D Finding 2's saturation blindness).
+>   - ⚠ **Stale-binary trap recurred here:** restoring `Calibration.h` from a `sed -i.bak` backup
+>     preserves the OLD mtime, so `cmake --build` skipped it and ctest ran a stale binary. `touch` the
+>     file after any mtime-preserving restore.
+>
 > **✅ TWO ITEMS QUEUED FROM THE SATURATOR RE-FIT (2026-07-22) — BOTH CLOSED (same day, later
 > session).** Background: `src/dsp/V1LateDSP.h`'s `RecoverySaturator` was just re-fit
 > (gain 0.40→0.30, knee 0.50→0.70, offset unchanged 0.100; commit `2f7253e`) after finding its old
@@ -356,10 +418,9 @@ without images.
 > `setHFEvenRestore(0.0, ...)`) — measured deltas **V1E +34.3 dB, V1L +7.7 dB, V2 +10.7 dB**, all well
 > clear of their gate thresholds. 31/31 ctest green on a full `-j8` build. New calibration constants
 > `kHFEvenA/K/Hz/Stages` in `Calibration.h`; env overrides `NALR_HFEVEN_OFF/_A/_K/_HZ/_STAGES` for
-> tuning/ablation (mirrors `WetHFCorrection`'s convention). This closes out Item 1 of the two-item
-> "decide by ear, LAST" bucket — **Gap H err2 (V1L 10–16 kHz top octave) is the one remaining item**,
-> and unlike this one it has no design yet (no SPICE anchor exists in that band to arbitrate against;
-> see the bucket's own note below for what a first attempt would need to do).
+> tuning/ablation (mirrors `WetHFCorrection`'s convention). This closed out Item 1 of the two-item
+> "decide by ear, LAST" bucket. **Item 2, Gap H err2 (V1L 10–16 kHz top octave), is ALSO now CLOSED
+> (2026-07-22) — see the ✅ GAP H err2 banner further down this file. The whole bucket is done.**
 > - **Item 2 (Gap F cab-sim residual vs items 1/H-err2) — NOT the same mechanism, no new work
 >   justified.** Reasoned from existing evidence (`cascade_analysis.py`'s 2026-07-21 re-run, already
 >   in gap-audit §F), no new renders needed: Gap F's cab-sim excess is a POSITIVE (too HOT) delta
@@ -1122,11 +1183,14 @@ without images.
 > full-chain points across frequencies traces no locus at all. The control invalidated its own script.
 >
 >
-> **🆕 GAP H err2 — BUILT AND SHIPPED 2026-07-21 (LATEST session), on the user's listening verdict
-> ("I've listened and I think it's worth trying to fix"). `src/dsp/WetTopOctaveRestore.h` — a V1L-ONLY
-> wet-path RBJ HIGH SHELF (13000 Hz / +6 dB / Q0.9; corner+Q set by the NULL, gain by EAR), LAST on the wet leg before BLEND (after
-> HFEvenRestore, so it cannot perturb that layer's fitted 5.5 kHz sidechain). ⚠ EAR-TUNED, NOT FITTED
-> — the magnitude is provisional pending the user's A/B verdict on the audition set.**
+> **✅ GAP H err2 — CLOSED 2026-07-22 (user accepted the shipped value as final; no further
+> audition pass). `src/dsp/WetTopOctaveRestore.h` — a V1L-ONLY wet-path RBJ HIGH SHELF (13000 Hz /
+> +6 dB / Q0.9; corner+Q set by the NULL, gain by EAR), LAST on the wet leg before BLEND (after
+> HFEvenRestore, so it cannot perturb that layer's fitted 5.5 kHz sidechain). EAR-TUNED, NOT FITTED
+> — the magnitude was always a judgement call (guardrail #4, no capture-free reference exists above
+> ~12.5 kHz); the user chose to ship it as-is rather than run the prepared `wet_top_audition.py`
+> A/B set. Do not re-open this for further magnitude tuning without a new reason. V2 stays OFF
+> (`kWetTopDbV2 = 0.0`) — same ear-decision status, not revisited.**
 > - **⛔ THE BL1.00 CAPTURE ASKS FOR ~+34 dB AND MUST NOT BE BELIEVED. Do NOT re-tune this against it.**
 >   Three independent reasons, all measured this session: (1) our wet path is **−41.6 dB @12.5 kHz** re
 >   1 kHz and **SPICE §1 puts V1L's wet path at −40 dB by ~11 kHz** — the model already matches its only
@@ -1798,7 +1862,7 @@ without images.
 >
 > | Gap | What | Status → next action |
 > |---|---|---|
-> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **ADDRESSED 2026-07-21 by `WetTopOctaveRestore.h`** (V1L-only wet-path high shelf 13 kHz/+6 dB/Q0.9, gain EAR-TUNED on the user's listening verdict, magnitude provisional). The leg split proved the band is 100% WET path at BL1.00 (dry leak 32.6 dB down, no cancellation) and the wet insertion point gives ~6:1 blend dilution for free (guardrail #6 by physics). ⛔ The BL1.00 capture's implied ~+34 dB is REJECTED — the pedal's own top octave is NON-MONOTONIC in blend, and the model already matches §1. §1's −40 dB point IMPROVES (10.82 → 11.04 kHz vs target ~11). Gated (fails on `NALR_WETTOP_OFF`). V2 shows the same structure but is deliberately NOT enabled (separate ear decision). Prior state: ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. Prior state: **OPEN but essentially exhausted.** Ruled out: PRESENCE, S-K corner, compression, and now the **S-K stopband floor-out** (2026-07-18, `v1l_sk_stopband_floor.py` — can only darken, wrong sign). Schematic + §1 already satisfied; only the NAM capture disagrees. **Last capture-free move: re-read the §1 graph EDGE, else CLOSE best-effort.** |
+> | **H err2** | V1L top octave ~19 dB too dark (capture-only) | ✅ **CLOSED 2026-07-22 — final.** Fixed 2026-07-21 by `WetTopOctaveRestore.h` (V1L-only wet-path high shelf 13 kHz/+6 dB/Q0.9, gain EAR-TUNED). The leg split proved the band is 100% WET path at BL1.00 (dry leak 32.6 dB down, no cancellation) and the wet insertion point gives ~6:1 blend dilution for free (guardrail #6 by physics). ⛔ The BL1.00 capture's implied ~+34 dB is REJECTED — the pedal's own top octave is NON-MONOTONIC in blend, and the model already matches §1. §1's −40 dB point IMPROVES (10.82 → 11.04 kHz vs target ~11). Gated (fails on `NALR_WETTOP_OFF`). **2026-07-22: user accepted the shipped +6 dB/13 kHz/Q0.9 as final — the prepared `wet_top_audition.py` A/B listening pass was NOT run. Do not re-open the magnitude without a new reason.** V2 stays OFF (`kWetTopDbV2 = 0.0`) — same ear-decision status, deliberately not revisited. Prior state: ✅ **CLOSED best-effort 2026-07-19 by the ⚖ ARBITRATION RULE** — it is a LINEAR quantity, the model already satisfies the schematic AND §1, and only the NAM capture disagrees ⇒ SPICE wins, disagreement flagged, no retune. |
 > | **C** | V2 12.5k/16k HF | ✅ **CLOSED best-effort 2026-07-18.** Re-derived on SHAPE (`v2_gapc_shape_os.py`): "recovery-cascade warp" framing was WRONG; <12k matched, 16k/18k = OS droop already handled. Real correctable part = base-rate **tone-stack swept-cap warp** (V1L/V2 −3/−3.7 dB @16k, V1E ~0). Prewarp tried → **reverted** (0.02 dB; swept caps, dsp.md forbids). Fixed by `src/dsp/ToneWarpShelf.h` calibration high-shelf (V1L/V2, tuned to analog-truth not captures, SR-scaled, gated `ToneWarpShelfTest`). Model warp −3.68→−0.36 vs truth. Residual 14.5/16k = capture noise (unarbitrable). |
 > | **J + E** | V1L 285 Hz phase notch **+** V2 BASS hump | ✅ **BOTH CLOSED 2026-07-19 — they were ONE defect, and it was ours.** J was an **oversampler-latency comb**: the dry tap was never delay-aligned with the oversampled wet path, so dry+wet summed misaligned by ~84 samples at 8x ⇒ first comb null at fs/(2·84) ≈ **285 Hz**. Fixed by `src/dsp/DryTapDelay.h` (no fitted constant — reads the oversampler's own latency; exact no-op at OS=1), gated by `DryTapAlignmentTest` (ablated: fails by 5.34/30.80/23.42 dB vs a 1.0 dB tol). **E then dissolved**: its BASS=0.50/0.35 captures ARE the only two V2 files with BLEND<1.00, so E's "~3 dB hump" was J's comb — after the fix those rows are the CLEANEST (+0.54/+0.64 dB) and the premise is inverted. Residual is a broad TILT uncorrelated with BASS or MID-SHIFT ⇒ ordinary V2 broadband residual, **not** a MID-stage error. See gap-audit §J/§E. |
 > | **B** | Drive-dependent band saturation (800 Hz fill, 3–4k) | 🔄 **DEMOTED 2026-07-19 — the saturator is NOT V1L's main THD error, and the planned fix is REFUTED.** The joint LF+HF score §5 asked for was built (`v1l_sat_joint_score.py`) and it killed the fix it was built to gate: the error is **NON-MONOTONIC in frequency** (2k **+4.6/+0.2/+5.3**, 4k **+1.1/+2.2/+1.9** too HOT, but 8k **−6.2/−0.1/−0.6** too COLD), so **no band-limit/pre-emphasis can work** — a lowpass on the nonlinear drive cuts 2k, 4k AND 8k, and 8k needs MORE. **Do not implement it.** Saturator is a net JOINT win (rms **3.81 shipped vs 4.88 disabled**) ⇒ **KEEP, unchanged**; but Gap F's "9×" was an LF-only score, worth ~22% on a joint one. ⭐ **The real V1L THD error is 440 Hz** (see Gap D row). Prior state: V1L half root-caused to the Gap F saturator (`v1l_sat_hf_ablate.py`), 2.9 of 3.19 pp of 4 kHz THD. V1E/V2 3–4 kHz remnant is separate (V2 ~+3 dB vs §1). |

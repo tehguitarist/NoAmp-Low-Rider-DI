@@ -16,6 +16,10 @@
 // octave. The user listened (2026-07-21) and asked for it to be fixed; that listening judgement is
 // the ONLY thing sizing this filter. It is deliberately NOT sized to the capture (see below).
 //
+// ✅ CLOSED 2026-07-22: the user accepted this shipped value (13 kHz/+6 dB/Q0.9) as final without
+// running the prepared A/B set (analysis/wet_top_audition.py). Do not re-tune the magnitude without
+// a new reason to reopen it — this is the deliberate, permanent voicing choice, not a provisional one.
+//
 // THE MEASUREMENT THAT DEFINES THE INSERTION POINT (analysis/gaph_topoct_legs.py, 2026-07-21).
 // Splitting each render into its two legs exactly (NALR_NODRY: dry = full - wet, reconstruction
 // error ~1e-15) shows WHO OWNS the top octave at each blend, at 12.5 kHz, re the full render at 1 kHz:

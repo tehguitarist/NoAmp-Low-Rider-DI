@@ -396,6 +396,20 @@ target_link_libraries(V1LateGapDTest
 add_test(NAME V1LateGapDTest COMMAND V1LateGapDTest)
 set_tests_properties(V1LateGapDTest PROPERTIES LABELS "CI")
 
+# kInputRef[V1E] clip-onset staging — L-003 gate. Every other V1E test drives V1EarlyDSP in the
+# VOLTS domain, where kInputRef has already been applied and is invisible, so nothing gated this
+# constant at all until 2026-07-22. This one applies the staging itself, as the processor does.
+# See tests/V1EarlyInputRefTest.cpp.
+juce_add_console_app(V1EarlyInputRefTest PRODUCT_NAME "V1EarlyInputRefTest")
+target_sources(V1EarlyInputRefTest PRIVATE tests/V1EarlyInputRefTest.cpp)
+target_compile_definitions(V1EarlyInputRefTest
+    PRIVATE JUCE_USE_CURL=0 JUCE_WEB_BROWSER=0 JUCE_STANDALONE_APPLICATION=1)
+target_link_libraries(V1EarlyInputRefTest
+    PRIVATE chowdsp::chowdsp_wdf juce::juce_dsp
+    PUBLIC juce::juce_recommended_config_flags)
+add_test(NAME V1EarlyInputRefTest COMMAND V1EarlyInputRefTest)
+set_tests_properties(V1EarlyInputRefTest PROPERTIES LABELS "CI")
+
 # Gap D calibration layer as shipped on V2 (ClipHarmonicReducer) — L-003 gate (magnitude, level-
 # dependent-shape check, proven to fail when the layer is ablated). See tests/V2ClipHarmonicReducerTest.cpp.
 juce_add_console_app(V2ClipHarmonicReducerTest PRODUCT_NAME "V2ClipHarmonicReducerTest")
