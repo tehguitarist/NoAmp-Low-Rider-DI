@@ -228,9 +228,52 @@ without images.
 >   bit-identical** — kept so this is re-measurable, with the refutation recorded in
 >   `V1LateDSP.h`'s own header so it is not silently shipped.
 >
-> **🆕 QUEUED, NOT INVESTIGATED — `ClipDriveNormaliser`'s `makeup` vs the MIDBAND COMPRESSION HALF
-> (surfaced 2026-07-23 while closing the band above; measured enough to be worth checking, NOT enough
-> to act on).** The close-out above split the band into a THD half (BL0.30, refuted) and a
+> **⛔ TESTED AND REFUTED 2026-07-23 (same day, later session) — `makeup` < 1.0 IS DISQUALIFIED, AND
+> THE REASON IS STRUCTURAL, NOT A MARGINAL TRADE. `makeup` STAYS 1.0. DO NOT RE-OPEN.**
+> The queued item below was scanned properly (`analysis/v1l_makeup_midband_scan.py`: real renders over
+> makeup 0–1, all 3 captures, midband compression + the gated 440 Hz axis + FR/null guards + the
+> BL0.30 blend-confound test). The capture-metric picture initially looked GOOD — and it was a trap.
+> - **THE APPARENT WIN.** At makeup 0.5: midband compression **2.97 → 1.82 dB** pooled (and **−2.60 dB
+>   on BOTH unconfounded captures**), **440 Hz compression 3.04 → 0.32 dB — near-perfect**, for only
+>   +0.31 dB on 440 Hz THD. The harm was concentrated almost entirely on BL0.30, the ONE capture with
+>   a documented reason to distrust it, and scoring BL0.30 at its corrected blend (0.20) shrank its
+>   objection from dMID +1.74 / dFR +1.90 / dNull +2.52 to **−0.27 / +0.27 / +0.90**. On the
+>   capture-based evidence alone this read as a clear win.
+> - **⛔ AND IT BREAKS SIX §1 GATES IN `V1LateIntegrationTest` — THE CAPTURE-FREE ANALOG-TRUTH
+>   ANCHORS.** Verified by actually shipping it and running ctest (32/33, one test failing with six
+>   internal checks down): §1 low bump, §1 high bump, the §1 −40 dB point, the `WetLFCorrection` gate
+>   and the `WetTopOctaveRestore` gate all fail. At the §8 P=0%/D=0% reference the output reads
+>   **low@80 Hz +10.9 dB (want ~0.0)** and **high@3.5 kHz +13.3 dB (want ~0.0)**.
+> - **⭐⭐ WHY — AND THIS IS THE DURABLE LESSON: THE "COMPRESSION" IMPROVEMENT WAS AN ARTEFACT OF
+>   MEASURING COMPRESSION AS A DIFFERENCE.** `ClipDriveNormaliser` is a BIDIRECTIONAL normaliser —
+>   `g_pre = (target/env)^depth` BOOSTS quiet signal toward the target as well as cutting loud. At
+>   makeup 1.0 that boost is exactly undone post-clip; at makeup < 1 it LEAKS TO THE OUTPUT, so quiet
+>   passages come out **10+ dB hot**. And `dGain = gain(−6) − gain(−18)` is a DIFFERENCE, so boosting
+>   the −18 dBFS end more than the −6 end drives dGain negative and **reads as "more compression"**.
+>   ⇒ we were not adding the pedal's compression (which comes from LIMITING loud signal); we were
+>   adding a low-level BOOST that mimics it in a differential metric while wrecking absolute level.
+>   **The §1 FR gates caught exactly what the compression metric is blind to.**
+> - **⇒ Guardrail #5 decided it, as designed.** §1 is a capture-free LINEAR reference, so the ⚖
+>   arbitration rule applies at full strength: a capture-fitted compression gain cannot buy a 10-13 dB
+>   departure from analog truth. **The midband compression deficit (+3.1..+4.9 dB) is REAL and stays
+>   OPEN/best-effort — it is the compression half of Gap D's Finding 4, proven to require MEMORY —
+>   but `makeup` is not the lever, and now for a structural reason rather than a scoring one.**
+> - ⚠ **A SECOND FINDING, worth keeping: `V1LateGapDTest` CANNOT SEE `makeup` AT ALL.** It hardcodes
+>   `1.0` in its own `setClipDriveNormalisation` call (line ~74) instead of reading `prepare()`'s
+>   default, and it says in its own header that it gates the deficit, not the tuning. So a silent
+>   `makeup` change would NOT fail that gate — the six failures above all came from
+>   `V1LateIntegrationTest`'s §1 checks instead. Same class as the documented "no gate discriminates
+>   the saturator values" hole. Logged, not built.
+> - ⚠ **AND THE DOCUMENTED FIT NUMBER HID THIS AXIS.** CLAUDE.md recorded "makeup 1.0 = 2.819 dB vs
+>   0.5 = 3.478" as validating 1.0 — that is `gapd_fit_harness`'s POOLED THD+compression score, 3 THD
+>   points against 1 compression point, so it is THD-dominated and conceals that **compression alone
+>   strongly prefers ~0.5** (440 comp 3.04 → 0.32). The harness's own "read the PER-AXIS columns, not
+>   the pooled headline" warning applies one level deeper than where it is written. The right reason
+>   to keep 1.0 is the §1 breakage above, NOT that pooled number.
+>
+> **~~🆕 QUEUED~~ (SUPERSEDED BY THE ⛔ BLOCK ABOVE — kept for the measurements only, which stand)
+> — `ClipDriveNormaliser`'s `makeup` vs the MIDBAND COMPRESSION HALF
+> (surfaced 2026-07-23 while closing the band above).** The close-out above split the band into a THD half (BL0.30, refuted) and a
 > COMPRESSION half (BL1.00/BL0.65 under-compress by **+3.1..+4.9 dB**). That compression half was
 > characterised and then left alone. `makeup` is a live lever on it — and it comes with its own
 > obstacle, recorded here so the next session gets both at once.
