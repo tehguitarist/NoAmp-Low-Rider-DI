@@ -991,7 +991,10 @@ without images.
 > - **V2 BASS peak too HIGH: plugin peaks ~90 Hz, should be ~70 Hz.** ✅ **DONE 2026-07-20** — same
 >   wet-path bell as V1L, milder (V2 50 Hz/+4 dB/Q1.2, refined after ear-check; `WetLFCorrection.h`).
 >   Worst-case capture RMS 1.98→1.85. See the ✅✅ RESOLVED banner above.
-> - **V2 twin-T NOTCH ~3 dB too SHALLOW** (needs to be deeper).
+> - **V2 twin-T NOTCH ~3 dB too SHALLOW** (needs to be deeper). ⛔ **REFUTED AND CLOSED 2026-07-22 —
+>   the premise was a level confound + a fixed-probe artefact, and V2 measures +0.35 dB (i.e. dead on,
+>   if anything DEEP) against its captures. Making it deeper would have been a regression. See the
+>   "✅ CLOSED 2026-07-22" block below (`analysis/notch_depth_measure.py`).**
 > - **V1E twin-T NOTCH center — ✅ DONE 2026-07-21. THE "~630 Hz" PREMISE WAS REFUTED; the real
 >   defect was a ~35 Hz composite shift, now corrected per-rev.** Measured (`analysis/notch_center_
 >   measure.py`, argmin of the clean-sweep transfer, all 11 captures): **every PEDAL notch centre is
@@ -1011,10 +1014,44 @@ without images.
 >   composite interaction differs per rev.** Durable: a broad notch's dashboard "centre" reads at its
 >   shoulder, not its argmin — measure argmin before chasing a visual centre (this is what stopped the
 >   L-013 trap of forcing V1e to 630, which would have pushed it 85 Hz below its own capture).
-> - **V1E + V2 twin-T NOTCH ~3 dB too SHALLOW** (V1E: also deeper, like V2). V1E FR otherwise close.
->   ⚠ UPDATE 2026-07-21: after the V1e centre fix, V1e's notch is now ~2 dB too DEEP at the 714 Hz
->   centre (flipped from shallow) while its shoulders match — so V1e's depth item is essentially
->   closed/inverted; V2 remains ~1-3 dB shallow. Small, still queued.
+> - **V1E + V2 twin-T NOTCH DEPTH — ✅ CLOSED 2026-07-22, NO CODE CHANGE. THE "TOO SHALLOW" PREMISE
+>   IS REFUTED, AND THE QUANTITY HAS NO LEVER ANYWAY. Do not re-open from an absolute notch dB.**
+>   New keeper diagnostic `analysis/notch_depth_measure.py` (prominence-based depth + argmin centre,
+>   plugin vs pedal on all 11 captures, plus a capture-free §1 block). Four findings:
+>   - **⛔ THE PREMISE WAS A DOUBLE MEASUREMENT ERROR, and it pointed the FIX THE WRONG WAY.** It came
+>     from `V2IntegrationTest`'s printed "deep notch @750Hz = −26.9 dB (target ~−36)". (1) **L-005 in
+>     a new place:** every §1 dB is relative to THAT curve's own normalization, and the model's whole
+>     §1 V2 curve sits **~+9.4 dB hotter** than §1's (low bump +8.4, notch +9.1, high bump +10.5 —
+>     **UNIFORM across features ⇒ a level offset, not a shape error**). (2) **Fixed-probe artefact:**
+>     probing a FIXED 750 Hz when the argmin is elsewhere costs **2.82 dB (V2) / 1.63 (V1L) / 0.76
+>     (V1E)** on a null this sharp. Together they fully explain the "9 dB shallow", with the sign
+>     inverted. **Acting on the queued "make V2 deeper" would have been a regression.**
+>   - **✅ MEASURED LEVEL-INVARIANTLY, BOTH REFERENCES AGREE ON THE SIGN — nothing is shallow.**
+>     vs CAPTURES (depth = prominence, read WITHIN each curve; the two DRIVE≥0.75 rows excluded, since
+>     a clipping pedal FILLS its own notch and its "clean" sweep is itself compressed — Gap D):
+>     **V2 +0.35 dB** (n=4, spread −0.96..+1.87) ⇒ **dead on**; **V1E +2.33 dB too DEEP** (n=2, the two
+>     rows agreeing to 0.36 dB — a tight, real signal); V1L +1.64 (n=3, noisy, and its Δfc is ±40 Hz so
+>     its depth read is centre-contaminated). vs **§1** (capture-free, re §1's own low- AND high-bump
+>     anchors): V1E **−0.88/−1.44** (inside §1's own ±1–2 dB tolerance ⇒ a match), V1L +2.92/+0.40
+>     (anchors disagree, inconclusive), V2 **−2.65/−4.75** (too DEEP). ⇒ ⚖ rule: a capture-free
+>     reference exists and says V1E is within tolerance and V2 is deep, never shallow. **No action.**
+>   - **⭐⭐ AND THERE IS NO LEVER — this is the durable finding, an authority argument in the class
+>     that killed C42/PRESENCE in Gap H.** Composite notch depth was perturbed three ways, each far
+>     larger than any real tolerance, each by an actual rebuild: **twin-T series cap C18 +10%
+>     (unbalances the T) → 0.21 dB; twin-T shunt leg R3 +20% → 0.53 dB; dry leg deleted entirely
+>     (`NALR_NODRY`) → 0.64 dB.** The twin-T null is far DEEPER than the composite reading, so what
+>     that reading measures is the **SHAPE around the null** (where the high bump sits, how steep the
+>     skirts are), not the null's bottom — which is why the T's own balance barely moves it. ⇒ **"tune
+>     the notch depth" has nothing to tune it WITH.** Also re-confirms `kV1eNotchFreqScale` is
+>     depth-neutral: `TwinTScaleProbe` reads **−37.1 dB at every scale 1.00–1.10** (scaling all three
+>     series caps together preserves the T's balance exactly and only moves 1/RC), so the V1e centre
+>     fix did not cause its +2.33 dB.
+>   - **Gate: deliberately NOT added.** `V2IntegrationTest` now PRINTS the level-invariant depth
+>     (argmin-located, re the high bump) right next to the misleading absolute line, with the
+>     authority table in-comment — but **asserts nothing**, because a quantity nothing can move would
+>     be a gate that cannot fail (L-003/L-009 — it would certify a no-op). The wrong gap note (a) in
+>     that file's class comment is corrected in place rather than deleted, so the correction is
+>     legible. 33/33 ctest green; `TwinTNotch.h` byte-identical, all three revisions bit-identical.
 >
 > **▶ PRIORITY ORDER across ALL outstanding items (2026-07-20), ranked by impact tempered by
 > flow-on effects** — does leaving this unfixed corrupt or bias measurements other open items are
@@ -1360,8 +1397,8 @@ without images.
 > the dry-leak null); a narrow bell lifts 40-80 Hz while sparing 25 Hz, threading both gates. Also
 > committed: `src/dsp/DiagFlags.h` (`NALR_NODRY` pure-wet diagnostic). 30/30 ctest green; reports
 > regenerated. Full record: `WetLFCorrection.h` header, the ✅✅ RESOLVED banner above,
-> [[v1l-bass-hump-mechanism-b]]. **QUEUED (logged, not done): V2/V1E twin-T notch depth (V2 ~1–3 dB
-> shallow; V1E now ~2 dB too DEEP after the centre fix — small). V1E twin-T notch centre ✅ DONE
+> [[v1l-bass-hump-mechanism-b]]. **V2/V1E twin-T notch depth ✅ CLOSED 2026-07-22 (no code change —
+> "too shallow" refuted, and the quantity has no lever; see USER-FLAGGED TWEAKS). V1E twin-T notch centre ✅ DONE
 > 2026-07-21; V1L+V2 HF 2–4 kHz ✅ DONE 2026-07-21 (WetHFCorrection bell — see USER-FLAGGED TWEAKS).**
 >
 > **Prior (2026-07-19): GAPS J AND E CLOSED — three real bugs, all found

@@ -22,6 +22,28 @@
 // LEVEL assumption in the source sim, not a topology mismatch (every stage's node wiring was checked
 // against netlists.md V1-V8 individually) — flagged for Phase 10 capture-anchored calibration rather
 // than adjusted blind here.
+//
+// ⚠⚠ GAP NOTE (a) ABOVE IS WRONG AND IS RETAINED ONLY SO THE CORRECTION IS LEGIBLE — MEASURED AND
+// REFUTED 2026-07-22 (analysis/notch_depth_measure.py). The notch is NOT "a few dB shallower" than
+// §1, on this revision or V1L, and there is no "shared twin-T-model characteristic". Two compounding
+// measurement errors manufactured it, and BOTH are visible in the printout below:
+//   1. LEVEL CONFOUND (L-005). Every §1 dB is relative to THAT curve's own normalization ("each sim
+//      is normalised its own way"), so an absolute model reading is not comparable to §1's -36. This
+//      model's whole §1 curve sits ~+9.4 dB hotter than §1's normalization — low bump +8.4, notch
+//      +9.1, high bump +10.5, i.e. UNIFORM across features, which is a level offset and not a shape
+//      error. Removing it, the notch lands within ~1 dB of §1 re the low bump.
+//   2. FIXED-PROBE ARTEFACT. `magnitudeDb(dsp, 750.0, ...)` probes a FIXED 750 Hz, but the model's
+//      minimum is not at exactly 750 Hz, and on a null this sharp a small centre offset reads as
+//      several dB of missing depth: measured full-chain, @750 Hz vs the true argmin costs 2.82 dB on
+//      V2 and 1.63 dB on V1L (0.76 dB on V1E).
+// Corrected, level-invariant readings (dip located by argmin, depth read re §1's OWN passband
+// anchors): V2 is 2.7-4.8 dB too DEEP vs §1 and +0.35 dB vs its own captures (4 usable, spread
+// -0.96..+1.87) — i.e. essentially dead on, and never shallow. The queued "V2 notch ~3 dB too
+// SHALLOW, needs to be deeper" action item came from note (a) and would have moved V2 AWAY from both
+// references; it is closed as refuted. The §1 block below now PRINTS the level-invariant depth next
+// to the misleading absolute reading, so this cannot be re-derived from an absolute number again.
+// It is printed and NOT asserted: composite notch depth was then measured to have no accessible
+// lever at all (see the authority table at that print), so a gate on it could not fail.
 
 #include "../src/dsp/V2DSP.h"
 #include "../src/dsp/ZenerDriveModule.h"
@@ -45,6 +67,35 @@ bool finiteBounded(const std::vector<double>& x, double bound)
         if (!std::isfinite(v) || std::abs(v) > bound)
             return false;
     return true;
+}
+
+double magnitudeDb(nalr::V2DSP& dsp, double freqHz, double ampIn);
+
+// Locate the twin-T notch MINIMUM by search, rather than probing a fixed frequency. Returns the
+// minimum in dB and writes its frequency to fcOut. Coarse-then-fine so the sharp null is actually
+// found: a fixed probe a few Hz off centre under-reads the depth by dB (see the class comment).
+double minMagnitudeDb(nalr::V2DSP& dsp, double loHz, double hiHz, double ampIn, double& fcOut)
+{
+    double bestF = loHz, bestDb = 1e9;
+    for (int pass = 0; pass < 2; ++pass)
+    {
+        const double lo = (pass == 0) ? loHz : bestF / 1.05;
+        const double hi = (pass == 0) ? hiHz : bestF * 1.05;
+        const int n = (pass == 0) ? 25 : 21;
+        for (int i = 0; i < n; ++i)
+        {
+            const double f = lo * std::pow(hi / lo, (double) i / (double) (n - 1));
+            dsp.reset();
+            const double d = magnitudeDb(dsp, f, ampIn);
+            if (d < bestDb)
+            {
+                bestDb = d;
+                bestF = f;
+            }
+        }
+    }
+    fcOut = bestF;
+    return bestDb;
 }
 
 double magnitudeDb(nalr::V2DSP& dsp, double freqHz, double ampIn)
@@ -243,6 +294,31 @@ int main()
         check(lowBump > 4.5, "wet-LF bass-bump calibration active @70Hz (FAILS with NALR_WETLF_OFF)");
         check(notch < -20.0, "§1 deep notch present (< -20 dB)");
         check(highBump > -15.0 && highBump < 5.0, "§1 high bump in range");
+
+        // --- twin-T notch DEPTH, level-invariant: DIAGNOSTIC, DELIBERATELY NOT ASSERTED ------------
+        // (added 2026-07-22, analysis/notch_depth_measure.py). Read as (dip - high bump) with the dip
+        // LOCATED by argmin, so it is immune to both faults that produced the false "notch ~9 dB too
+        // shallow" claim in gap note (a): an absolute level offset cancels in the difference, and a
+        // centre shift moves fc instead of faking a depth loss. Printed so the CORRECT number is
+        // always in front of anyone reading the misleading absolute "@750Hz" line above it.
+        //
+        // ⚠ NO check() HERE, ON PURPOSE. Composite notch depth was measured to have NO ACCESSIBLE
+        // LEVER, so asserting it would certify a no-op (L-003's "verify the gate can fail" / L-009).
+        // Authority measured directly, each by rebuilding with the perturbation in place — every one
+        // far larger than any real component tolerance, and all three essentially inert:
+        //     twin-T series cap C18 +10% (unbalances the T) : -29.81 -> -29.60 dB  (0.21 dB)
+        //     twin-T shunt leg  R3  +20%                    : -29.81 -> -29.28 dB  (0.53 dB)
+        //     dry leg removed entirely (NALR_NODRY=1)       : -29.81 -> -30.45 dB  (0.64 dB)
+        // The twin-T null is far deeper than this reading; what the reading actually measures is the
+        // SHAPE around the null (where the high bump sits and how steep the skirts are), not the
+        // null's own bottom — which is why the T's own balance barely touches it. Consequence for
+        // anyone tempted to "tune the notch depth": there is nothing to tune it WITH. Fix the
+        // surrounding shape instead, or leave it.
+        double notchFc = 0.0;
+        const double notchMin = minMagnitudeDb(dsp, 550.0, 1050.0, 0.3, notchFc);
+        std::printf("      notch depth (argmin @%.0f Hz, re high bump) = %.2f dB  [§1 implies -26.0; "
+                    "diagnostic, not asserted — no lever, see comment]\n",
+                    notchFc, notchMin - highBump);
         std::printf("      wet-HF bell boost (g@3400 - g@1050) = %.2f dB\n", bellBoost);
         // Wet-HF calibration gate (WetHFCorrection.h, guardrail #3): FAILS with NALR_WETHF_OFF.
         check(bellBoost > kWetHFBoostGate, "wet-HF 3-4kHz calibration active (FAILS with NALR_WETHF_OFF)");
