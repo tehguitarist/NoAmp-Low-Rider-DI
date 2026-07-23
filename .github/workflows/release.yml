@@ -91,8 +91,8 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           for bundle in \
-            "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmpLowRiderDI.component" \
-            "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3"; do
+            "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmp Low Rider DI.component" \
+            "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3"; do
             codesign --force --deep --options runtime --timestamp \
               --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" "$bundle"
             codesign --verify --deep --strict --verbose=2 "$bundle"
@@ -107,8 +107,8 @@ jobs:
           NOTARIZE_ZIP="$RUNNER_TEMP/notarize.zip"
           NOTARIZE_DIR="$RUNNER_TEMP/notarize"
           mkdir -p "$NOTARIZE_DIR"
-          cp -R "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmpLowRiderDI.component" "$NOTARIZE_DIR/"
-          cp -R "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3" "$NOTARIZE_DIR/"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmp Low Rider DI.component" "$NOTARIZE_DIR/"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3" "$NOTARIZE_DIR/"
           ditto -c -k --keepParent "$NOTARIZE_DIR" "$NOTARIZE_ZIP"
 
           xcrun notarytool submit "$NOTARIZE_ZIP" \
@@ -117,8 +117,8 @@ jobs:
             --team-id "$APPLE_TEAM_ID" \
             --wait
 
-          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmpLowRiderDI.component"
-          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3"
+          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmp Low Rider DI.component"
+          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3"
 
       - name: Package
         run: |
@@ -189,7 +189,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ needs.version.outputs.version }}"
-          Compress-Archive -Path "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmpLowRiderDI.vst3" `
+          Compress-Archive -Path "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3" `
             -DestinationPath "NoAmpLowRiderDI-Windows-v$version.zip"
 
       # makensis ships on windows-latest runners but is NOT on PATH — locate it rather than
@@ -257,7 +257,7 @@ jobs:
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           (cd build/NoAmpLowRiderDI_artefacts/Release/VST3 && \
-            zip -r "${GITHUB_WORKSPACE}/NoAmpLowRiderDI-Linux-v${VERSION}.zip" NoAmpLowRiderDI.vst3)
+            zip -r "${GITHUB_WORKSPACE}/NoAmpLowRiderDI-Linux-v${VERSION}.zip" "NoAmp Low Rider DI.vst3")
 
       - name: Build installer
         run: |
