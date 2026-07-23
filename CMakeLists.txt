@@ -12,6 +12,12 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS deployment v
 
 enable_testing()
 
+# MSVC's <cmath> only exposes M_PI (and the other M_* constants) when _USE_MATH_DEFINES is defined
+# before the header is included; GCC/Clang define it unconditionally, so this only bit Windows CI.
+# Defined globally (not per-file) since M_PI is used throughout src/dsp and tests. Harmless on
+# non-MSVC compilers (the macro is simply unused there).
+add_compile_definitions(_USE_MATH_DEFINES)
+
 # -Wall/-Wextra are GCC/Clang flags; MSVC's cl.exe misparses "-Wextra" as the /W switch with a
 # non-numeric argument (error D8021) — so a hardcoded "-Wextra" breaks the Windows CI build. Gate it.
 if (MSVC)
