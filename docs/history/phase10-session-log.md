@@ -13,6 +13,101 @@
 
 > All work is on **`main`**.
 >
+> ## 🔍 V1L ZENER ACCURACY — INVESTIGATED, NOTHING SHIPPED (2026-07-23, later session)
+> Worked the queued "Current step" plan (CLAUDE.md) end to end against a freshly rebuilt
+> `OfflineRender`. Net result: **the null-sweep tooling had a real (now-fixed) edge-search bug, but
+> neither candidate zener-value change for V1L earns its way past the six-guardrail bar.**
+>
+> **1. Null-sweep boundary guard.** `analysis/knob_tolerant_null.py`'s local BLEND/DRIVE search hit
+> the exact edge of its ±0.05 window on every V1L capture — an edge optimum is a non-result (same
+> trap as the old Vzt 0.20–0.60 one-sided sweep). Ported the boundary-exclusion guard from
+> `v1l_blend_knob_probe.py` (checks whether the reported best sits on the *tested* range's edge,
+> not the pot's own [0,1] rail) and widened the span in stages (0.05→0.15→0.4→0.9, cross-checked
+> with `v1l_blend_knob_probe.py`'s full-curve printout) until every V1L capture's optimum was
+> genuinely interior:
+>   - V1030 (D0.65 BL**1.00**): true optimum at rendered blend **0.50** (shift −0.50), null −7.14 dB.
+>   - V1100 (D0.45 BL0.65): optimum at 0.65 (shift 0.00), null −10.46 dB.
+>   - V1200 (D0.40 BL0.30): optimum at 0.40 (shift +0.10), null −10.78 dB.
+> The three shifts (−0.50, 0.00, +0.10) are **inconsistent** — not a systematic taper error — so per
+> the probe's own decision rule V1030's large shift is a one-off capture/knob discrepancy, matching
+> the already-open "V1L blend/wet-level discrepancy" item, not a new fixable defect.
+> **Headline number is unchanged: V1L's best (deepest) knob-tolerant null across its 3 captures is
+> still ≈ −10.8 dB** — the deepest-nulling capture (V1200/BL0.30) was already interior even at the
+> old narrow span; the edge-hugging was isolated to the shallower-nulling V1030 capture, which
+> remains the shallowest even at its corrected value. So the README's existing −18.0/−10.8/−16.8 dB
+> per-revision figures needed no correction, though the tooling bug (now fixed) could have produced
+> a wrong number on a different capture matrix and is worth re-verifying against if it ever changes.
+> Also reconfirmed: linear-removed floor is 10+ dB deeper than the raw null on all three V1L
+> captures (−21.3/−19.7/−22.0 dB) — most of V1L's remaining gap is linear (EQ/phase), which bounds
+> how much a zener (nonlinear-only) parameter change could ever close.
+>
+> **2. Cheap test — V2's Cj=10pF/m=0.015 dropped into V1L — REFUTED.** Ran `ab_report.py --filter
+> V1L` before/after a `[PROBE]`-tagged edit to `ZenerDriveModule.h`'s `v1LateParams()`. The
+> best-nulling capture (V1200/BL0.30) regressed 2.7 dB (clean null −10.3 → −7.6 dB; driven null
+> −9.8 → −9.3 dB) for only a marginal FR-shape rms gain (median 3.80 → 3.55 dB) and no consistent
+> THD improvement (some anchors better, some worse, no clear pattern). Reverted; rebuilt
+> `OfflineRender`; confirmed the reverted binary reproduces the original baseline numbers exactly.
+>
+> **3. Independent V1L Cj fit — attempted, not decisive.** Generalised `analysis/cj_scan.py` with a
+> `--rev` flag (was hardcoded to V2) and ran it against all 3 V1L captures (`--min-blend 0.0
+> --max-drive 0.7`, since V1L has no captures that are simultaneously full-wet AND low-drive the
+> way `cj_scan.py`'s default V2 screen assumes). Result: RMS HF-shape error is **nearly flat**
+> (7.53–7.65 dB) from 150 pF through 470 pF — nothing like V2's decisive 4.7 dB minimum — and the
+> per-capture HF-band errors **flip sign across captures** (V1030: plugin darker than pedal by
+> ~7 dB at 8 kHz and ~20 dB at 12 kHz; V1100: plugin *brighter* than pedal by ~7.5 dB at 8 kHz and
+> ~14 dB at 12 kHz). A flat error curve plus sign-inconsistent per-capture residuals is the
+> guardrail #6/L-008 overfitting signature this task's own instructions predicted: V1L's 3 captures
+> never hold DRIVE/BLEND/BASS fixed while sweeping one control (unlike V1E's matched-pair taper
+> fit), so a from-scratch fit is absorbing that confound, not isolating Cj's HF rolloff. The
+> "best" 150 pF is not meaningfully different from the shipped 220 pF (0.009 dB RMS apart — noise).
+>
+> **4. Nothing shipped.** No candidate clears the guardrail #3 bar (a gate proven to fail on
+> revert) because neither candidate is an improvement to begin with. Full `ctest` (35/35) green
+> before and after the probe. `ZenerDriveModule.h`'s `v1LateParams()` is numerically unchanged
+> (Cj=220pF, m=0.0) — only its comment records the refuted probe. Changed files: `analysis/
+> cj_scan.py` (now revision-parametric), `analysis/knob_tolerant_null.py` (boundary guard),
+> `analysis/README.md` (both entries updated), `CLAUDE.md` (queued-item replaced with this
+> conclusion), and this entry. **Re-open only with genuinely new V1L captures, or a matched-pair
+> capture isolating DRIVE/BLEND/BASS independently — re-running the same 3-capture fit again will
+> not produce a different answer.**
+>
+> **5. FOLLOW-UP (same day, user-directed): independent V1L `m` fit + stage-A rail-asymmetry scan —
+> both refuted, and the refutation is CLASS-LEVEL, not parameter-level.** Two new report-only
+> scripts, both n=1 (V1030 is V1L's only full-wet capture — half the evidence V2's two-capture m
+> fit had):
+>   - **`v1l_m_scan.py`** (H2-primary/H4-secondary RMS across 9 anchors = 100/200/400 Hz ×
+>     −18/−12/−6 dBFS, odd harmonics as a premise control). Run TWICE at the user's suggestion —
+>     once at the labelled BL1.00 and once at `--blend-override 0.50` (the null-sweep's corrected
+>     optimum for this capture). Best m ≈ 0.18–0.25 under either hypothesis but the fit never
+>     converges: best-achievable H2 residual ~8.4 dB (V2's fit: ≤3 dB), H2 and H4 DISAGREE on the
+>     optimum (H2 wants 0.18–0.25, H4 wants 0.05–0.08), and per-anchor residuals flip sign across
+>     frequency. **Side finding: the odd-harmonic control errors are systematically ~2× smaller
+>     under the blend=0.50 hypothesis (H3 ~2.0 vs ~4.3 dB rms)** — a second, independent,
+>     harmonic-domain corroboration that V1030's physical blend knob really was near 0.50, not its
+>     labelled 1.00 (adds to the null-depth evidence in item 1).
+>   - **`v1l_rail_scan.py`** (same scoring; scans stage-A rail (vNeg,vPos) pairs around the
+>     physical 0.69·VCC-bias hypothesis (−5.8/+2.6) AND its flipped orientation, with a mandatory
+>     L-009 liveness gate since `gapd_flag_check.py` never covered `--rail-vneg/vpos`). Result:
+>     the flag is LIVE on V1L (−26.8 dB whole-file diff vs default; opposite-extreme pairs differ
+>     from each other by −21.1 dB, so the value plumbing is proven too, not just the flag) — yet
+>     **every pair scores bit-identically at the 100–400 Hz anchors** (H2 24.07 / H4 14.50 dB, 7/7
+>     pairs). That is physics, not tooling: exactly as `ZenerDriveModule.h`'s header documents, the
+>     rail is operative only ABOVE the ~3.3 kHz Cj corner (HF/transients); at LF the zener clamps
+>     long before the wiper reaches any rail, so no rail asymmetry can touch the LF even-harmonic
+>     deficit.
+>   - **The class-level kill: H2-vs-LEVEL slope.** At 200 Hz the pedal's H2 re fundamental RISES
+>     +7.7 dB across −18→−6 dBFS (−24.4 → −20.0 → −16.7); under the best static asymmetry the
+>     plugin's FALLS ~−2.5 dB (−25.8 → −26.5 → −28.3). Harder clipping is relatively MORE
+>     symmetric, so every memoryless asymmetry (knee mismatch m, a DC window offset, rail
+>     asymmetry) has a falling slope — a ~10 dB slope disagreement is unreachable by ANY static
+>     parameter. A rising slope means the operating point shifts WITH signal level = signal-
+>     dependent bias = MEMORY. Physically plausible source: the CH34-9's self-bias node (R105
+>     100k/R101 220k on C1 47u, netlists.md L4 [○]) shifting under asymmetric current draw at
+>     drive — a large-tau bias droop the model doesn't carry. **This puts V1L's LF even-harmonic
+>     deficit in the same proven-memory class as Gap I's onset floor and the V1L midband
+>     compression deficit** — best-effort, no lever without a genuinely new (memory-carrying)
+>     idea, and any future attempt must model the bias node, not tune the clip element.
+>
 > ## ✅✅ v1.0.0 — RELEASE-READINESS AUDIT DONE (2026-07-23, later session). VERSION 0.9.1 → 1.0.0.
 > Prompted by the user asking whether the project is ready to ship. Full audit, not a guess: clean
 > `git status`, a full `cmake --build build -j8` (every target incl. AU/VST3, zero errors/warnings),

@@ -231,13 +231,18 @@ public:
     // The canonical CH34-9 (V1 Late) constants. Cj/zener-knee are Phase-4 fits, refined in Phase 10.
     static ZenerDriveParams v1LateParams()
     {
+        // [PROBE] 2026-07-23 — TESTED dropping V2's independently-fit Cj/m (10 pF / 0.015) in here per
+        // CLAUDE.md's "Queued next steps" item 2 (cheap test before an independent V1L fit). REFUTED:
+        // ab_report.py --filter V1L showed the best-nulling capture (V1200) regress by 2.7 dB (clean
+        // null -10.3 -> -7.6 dB) for only a marginal FR-shape rms improvement (3.80 -> 3.55 dB) and no
+        // consistent THD gain. Reverted to the values below. See docs/history/phase10-session-log.md.
         // Cj 220 pF: the pair's two junction caps in series ~= half a DZ23 device (~450 pF) -> ~225 pF
         // (dsp.md's "~100-225 pF" range). Its ~3.3 kHz corner (< V1E's C28 ~4.8 kHz) is what makes V1L
         // roll off MORE at the top than V1E (FR §4 / §1). Fit parameter -- refine vs captures (Phase 10).
         return {/*R23*/ 10.0e3,     /*R25*/ 22.0e3,    /*Rpot*/ 100.0e3, /*R17*/ 10.0e3, /*Rf*/ 220.0e3,
                 /*CinA(C28)*/ 2.2e-6, /*CinB(C8)*/ 2.2e-6,
                 /*Cj*/ 220.0e-12,  /*Vz*/ 3.3,        /*Vf*/ 0.65,      /*Vzt*/ 0.20,   /*Iref*/ 5.0e-3,
-                /*m*/ 0.0}; // symmetric until fit against V1L captures (Phase 10)
+                /*m*/ 0.0}; // symmetric — see [PROBE] note above; independent V1L m-fit not yet done
     }
 
     // The CH40 (V2) respin. netlists.md V4: R12/R14/R15/R903 sit in the CH34-9's R23/R25/R17/Rf roles

@@ -104,6 +104,9 @@ without images.
   - `v1l_midband_wetcomp_feasibility.py` — PAPER-only feasibility test of a midband-sidechained
     wet-leg downward compressor for the V1L 1613/2032 Hz compression deficit; REFUTED (guardrail #6
     wet-fraction ceiling + THD-scale-invariance by construction) — not built, see gap table
+  - `v1l_m_scan.py` / `v1l_rail_scan.py` — the 2026-07-23 V1L static-asymmetry refutations (zener
+    m and stage-A rail); established the LF even-harmonic deficit needs MEMORY — do not re-run
+    expecting a different answer (see Current step item 4)
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
 - **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
   `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).
@@ -191,33 +194,49 @@ or `docs/phase10-gap-audit.md` (search the filename or gap letter mentioned).
   artefact, not the recovery cascade).
 - **`TopOctaveShelf.h`** — low-OS top-octave restore inside the oversampled clip/recovery regions.
 
-### Queued next steps — V1L zener accuracy (2026-07-23, later session, not started)
+### V1L zener accuracy — INVESTIGATED 2026-07-23, no viable fix found, nothing shipped
 
-Surfaced by a fresh knob-tolerant null-depth audit (`analysis/knob_tolerant_null.py`, README
-"Accuracy — null depth" section): V1L is the shallowest of the three revisions on both the raw null
-and the linear-removed floor, and the floor is 10+ dB deeper than the raw null on all three
-revisions — most of the remaining gap is linear (EQ/phase), not clipping-character. Two items:
+Followed the queued plan (all 4 steps) against a rebuilt `OfflineRender`. Conclusion: **the null
+sweep's edge-hugging was a real bug (now fixed), but neither of the two candidate zener-value
+changes earns its way in — V1L keeps its Phase-4 `Cj=220pF`/`m=0.0` unchanged.**
 
-1. **Re-run the null sweep with a wider window + an edge-guard.** All three V1L captures (and
-   DRIVE on most captures project-wide) hit the exact edge of the current ±0.05 local search — an
-   edge optimum is a non-result (same trap as the old Vzt 0.20–0.60 sweep), so V1L's reported
-   −10.8 dB best null may understate what's reachable. `v1l_blend_knob_probe.py` already has the
-   boundary-exclusion guard this script needs; port it over, widen the span, and re-run before
-   trusting any V1L-vs-V1E/V2 comparison.
-2. **V1L's zener `Cj`/`m` were never independently fit — V2's were.** `ZenerDriveModule.h`: V1L
-   keeps `Cj=220pF` (Phase-4 napkin math, its own comment flags "refine vs captures (Phase 10)" —
-   never done) and `m=0.0` (class default, comment flags "until fit against V1L captures
-   (Phase 10)" — never done), while V2's `Cj=10pF`/`m=0.015` were independently capture-fit
-   (`cj_scan.py`, H2/H4 matching) and meaningfully improved V2. Cj is a linear HF-rolloff filter —
-   fits the "mostly linear" finding above. **Try the cheap thing first**: V1L and V2 share the
-   identical `ZenerDriveModule`/`ZenerFeedbackClipper` class (only R/C values + zener package
-   differ), and V1L has just 3 captures (confounded — drive/blend/bass move together), so a
-   from-scratch V1L-only fit risks overfitting that small set (the guardrail #6 / L-008 pattern
-   already documented below). Test dropping V2's already-validated `Cj=10pF`/`m=0.015` straight
-   into V1L before running an independent fit — even if it reads worse against V1L's own captures
-   at first, it may be the more honest value given how much better-supported V2's fit is. Only if
-   that doesn't hold up, port `cj_scan.py` (currently V2-only; the `--zener-cj`/`--zener-m`
-   OfflineRender flags are already generic) to fit V1L's own values.
+1. **Null-sweep boundary guard fixed** (`analysis/knob_tolerant_null.py`, ported from
+   `v1l_blend_knob_probe.py`). Every V1L capture hit the old ±0.05 edge; widening the span found all
+   three true interior optima. **The headline "best null" figure is unchanged at −10.8 dB** — the
+   deepest-nulling capture (BL0.30) was already interior. The BL1.00 capture's true optimum is only
+   −7.14 dB at a rendered blend of 0.50 (shift −0.50) — inconsistent with the other two captures'
+   near-zero shifts, so per the standing decision rule this is a one-off capture/knob discrepancy
+   (see "V1L blend/wet-level discrepancy" below), not a systematic taper defect. Linear-removed
+   floors confirmed 10+ dB deeper on all three V1L captures — most of the residual is linear
+   (EQ/phase), which bounds how much a zener (nonlinear-only) fix could ever close.
+2. **Cheap test REFUTED: dropping V2's `Cj=10pF`/`m=0.015` into V1L regresses it.** `ab_report.py
+   --filter V1L` before/after: the best-nulling capture (BL0.30) dropped 2.7 dB (clean null −10.3 →
+   −7.6 dB) for only a marginal FR-shape rms gain (3.80 → 3.55 dB median) and no consistent THD
+   improvement. Reverted (comment-documented `[PROBE]` in `ZenerDriveModule.h`).
+3. **Independent V1L Cj fit is not decisive — a from-scratch fit was overfitting exactly as
+   guardrail #6/L-008 warned.** Ported `cj_scan.py` to take `--rev V1L` (generalised, no longer
+   V2-only). RMS HF-shape error is nearly flat (7.53–7.65 dB) across 150–470 pF — nothing like V2's
+   decisive 4.7 dB minimum — and the per-capture HF errors flip sign across the 3 captures (V1030
+   plugin darker than pedal at 8/12 kHz; V1100 plugin brighter at the same frequencies). That's the
+   confound the small, non-matched-pair V1L capture set was flagged to risk, not a real Cj value.
+4. **Follow-up (user-directed): independent `m` fit + stage-A rail-asymmetry scan — both refuted,
+   CLASS-LEVEL.** `v1l_m_scan.py` (run at both the labelled BL1.00 AND blend-override 0.50): m
+   never converges (best H2 residual ~8.4 dB vs V2's ≤3; H2/H4 disagree on the optimum). Side
+   finding: the odd-harmonic control is ~2× cleaner under blend=0.50 — second independent
+   corroboration that V1030's real knob was ~0.50, not 1.00. `v1l_rail_scan.py` (L-009 liveness
+   gate passed, value plumbing proven): the rail is LIVE but bit-blind at 100–400 Hz — the zener
+   clamps at LF before the wiper rails (as ZenerDriveModule.h documents), so no rail asymmetry
+   touches the deficit. **Decisive: the pedal's H2-vs-level slope RISES +7.7 dB (200 Hz, −18→−6)
+   while every static asymmetry's FALLS** — a rising slope needs a level-dependent operating
+   point = MEMORY (candidate: the CH34-9 self-bias node, 100k/220k on 47 µF, drooping under
+   asymmetric draw — netlists.md L4 [○]). V1L's LF even-harmonic deficit joins the proven-memory
+   class (Gap I, V1L midband compression): best-effort, do not re-tune the clip element for it.
+5. **Nothing shipped.** No parameter change earns the six-guardrail bar. Full `ctest` (35/35) green
+   before and after; only `analysis/cj_scan.py` (now revision-parametric),
+   `analysis/knob_tolerant_null.py` (boundary guard), and the two new report-only scan scripts
+   changed, plus this note and their `analysis/README.md` entries. Re-open only with genuinely new
+   captures, a matched-pair-style isolation of V1L's DRIVE/BLEND/BASS confound, or a
+   memory-carrying bias-node model — not by re-running any static-parameter fit again.
 
 ### Open, best-effort — no known lever (do not re-open without a genuinely new idea)
 

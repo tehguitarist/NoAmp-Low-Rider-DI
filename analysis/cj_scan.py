@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
-"""Phase-10 Step 3 — V2 zener Cj scan (README calibration workflow §3).
+"""Phase-10 Step 3 — zener Cj scan (README calibration workflow §3). V2 by default; --rev V1L
+ports the identical method to V1 Late's 3 captures (CLAUDE.md "Queued next steps" item 3 — V1L's
+Cj/m were never independently fit, unlike V2's cj_scan.py-derived 10 pF / 0.015).
 
 `v2Params()` still reuses the V1L Cj placeholder (220 pF, ZenerDriveModule.h). This fits it
 independently from the captured DRIVE HF rolloff (reference-fr-targets.md §4).
+
+⚠ V1L CONFIDENCE CAVEAT (guardrail #6 / L-008): V1L has only 3 captures (vs V2's 12), and none
+hold drive/blend/bass fixed while sweeping only one control (the matched-pair technique that
+rescued the V1E taper fit) — so a from-scratch V1L Cj fit is at real risk of absorbing whatever
+else differs between those 3 captures (the L-008 "unphysical value = receipt for an upstream
+error" pattern) rather than isolating Cj's own HF rolloff. Treat any V1L result here as
+LOWER CONFIDENCE than V2's and require it to survive ab_report.py's THD+FR+null triad, not just
+this script's own normalized-FR-shape metric, before shipping.
 
 WHY the "sweep_clean" (-30 dBFS) segment is safe for this even at full DRIVE gain, and why
 per-capture SHAPE-normalization (not absolute FR) is the right metric:
@@ -24,6 +34,7 @@ per-capture SHAPE-normalization (not absolute FR) is the right metric:
 
 Usage:
   python3 analysis/cj_scan.py [--bin PATH] [--os 8] [--values 100e-12,...] [--keep-renders D]
+  python3 analysis/cj_scan.py --rev V1L --min-blend 0.0 --values 100e-12,150e-12,220e-12,...
 """
 import os, sys, argparse, subprocess, tempfile
 import numpy as np
@@ -64,6 +75,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bin", default=DEFAULT_BIN)
     ap.add_argument("--os", type=int, default=8)
+    ap.add_argument("--rev", default="V2", help="revision to fit (V2 or V1L)")
     ap.add_argument("--values", default=None, help="comma list of candidate Cj (farads)")
     ap.add_argument("--max-drive", type=float, default=MAX_SAFE_DRIVE01)
     ap.add_argument("--min-blend", type=float, default=0.85, help="skip partial-blend captures (top-octave phase cancellation, see README blend caveat)")
@@ -78,12 +90,15 @@ def main():
     inp = A.seg_of(orig, "sweep_clean")
     grid = np.array([x for x in A.analysis_freqs() if HF_BAND[0] <= x <= HF_BAND[1]])
 
-    allv2 = [(p, d) for p, d in NC.find_captures() if d["rev"] == "V2"]
-    caps = [(p, d) for p, d in allv2 if d["blend"] >= a.min_blend and d["drive"] <= a.max_drive]
-    skipped_blend = [os.path.basename(p) for p, d in allv2 if d["blend"] < a.min_blend]
-    skipped_drive = [os.path.basename(p) for p, d in allv2
+    allrev = [(p, d) for p, d in NC.find_captures() if d["rev"] == a.rev]
+    caps = [(p, d) for p, d in allrev if d["blend"] >= a.min_blend and d["drive"] <= a.max_drive]
+    skipped_blend = [os.path.basename(p) for p, d in allrev if d["blend"] < a.min_blend]
+    skipped_drive = [os.path.basename(p) for p, d in allrev
                       if d["blend"] >= a.min_blend and d["drive"] > a.max_drive]
-    print(f"Cj scan: {len(candidates)} candidates x {len(caps)} V2 captures (full-wet, safe-drive), os={a.os}x")
+    if a.rev == "V1L" and len(caps) < 2:
+        print(f"  ⚠ only {len(caps)}/3 V1L captures pass the min-blend/max-drive screen — "
+              f"consider --min-blend 0.0 to use all 3 (lower confidence; see header caveat)\n")
+    print(f"Cj scan: {len(candidates)} candidates x {len(caps)} {a.rev} captures (full-wet, safe-drive), os={a.os}x")
     if skipped_blend:
         print(f"  SKIPPED (partial blend, top-octave phase cancellation): {', '.join(skipped_blend)}")
     if skipped_drive:
