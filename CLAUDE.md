@@ -184,6 +184,34 @@ or `docs/phase10-gap-audit.md` (search the filename or gap letter mentioned).
   artefact, not the recovery cascade).
 - **`TopOctaveShelf.h`** — low-OS top-octave restore inside the oversampled clip/recovery regions.
 
+### Queued next steps — V1L zener accuracy (2026-07-23, later session, not started)
+
+Surfaced by a fresh knob-tolerant null-depth audit (`analysis/knob_tolerant_null.py`, README
+"Accuracy — null depth" section): V1L is the shallowest of the three revisions on both the raw null
+and the linear-removed floor, and the floor is 10+ dB deeper than the raw null on all three
+revisions — most of the remaining gap is linear (EQ/phase), not clipping-character. Two items:
+
+1. **Re-run the null sweep with a wider window + an edge-guard.** All three V1L captures (and
+   DRIVE on most captures project-wide) hit the exact edge of the current ±0.05 local search — an
+   edge optimum is a non-result (same trap as the old Vzt 0.20–0.60 sweep), so V1L's reported
+   −10.8 dB best null may understate what's reachable. `v1l_blend_knob_probe.py` already has the
+   boundary-exclusion guard this script needs; port it over, widen the span, and re-run before
+   trusting any V1L-vs-V1E/V2 comparison.
+2. **V1L's zener `Cj`/`m` were never independently fit — V2's were.** `ZenerDriveModule.h`: V1L
+   keeps `Cj=220pF` (Phase-4 napkin math, its own comment flags "refine vs captures (Phase 10)" —
+   never done) and `m=0.0` (class default, comment flags "until fit against V1L captures
+   (Phase 10)" — never done), while V2's `Cj=10pF`/`m=0.015` were independently capture-fit
+   (`cj_scan.py`, H2/H4 matching) and meaningfully improved V2. Cj is a linear HF-rolloff filter —
+   fits the "mostly linear" finding above. **Try the cheap thing first**: V1L and V2 share the
+   identical `ZenerDriveModule`/`ZenerFeedbackClipper` class (only R/C values + zener package
+   differ), and V1L has just 3 captures (confounded — drive/blend/bass move together), so a
+   from-scratch V1L-only fit risks overfitting that small set (the guardrail #6 / L-008 pattern
+   already documented below). Test dropping V2's already-validated `Cj=10pF`/`m=0.015` straight
+   into V1L before running an independent fit — even if it reads worse against V1L's own captures
+   at first, it may be the more honest value given how much better-supported V2's fit is. Only if
+   that doesn't hold up, port `cj_scan.py` (currently V2-only; the `--zener-cj`/`--zener-m`
+   OfflineRender flags are already generic) to fit V1L's own values.
+
 ### Open, best-effort — no known lever (do not re-open without a genuinely new idea)
 
 Every item below has had its candidate fixes refuted by measurement, not merely deprioritised —

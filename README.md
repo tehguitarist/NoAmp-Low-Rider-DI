@@ -39,29 +39,36 @@ actual node-level topology rather than hand-tuned approximations:
 - Op-amp rail saturation on the V1 Early drive stage, both with 1st-order ADAA anti-aliasing
 - Switchable oversampling (1×/2×/4×/8×) with a separate, higher-quality offline-render factor
 
-## Performance (Phase 9 probes)
+## Performance (updated 2026-07-23)
 
 Measured via `PerfBenchmark`/`FeatureProfile`/`OSFidelity` (`ctest`), Apple Silicon, Release build.
-Absolute CPU % is machine-dependent — read this as relative shape, not an absolute spec.
+Absolute CPU % is machine-dependent — read this as relative shape, not an absolute spec. These are
+fresh numbers, re-run against the current `main` — CPU cost has grown since the original Phase 9
+measurement as Phase 10 added several always-on wet-path calibration layers (per-sample envelope
+followers/EQ stages: `WetLFCorrection`, `WetHFCorrection`, `HFEvenRestore`, `WetTopOctaveRestore`,
+`ClipDriveNormaliser`, `ClipHarmonicReducer`, `RevisionLevelTrim`, …), heaviest on V1 Late/V2 which
+carry the most of them.
 
 | Revision | OS factor | CPU % of realtime | Latency (samples) |
 |----------|-----------|-------------------|-------------------|
-| V1 Early | 1x        | 1.4%              | 0                 |
-| V1 Early | 2x        | 1.6%              | 49                |
-| V1 Early | 4x        | 2.3%              | 61                |
-| V1 Early | 8x        | 3.7%              | 65                |
-| V1 Late  | 1x        | 1.4%              | 0                 |
-| V1 Late  | 2x        | 2.5%              | 49                |
-| V1 Late  | 4x        | 4.3%              | 61                |
-| V1 Late  | 8x        | 7.8%              | 65                |
-| V2       | 1x        | 1.5%              | 0                 |
-| V2       | 2x        | 2.5%              | 49                |
-| V2       | 4x        | 4.0%              | 61                |
-| V2       | 8x        | 7.0%              | 65                |
+| V1 Early | 1x        | 1.3%              | 0                 |
+| V1 Early | 2x        | 1.9%              | 49                |
+| V1 Early | 4x        | 2.7%              | 61                |
+| V1 Early | 8x        | 4.2%              | 65                |
+| V1 Late  | 1x        | 2.0%              | 0                 |
+| V1 Late  | 2x        | 3.6%              | 49                |
+| V1 Late  | 4x        | 6.0%              | 61                |
+| V1 Late  | 8x        | 11.0%             | 65                |
+| V2       | 1x        | 1.9%              | 0                 |
+| V2       | 2x        | 3.2%              | 49                |
+| V2       | 4x        | 5.1%              | 61                |
+| V2       | 8x        | 9.0%              | 65                |
 
 All three revisions oversample their DRIVE nonlinearity. V1 Late / V2 cost more per factor than
 V1 Early — their zener clip is a per-sample Newton/omega solve, heavier than V1 Early's hard rail
-clamp. `OSFidelity` Part C confirms the oversampling cuts zener aliasing by ~43 dB from 1× to 8×.
+clamp, and they run more of the wet-path calibration layers above. `OSFidelity` Part C confirms the
+oversampling cuts zener aliasing by ~43 dB from 1× to 8×. Latency is unchanged from Phase 9 — none
+of the added layers sit inside the oversampled region or add their own delay.
 
 **No HQ toggle.** `FeatureProfile` A/B'd the two candidate CPU/accuracy levers per `dsp.md`'s
 "HQ / Eco mode" guidance and found neither justifies one:
@@ -80,6 +87,31 @@ artifact, not a clip-fidelity issue). A base-rate high-shelf (`TopOctaveShelf`),
 factor and transparent at 4×/8×, restores it — bringing 1× to within ~±2 dB through 10 kHz. It only
 engages when you drop below the 4× default, so the shipping sound is unaffected. Validated by
 `OSFidelity` Part A across all three revisions.
+
+## Accuracy — null depth vs the real pedal (updated 2026-07-23)
+
+Measured via `analysis/knob_tolerant_null.py` against the 11 original real-pedal captures (the
+second-unit `V2-2` set — a different physical pedal — is corroborating-evidence-only and is never
+pooled into these numbers; see `analysis/README.md`). A capture's knob settings are hand-read off a
+clock-face label, and that reading is sometimes a couple of percent off the pedal's true position —
+not a model defect. So rather than nulling each capture only at its labelled setting, this sweeps
+BLEND and DRIVE ±0.05 around the label (OS=8×, full-length clean sweep) and reports the deepest null
+found — separating genuine model/circuit error from knob-reading slop. It also reports a
+**linear-removed floor**: the null depth you'd get if every remaining linear (EQ-shape/phase)
+mismatch were perfectly corrected, isolating the genuinely nonlinear (clipping-timbre) residual.
+
+| Revision | Best null (knob-tolerant) | Linear-removed floor |
+|----------|---------------------------|-----------------------|
+| V1 Early | −18.0 dB                  | −41.5 dB              |
+| V1 Late  | −10.8 dB                  | −22.0 dB              |
+| V2       | −16.8 dB                  | −33.3 dB              |
+
+The linear-removed floor is **10–20 dB deeper than the best achievable null on every revision** —
+meaning most of the remaining gap to the real pedal is a linear EQ-shape/phase mismatch (taper,
+discretisation warp, wet/dry balance), not a fundamental limit of the clipping model. V1 Late is the
+shallowest of the three on both metrics, consistent with its known open items (the V1L midband
+compression deficit and 4–6 kHz null misplacement — see `CLAUDE.md`'s gap table); V1 Early nulls
+deepest, as expected for the revision with no clipping module at all.
 
 ## Building
 
