@@ -98,6 +98,9 @@ without images.
     render-and-score harness mirroring `v1e_even_fit.py`; `--quick` for a fast 1-capture/rev grid)
   - `v1l_gapd_tauscz_sweep.py` — `ClipDriveNormaliser` tau/scHz check, V1L-DRIVE axis only (V2 is
     physically inert to this layer, so no guardrail #6 join needed); confirmed shipped values optimal
+  - `v1l_midband_wetcomp_feasibility.py` — PAPER-only feasibility test of a midband-sidechained
+    wet-leg downward compressor for the V1L 1613/2032 Hz compression deficit; REFUTED (guardrail #6
+    wet-fraction ceiling + THD-scale-invariance by construction) — not built, see gap table
 - **`docs/ui-peripheral-spec.md`** — full visual spec for the reusable UI elements.
 - **`src/ui/`** — drop-in `PedalLookAndFeel`, `VUMeter`, `ThreePositionSwitch`, `LEDIndicator`,
   `PedalAssets` (BinaryData image/font accessors — see `docs/ui-noamp-assets.md`).
@@ -278,10 +281,36 @@ without images.
 >
 > ### ⚪ OPEN, BEST-EFFORT — NO KNOWN LEVER. Do not re-open without a new mechanism.
 > Each of these has had its candidate levers refuted by measurement, not merely deprioritised:
-> - **V1L midband COMPRESSION deficit** (+3.1..+4.9 dB at 1613/2032 Hz on BL1.00/BL0.65) — **NEW
->   2026-07-23**. It is the compression half of Gap D's **Finding 4**, proven to require MEMORY.
->   `makeup` is REFUTED structurally (it leaks the normaliser's bidirectional boost ⇒ +10.9/+13.3 dB
->   at the §1 reference). No lever known.
+> - **V1L midband COMPRESSION deficit** (+3.1..+4.9 dB at 1613/2032 Hz on BL1.00/BL0.65) — the
+>   compression half of Gap D's **Finding 4**, proven to require MEMORY. `makeup` is REFUTED
+>   structurally (it leaks the normaliser's bidirectional boost ⇒ +10.9/+13.3 dB at the §1
+>   reference). **A FOURTH lever was tried 2026-07-23 (later session) — a bespoke midband-sidechained
+>   downward compressor on the wet leg, PAPER-MODELLED only (`analysis/v1l_midband_wetcomp_
+>   feasibility.py`, no C++) — and it is ALSO refuted, on TWO separate grounds:**
+>   - **Guardrail #6 ceiling.** The compressor's authority is set by the WET FRACTION in the mix
+>     (BL1.00 1.00, BL0.65 0.72, BL0.30 0.32 — measured), but the pedal's own pre-blend midband
+>     level is nearly IDENTICAL across all three captures (−21.0..−21.9 dB) — so the correction's
+>     input is uniform while its output authority is not. The deficit is ordered BL0.65 > BL1.00 >
+>     BL0.30 (BL0.65 needs the MOST), the exact opposite of the authority ordering. Best joint
+>     setting: pooled deficit 3.89→~1.5 dB (~60%), but BL0.65 bottoms out ~2.2 dB short at ANY
+>     setting (thr/ratio grid to ratio=20, two sidechain centres both tried) while pushing harder
+>     over-shoots BL1.00's 2032 Hz PAST zero (+1.70 dB, wrong sign) — the redistribution signature.
+>   - **STRUCTURALLY CANNOT TOUCH THD, EVEN WHERE IT "WORKS."** The element sits AFTER the whole
+>     nonlinear chain (a broadband gain multiply keyed by a narrowband envelope), so it is THD-
+>     scale-invariant BY CONSTRUCTION — measured: THD at 1613/2032 Hz moves ±0.1–2 pp with no
+>     consistent sign, i.e. noise, not an effect. So even a perfect fit would do nothing for BL0.30's
+>     real defect (THD +12..+19 dB hot at matched compression) — it only ever moves level, never
+>     spectral content. **Self-test exact** (reconstruction identity 0.000e+00); guards clean at the
+>     best setting — clean sweep unchanged (−400 dB), the gated 440 Hz axis untouched (0.00 dB), the
+>     LF guard band (100/200/400 Hz) and 3 of 4 already-closed neighbour anchors (3225/4064/5120 Hz)
+>     exactly 0.00 — **because the test signal is a monophonic Farina sweep**, so the narrowband
+>     detector and any other frequency are never simultaneously excited; this is a real methodology
+>     gap, not evidence of safety — on polyphonic material the same broadband duck would also pull
+>     down bass/treble content coincident with a loud midband moment, untestable by this harness (one
+>     neighbour, 2560 Hz, close enough to the sidechain's skirt to leak −0.5..−1.5 dB even on a
+>     sweep, which is the tell). **Disposition: NOT WORTH BUILDING** — narrower win (compression only,
+>     ~60%, one capture uncloseable) than the C++/OS/ADAA surface area of a new envelope element would
+>     cost, and it cannot address the co-located THD problem at all. No lever known for either half.
 > - **V1L 1613–3225 Hz THD overshoot** — CLOSED best-effort. All three levers refuted
 >   (`ClipDriveNormaliser` on authority, blend on magnitude, `ClipHarmonicReducer` on guardrail #6).
 > - **V1L 4–6 kHz null misplacement** (~⅓ octave, ~3 dB, one capture) — every structurally-safe
