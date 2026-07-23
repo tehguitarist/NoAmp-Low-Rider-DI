@@ -137,7 +137,42 @@ without images.
 ## Current step
 
 > Update this at the start/end of each session so progress doesn't rely on conversation history.
-> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-23).** All work is on **`main`**.
+> **CURRENT: Phase 10 — FR/THD gap reduction (updated 2026-07-23). VERSION BUMPED TO 1.0.0.**
+> All work is on **`main`**.
+>
+> ## ✅✅ v1.0.0 — RELEASE-READINESS AUDIT DONE (2026-07-23, later session). VERSION 0.9.1 → 1.0.0.
+> Prompted by the user asking whether the project is ready to ship. Full audit, not a guess: clean
+> `git status`, a full `cmake --build build -j8` (every target incl. AU/VST3, zero errors/warnings),
+> **`auval -v aufx NALR LPrc` PASSES** (renders at 6 sample rates 11025–192000 Hz + block sizes,
+> parameter automation direct+ramped, MIDI, connection semantics — the real DAW-load gate, run
+> headlessly), last pushed `main` commit CI-green on macOS/Windows/Linux, installers (macOS `.pkg`,
+> Windows NSIS, Linux `.deb`) already correctly named for this project (not template placeholders),
+> 36 factory presets present. **One genuine gap found and closed**: CLAUDE.md's own build-sequence
+> step 10 ("Final sweep — all controls full range: no instability, clicks, or NaN/Inf") had never
+> been given its own dedicated test — `RevisionSwitchTest` covers revision-switching only, at fixed
+> knob values. **NEW: `tests/FullSweepTest.cpp`**, registered in ctest (35/35 green). Two phases per
+> (revision × OS factor): CORNERS (all-extreme parameter combinations, incl. both trims at their
+> ±18 dB rails, bypass, render-oversampling) held to settle on a hot two-tone signal; WALK (every pot
+> continuously swept 0→1→0 at decorrelated rates, mid_shift/bass_shift topology switches, bypass
+> toggle, and a render-oversampling flip, all mid-run) — asserts finite output and no plugin-
+> introduced click/blow-up throughout.
+> - **⚠ THE FIRST VERSION USED A FIXED THRESHOLD AND IT WAS WRONG — worth recording, since it is
+>   EXACTLY the trap this file's own note warns about** ("Output > 0 dBFS at extreme drive+volume is
+>   faithful, not a fault — the output trim manages it"). A fixed absolute click/blow-up ceiling
+>   flagged the ordinary, EXPECTED result of stacking +18 dB input trim with max DRIVE/LEVEL on a hot
+>   signal as a false failure. **Fixed by making both checks ADAPTIVE**: a slowly-decaying peak-hold
+>   envelope of the signal itself (~10 ms tau, similar order to the project's own envelope followers)
+>   is tracked per run, and a sample/step is flagged only when it is anomalously large **relative to
+>   what that same run has recently been producing** — loudness-invariant (a run pinned hot from
+>   block 0 settles into its own new-normal immediately) while still catching a genuine discontinuity
+>   or runaway. A short warmup window (64 samples) after each deliberate jump (a new corner applied,
+>   not knob automation) exempts the jump's own settle instant, mirroring how a preset recall is
+>   allowed to be audible without being a "click."
+> - **Verified to FAIL on a real defect (L-003, both ways).** Temporarily injected a ×40 gain spike
+>   at one fixed sample index in `PluginProcessor::processBlock`'s output write — the test caught it
+>   immediately (918 flagged lines, exit 1) across both quiet and loud settings. Reverted; `git diff`
+>   confirmed byte-identical to the committed state before re-verifying green (exit 0, 35/35 ctest).
+> - Runtime ~4.4 s (3 revisions × 4 OS factors × ~6 corners × 40 blocks + 300-block walk each).
 >
 > ## ✅✅ PER-REVISION LOUDNESS MATCH SHIPPED (2026-07-23, later session) — THE FIRST DELIBERATELY
 > ## UN-FAITHFUL LAYER IN THE PROJECT. `src/dsp/RevisionLevelTrim.h`. V1E and V1L AUDIO CHANGE;

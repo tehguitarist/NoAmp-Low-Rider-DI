@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(NoAmpLowRiderDI VERSION 0.9.1)   # bump VERSION to force Logic to rescan the AU after changes
+project(NoAmpLowRiderDI VERSION 1.0.0)   # bump VERSION to force Logic to rescan the AU after changes
 
 # Fallback version string for console-app targets that source PluginEditor.cpp directly (e.g.
 # StateRoundTrip, UIRenderProbe) — they don't get juce_add_plugin's generated JucePlugin_VersionString.
@@ -235,6 +235,38 @@ target_link_libraries(RevisionSwitchTest
 )
 add_test(NAME RevisionSwitchTest COMMAND RevisionSwitchTest)
 set_tests_properties(RevisionSwitchTest PROPERTIES LABELS "CI")
+
+# 10 — Final full-parameter sweep (CLAUDE.md build sequence step 10: "all controls full range: no
+# instability, clicks, or NaN/Inf"). Drives the real processor across every revision x oversampling
+# factor with every control at its extremes (CORNERS) and continuously swept through its whole range
+# on decorrelated rates (WALK), on a hot multi-tone + impulse signal, with bypass and render-
+# oversampling toggled mid-run. See tests/FullSweepTest.cpp for the full design rationale.
+juce_add_console_app(FullSweepTest PRODUCT_NAME "FullSweepTest")
+target_sources(FullSweepTest
+    PRIVATE
+        tests/FullSweepTest.cpp
+        src/PluginProcessor.cpp
+        src/PluginEditor.cpp
+        src/ui/PedalLookAndFeel.cpp
+        src/ui/PedalAssets.cpp
+)
+target_compile_definitions(FullSweepTest
+    PRIVATE
+        JUCE_USE_CURL=0
+        JUCE_WEB_BROWSER=0
+        JUCE_STANDALONE_APPLICATION=1
+)
+target_link_libraries(FullSweepTest
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        chowdsp::chowdsp_wdf
+        NoAmpAssets
+    PUBLIC
+        juce::juce_recommended_config_flags
+)
+add_test(NAME FullSweepTest COMMAND FullSweepTest)
+set_tests_properties(FullSweepTest PROPERTIES LABELS "CI")
 
 # 7b — Trim-lock acceptance gate (trim-lock-implementation.md): constructs the real editor so
 # mirrorTrim()'s slider.onValueChange wiring is live, drives input/output trim through APVTS, and
