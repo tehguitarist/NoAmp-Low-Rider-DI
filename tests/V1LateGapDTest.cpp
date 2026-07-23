@@ -13,11 +13,19 @@
 // single THD number (a single number can be matched by two errors cancelling — see the V1E D1.00
 // history).
 //
-// ⚠ THIS GATES THE DEFICIT, NOT THE TUNING. It deliberately does NOT assert the exact shipped
-// parameter values: `makeup` is unconstrained by the THD-only fit (a post-clip scalar cancels in a
-// ratio) and tau/scHz were never swept, so pinning them here would freeze placeholders and read as
-// measured values. It asserts the SPREAD improves by a margin far outside any plausible re-fit, and
-// that the improvement disappears when the layer is ablated.
+// ⚠ THIS GATES THE DEFICIT (the drive-axis THD spread), NOT the exact depth/target TUNING: it
+// asserts the spread improves by a margin far outside any plausible re-fit, and that the improvement
+// disappears when the layer is ablated — it does NOT pin depth/target to their fitted values.
+//
+// `makeup` IS gated, separately, on LEVEL (GATE 5/6). The THD-spread gates are structurally blind to
+// it — a post-clip scalar cancels out of a THD ratio — which is exactly how `makeup 0.5` once shipped
+// silently and was caught only by V1LateIntegrationTest's §1 checks (CLAUDE.md). `makeup` is a level
+// phenomenon: at the shipped makeup=1.0 the pre-clip normaliser boost is exactly undone post-clip, so
+// it is level-neutral on a quiet tone; at makeup<1 it leaks and runs hot. GATE 5 reads prepare()'s
+// shipped value (mirroring the V1LateIntegrationTest saturator gate's useShippedDefault pattern) so a
+// silent revert trips it. tau/scHz remain ungated: they were swept (analysis/v1l_gapd_tauscz_sweep.py)
+// and have sub-noise leverage on this axis, so a gate on them would pin a value the evidence cannot
+// resolve — GATE 5's invariant is depth-independent precisely so it does NOT freeze such placeholders.
 //
 // Measured in-DSP, at the model's own operating point — deliberately NOT the capture-fitted numbers,
 // because this test must not silently depend on the analysis harness or on files it cannot see.
@@ -99,6 +107,47 @@ double spreadDb(double a, double b)
     const double hi = std::max(a, b), lo = std::min(a, b);
     return 20.0 * std::log10((hi + 1e-12) / (lo + 1e-12));
 }
+
+// Fundamental (440 Hz) magnitude of the settled tail, in dB. Used by the makeup gate: `makeup`
+// is a LEVEL phenomenon (a post-clip scalar cancels out of a THD ratio, which is why the spread
+// gates above are blind to it). `makeupOverride` < 0 leaves prepare()'s shipped layer alone;
+// >= 0 re-applies the layer at the shipped depth/target/tau/scHz but with the given makeup.
+// makeupOverride == -3 means "layer OFF" (depth 0), for the level-neutrality control.
+double fundLevelDb(double drive, double amp, double makeupOverride)
+{
+    const int block = 512;
+    nalr::V1LateDSP dsp;
+    dsp.setOversamplingFactor(8);
+    dsp.prepare(kFs, block);
+    if (makeupOverride <= -2.5)
+        dsp.setClipDriveNormalisation(0.0, 2.0, 30.0, 200.0, 1.0); // layer OFF
+    else if (makeupOverride >= 0.0)
+        dsp.setClipDriveNormalisation(0.5, 2.0, 30.0, 200.0, makeupOverride);
+    dsp.setParams(drive, /*presence*/ 0.74, /*blend*/ 1.0, /*level*/ 0.35, /*bass*/ 0.55, /*treble*/ 0.50);
+    dsp.reset();
+
+    const int totalBlocks = 200;
+    std::vector<double> tail;
+    std::vector<double> buf((size_t) block, 0.0);
+    long idx = 0;
+    for (int b = 0; b < totalBlocks; ++b)
+    {
+        for (int i = 0; i < block; ++i, ++idx)
+            buf[(size_t) i] = amp * std::sin(2.0 * M_PI * kF0 * (double) idx / kFs);
+        dsp.processBlock(buf.data(), block);
+        if (b >= totalBlocks / 2)
+            tail.insert(tail.end(), buf.begin(), buf.end());
+    }
+    double re = 0.0, im = 0.0;
+    const double w = 2.0 * M_PI * kF0 / kFs;
+    for (size_t i = 0; i < tail.size(); ++i)
+    {
+        const double win = 0.5 - 0.5 * std::cos(2.0 * M_PI * (double) i / (double) (tail.size() - 1));
+        re += tail[i] * win * std::cos(w * (double) i);
+        im -= tail[i] * win * std::sin(w * (double) i);
+    }
+    return 20.0 * std::log10(std::sqrt(re * re + im * im) + 1e-20);
+}
 } // namespace
 
 int main()
@@ -147,6 +196,36 @@ int main()
     // still shrink a spread while being obviously wrong.
     check(shipped[0] > shipped[2] && ablated[0] > ablated[2],
           "THD still RISES with drive (the correction flattens, it does not invert)");
+
+    // GATE 5 — `makeup` LEVEL gate (closes the hole documented in CLAUDE.md: the THD-spread gates
+    // above are structurally blind to `makeup`, because a post-clip scalar cancels out of a THD
+    // ratio, so `makeup 0.5` once shipped silently and was caught only by V1LateIntegrationTest's §1
+    // checks). `makeup` is a LEVEL phenomenon, so gate it on level. The physical invariant: at the
+    // shipped makeup = 1.0 the pre-clip normaliser boost g_pre = (target/env)^depth is EXACTLY undone
+    // post-clip (g_pre^-1), so on a QUIET tone (env << target, clip ~linear) the layer adds no net
+    // level — it only reshapes the drive-axis THD. At makeup < 1 the boost LEAKS (g_pre^(1-makeup)),
+    // so a quiet tone comes out several dB hot. This branch reads prepare()'s shipped makeup (no
+    // override), so a silent revert to makeup 0.5 turns this measurement into GATE 6's condition and
+    // trips the check. Invariant holds for ANY depth (the boost is always fully undone at makeup=1),
+    // so it does not freeze a depth placeholder. Quiet operating point: DRIVE 0.30, amp 0.05.
+    const double quietDrive = 0.30, quietAmp = 0.05;
+    const double levelOff = fundLevelDb(quietDrive, quietAmp, -3.0); // layer OFF (depth 0)
+    const double levelShipped = fundLevelDb(quietDrive, quietAmp, -1.0); // prepare()'s shipped makeup
+    const double levelHalf = fundLevelDb(quietDrive, quietAmp, 0.5); // explicit makeup 0.5 adversary
+    std::printf("       makeup level gate (quiet 440 Hz, D%.2f a%.2f):"
+                " off=%.2f dB  shipped=%.2f dB  makeup0.5=%.2f dB\n",
+                quietDrive, quietAmp, levelOff, levelShipped, levelHalf);
+
+    std::snprintf(buf, sizeof buf, "(shipped - off = %.2f dB, want ~0)", levelShipped - levelOff);
+    check(std::abs(levelShipped - levelOff) < 0.75,
+          "shipped makeup=1.0 is LEVEL-NEUTRAL on a quiet signal (boost fully undone post-clip)", buf);
+
+    // GATE 6 — CONTROL / teeth: an explicit makeup=0.5 is NOT level-neutral — it leaks a large boost.
+    // This proves GATE 5 is a live discriminator (a makeup change genuinely moves the quiet-signal
+    // level) rather than a tautology, and quantifies what a silent revert to 0.5 would do to GATE 5.
+    std::snprintf(buf, sizeof buf, "(makeup0.5 - off = %.2f dB)", levelHalf - levelOff);
+    check(levelHalf - levelOff > 3.0,
+          "CONTROL: makeup=0.5 leaks a large boost (proves GATE 5 can fail on a silent revert)", buf);
 
     std::printf("%s\n", failures == 0 ? "ALL GATES PASSED" : "GATES FAILED");
     return failures == 0 ? 0 : 1;

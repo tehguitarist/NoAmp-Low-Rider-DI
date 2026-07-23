@@ -204,11 +204,12 @@ without images.
 >
 > ## ✅ START HERE — CONSOLIDATED ACTION ITEMS (2026-07-23, end of session)
 >
-> **Only TWO things are actionable. Everything else below is best-effort with no known lever —
+> **Both of the two actionable items below are now DONE (2026-07-23, later session — report
+> regenerated; gate hole closed). Everything else in this file is best-effort with no known lever —
 > do not chase those without a genuinely new idea.** This list was written at a clean stopping point
 > after the V1L 1613–3225 Hz band was closed; the rest of this file is history and reference.
 >
-> ### 🔴 1. REGENERATE `analysis/reports/` — DO THIS FIRST, BEFORE TRUSTING ANY REPORT-BASED NUMBER
+> ### ✅ 1. REGENERATE `analysis/reports/` — DONE 2026-07-23 (later session)
 > `analysis/reports/comprehensive_data.json` was generated **2026-07-21 02:57** and **EIGHT DSP
 > commits have shipped since**: `HFEvenRestore` (all 3 revs), `WetTopOctaveRestore`, the
 > **`kInputRef[V1E]` 7.0 → 6.0 re-fit**, the **V1L saturator re-fit** (0.40/0.50 → 0.30/0.70),
@@ -224,15 +225,25 @@ without images.
 > `gapd_fit_harness` render path) over anything that reads the JSON, and treat any report-derived
 > figure written before 2026-07-23 as suspect.
 >
-> ### 🟡 2. GATE HOLE — `V1LateGapDTest` CANNOT SEE `makeup` (small, buildable, real)
-> It hardcodes `1.0` in its own `setClipDriveNormalisation` call (~line 74) instead of reading
-> `prepare()`'s shipped default, and its header says it gates the deficit, not the tuning. **A silent
-> change to `makeup` would NOT fail it** — proven this session: shipping `makeup 0.5` left
-> `V1LateGapDTest` green and was caught only by `V1LateIntegrationTest`'s §1 checks (six of them).
-> That accident is load-bearing, so it should be deliberate. Same class as the saturator hole that was
-> closed 2026-07-22 with a synthetic-tone probe. Either read `prepare()`'s default (mirroring the
-> `V1LateIntegrationTest` saturator gate's `useShippedDefault` pattern) or assert the §1 low-bump
-> consequence directly. **Verify it FAILS on a silent revert (L-003, both ways).**
+> ### ✅ 2. GATE HOLE — `V1LateGapDTest` CANNOT SEE `makeup` — CLOSED 2026-07-23 (later session)
+> Closed the way the saturator hole was closed 2026-07-22: a synthetic-tone probe, not a THD-spread
+> assertion (the existing 4 gates measure THD SPREAD across drive, which is structurally blind to
+> `makeup` — a post-clip scalar cancels out of a THD ratio; that's exactly how `makeup 0.5` once
+> shipped silently and was caught only by `V1LateIntegrationTest`'s §1 checks, six of them).
+> **`makeup` is a LEVEL phenomenon, so it's gated on level, not THD.** The physical invariant: at the
+> shipped `makeup=1.0` the pre-clip normaliser's boost `g_pre=(target/env)^depth` is EXACTLY undone
+> post-clip, so on a QUIET tone (env ≪ target) the layer is level-neutral; at `makeup<1` the boost
+> LEAKS and the quiet tone runs hot. Two new gates in `tests/V1LateGapDTest.cpp` (GATE 5/6), reading
+> **`prepare()`'s shipped value** (mirrors the `V1LateIntegrationTest` saturator gate's
+> `useShippedDefault` pattern) at DRIVE 0.30 / amp 0.05: shipped reads **`shipped − off = −0.01 dB`**
+> (level-neutral, PASS); the CONTROL (explicit `makeup=0.5`) reads **`+7.30 dB`** (leaks, proving the
+> gate is a live discriminator, not a tautology). **Verified to FAIL on a silent revert (L-003, both
+> ways):** reverting `prepare()`'s `makeup` 1.0→0.5 makes GATE 5 the SOLE failure — all 4 THD-spread
+> gates stay green (confirming they really are blind to it), exactly reproducing the original hole.
+> Reverted back to 1.0 after verification; `V1LateDSP.h` unchanged. 34/34 ctest green. `tau`/`scHz`
+> remain deliberately UNGATED (swept 2026-07-22, sub-noise-floor leverage on this axis — a gate on
+> them would pin a value the evidence can't resolve; GATE 5's invariant is depth-independent by
+> design so it doesn't freeze such a placeholder either).
 >
 > ### 🟡 3. `V2-2` — PUNCH LIST CLOSED OUT 2026-07-23 (later session); STILL DO NOT FIT ANYTHING TO IT
 > Both queued follow-ups from the earlier pass are now done. Full detail in the "✅ THE `V2-2` SET IS
