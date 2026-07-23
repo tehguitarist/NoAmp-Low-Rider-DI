@@ -4,6 +4,8 @@ A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, JUCE 8) model
 three reverse-engineered generations of the Tech 21 SansAmp Bass Driver DI (BDDI).
 As far as I'm aware this is the first BDDI plugin to accurately model all three revisions, each of which have it's huge proponents. As far as I could find, it's also the only accurate BDDI plugin that still works on modern PCs outside captures (excepting the Honeycomb plugin - which is by it's own admission BDDI inspired).
 
+That said. Have any of these pedals yourself? I'd love to make this plugin more accurate but need help to do that. If you have the pedals, and have had experience reamping before, I'd love to get some specific captures of your pedal to help improve this even more. I've used NAM profiles that are available, but they aren't as granular as I'd like to get that last 5% of accuracy like the other plugins I have done.
+
 ![image](image.png)
 
 **[⬇ Download the latest release](https://github.com/tehguitarist/NoAmp-Low-Rider-DI/releases/latest)** 
