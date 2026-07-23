@@ -82,12 +82,23 @@ def render_nominal_linear(binpath, parsed, orig, cap_al, os_factor, seg):
 
 
 def sweep_knob(binpath, parsed, knob, orig, cap_al, os_factor, span, steps, seg):
-    """Local search around the labelled value. Returns (best_null, best_offset, nominal_null)."""
+    """Local search around the labelled value. Returns (best_null, best_offset, nominal_null, edge).
+
+    ⚠ BOUNDARY GUARD (ported from v1l_blend_knob_probe.py): an optimum sitting on the swept EDGE
+    is a non-result -- the curve is still descending when the range runs out, so the true optimum
+    is unknown and the reported "best" is an artefact of where the sweep stopped, not a
+    measurement (same trap as the old one-sided Vzt 0.20-0.60 scan). Every V1L capture in the
+    original span=0.05 run of this script hit exactly this trap. Flag it via `edge` rather than
+    silently reporting the boundary value as if it were a real optimum.
+    """
     nom = parsed.get(knob)
     if nom is None:
-        return None
+        return None, None, None, False
     offs = np.linspace(-span, span, steps)
+    lo_off, hi_off = offs.min(), offs.max()
+    lo_v, hi_v = nom + lo_off, nom + hi_off
     best, best_off, nominal = None, 0.0, None
+    tested_offs = []
     for o in offs:
         v = nom + o
         if not (0.0 <= v <= 1.0):
@@ -95,6 +106,7 @@ def sweep_knob(binpath, parsed, knob, orig, cap_al, os_factor, span, steps, seg)
         nd = render_null(binpath, parsed, knob, v, orig, cap_al, os_factor, seg)
         if nd is None:
             continue
+        tested_offs.append(o)
         if abs(o) < 1e-9:
             nominal = nd
         # null_depth() is dB re reference RMS -- MORE NEGATIVE = deeper/better null. "best" must
@@ -104,7 +116,15 @@ def sweep_knob(binpath, parsed, knob, orig, cap_al, os_factor, span, steps, seg)
         # be shallower than the nominal null, and the buggy version routinely was).
         if best is None or nd < best:
             best, best_off = nd, o
-    return best, best_off, nominal
+    edge = False
+    if best is not None and tested_offs:
+        tlo, thi = min(tested_offs), max(tested_offs)
+        # Edge only counts if the search window itself wasn't already clipped by [0,1] on that
+        # side -- a knob pinned at its own rail (e.g. drive=0) can't be widened further and isn't
+        # a "widen your span" situation.
+        edge = ((abs(best_off - tlo) < 1e-9 and lo_v > 0.0) or
+                (abs(best_off - thi) < 1e-9 and hi_v < 1.0))
+    return best, best_off, nominal, edge
 
 
 def main():
@@ -148,23 +168,25 @@ def main():
         for k in ("blend", "drive"):
             row[k] = parsed.get(k)
 
-        best_bl, off_bl, nom_bl = sweep_knob(a.bin, parsed, "blend", orig, cap_al, a.os, a.span,
-                                              a.steps, a.seg)
-        best_dr, off_dr, nom_dr = sweep_knob(a.bin, parsed, "drive", orig, cap_al, a.os, a.span,
-                                              a.steps, a.seg)
+        best_bl, off_bl, nom_bl, edge_bl = sweep_knob(a.bin, parsed, "blend", orig, cap_al, a.os,
+                                                       a.span, a.steps, a.seg)
+        best_dr, off_dr, nom_dr, edge_dr = sweep_knob(a.bin, parsed, "drive", orig, cap_al, a.os,
+                                                       a.span, a.steps, a.seg)
         nom_null2, lin_removed = render_nominal_linear(a.bin, parsed, orig, cap_al, a.os, a.seg)
 
         best_knob = min([v for v in (best_bl, best_dr) if v is not None], default=None)  # most negative = deepest
         row.update(nom_null=nom_bl if nom_bl is not None else (nom_dr if nom_dr is not None else nom_null2),
-                   best_bl=best_bl, off_bl=off_bl,
-                   best_dr=best_dr, off_dr=off_dr,
+                   best_bl=best_bl, off_bl=off_bl, edge_bl=edge_bl,
+                   best_dr=best_dr, off_dr=off_dr, edge_dr=edge_dr,
                    best_knob=best_knob,
                    linear_removed=lin_removed)
         rows.append(row)
 
-        bl_str = (f"nom={nom_bl:6.1f}  best={best_bl:6.1f} @ blend{off_bl:+.3f}"
+        bl_edge_tag = "  *** AT SWEEP EDGE — NOT AN OPTIMUM, widen --span ***" if edge_bl else ""
+        dr_edge_tag = "  *** AT SWEEP EDGE — NOT AN OPTIMUM, widen --span ***" if edge_dr else ""
+        bl_str = (f"nom={nom_bl:6.1f}  best={best_bl:6.1f} @ blend{off_bl:+.3f}{bl_edge_tag}"
                   if best_bl is not None else "  n/a (no blend tag)")
-        dr_str = (f"best={best_dr:6.1f} @ drive{off_dr:+.3f}"
+        dr_str = (f"best={best_dr:6.1f} @ drive{off_dr:+.3f}{dr_edge_tag}"
                   if best_dr is not None else "n/a (no drive tag)")
         lr_flag = " <-- DEEPER than best knob-tolerant null" if (
             lin_removed is not None and best_knob is not None and lin_removed < best_knob - 0.05) else ""

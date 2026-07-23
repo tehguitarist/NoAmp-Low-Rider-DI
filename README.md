@@ -6,6 +6,8 @@ As far as I'm aware this is the first BDDI plugin to accurately model all three 
 
 ![image](image.png)
 
+**[⬇ Download the latest release](https://github.com/tehguitarist/NoAmp-Low-Rider-DI/releases/latest)** 
+
 ## What it is
 
 Rather than model one fixed circuit, this plugin lets you pick **which era of the pedal** you're
