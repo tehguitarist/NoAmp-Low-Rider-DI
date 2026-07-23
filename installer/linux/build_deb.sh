@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-VST3_SRC="$ARTEFACTS/VST3/NoAmpLowRiderDI.vst3"
+VST3_SRC="$ARTEFACTS/VST3/NoAmp Low Rider DI.vst3"
 [ -d "$VST3_SRC" ] || { echo "error: $VST3_SRC not found — build NoAmpLowRiderDI_VST3 first" >&2; exit 1; }
 
 ROOT="$WORK/pedal"

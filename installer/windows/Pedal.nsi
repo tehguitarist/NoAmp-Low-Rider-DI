@@ -7,8 +7,9 @@
 ; Build with (from repo root, after building NoAmpLowRiderDI_VST3):
 ;   makensis /DVERSION=0.1.0 /DARTEFACTS_DIR=build\NoAmpLowRiderDI_artefacts\Release\VST3 installer\windows\Pedal.nsi
 ;
-; ARTEFACTS_DIR should point at the directory CONTAINING NoAmpLowRiderDI.vst3 (i.e. the VST3 release
-; output folder), not NoAmpLowRiderDI.vst3 itself.
+; ARTEFACTS_DIR should point at the directory CONTAINING "NoAmp Low Rider DI.vst3" (i.e. the VST3
+; release output folder), not the bundle itself. Note the bundle is named after PRODUCT_NAME
+; ("NoAmp Low Rider DI", with spaces), not the CMake target name (NoAmpLowRiderDI).
 
 !ifndef VERSION
   !define VERSION "0.0.0"
@@ -29,15 +30,15 @@ UninstPage uninstConfirm
 UninstPage instfiles
 
 Section "NoAmpLowRiderDI VST3 Plugin" SecVST3
-    SetOutPath "$INSTDIR\NoAmpLowRiderDI.vst3"
-    File /r "${ARTEFACTS_DIR}\NoAmpLowRiderDI.vst3\*.*"
+    SetOutPath "$INSTDIR\NoAmp Low Rider DI.vst3"
+    File /r "${ARTEFACTS_DIR}\NoAmp Low Rider DI.vst3\*.*"
 
-    WriteUninstaller "$INSTDIR\NoAmpLowRiderDI.vst3\Uninstall-NoAmpLowRiderDI.exe"
+    WriteUninstaller "$INSTDIR\NoAmp Low Rider DI.vst3\Uninstall-NoAmpLowRiderDI.exe"
 
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NoAmpLowRiderDI" \
         "DisplayName" "NoAmpLowRiderDI VST3"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NoAmpLowRiderDI" \
-        "UninstallString" "$INSTDIR\NoAmpLowRiderDI.vst3\Uninstall-NoAmpLowRiderDI.exe"
+        "UninstallString" "$INSTDIR\NoAmp Low Rider DI.vst3\Uninstall-NoAmpLowRiderDI.exe"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NoAmpLowRiderDI" \
         "DisplayVersion" "${VERSION}"
     WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NoAmpLowRiderDI" \
@@ -45,6 +46,6 @@ Section "NoAmpLowRiderDI VST3 Plugin" SecVST3
 SectionEnd
 
 Section "Uninstall"
-    RMDir /r "$INSTDIR\NoAmpLowRiderDI.vst3"
+    RMDir /r "$INSTDIR\NoAmp Low Rider DI.vst3"
     DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NoAmpLowRiderDI"
 SectionEnd

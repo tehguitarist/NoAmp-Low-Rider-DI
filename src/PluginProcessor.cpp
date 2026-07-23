@@ -49,7 +49,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcesso
                                                     juce::NormalisableRange<float>{-kTrimRangeDb, kTrimRangeDb}, 0.0f));
 
     params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idOversampling, 1}, "Oversampling",
-                                                                  juce::StringArray{"1x", "2x", "4x", "8x"}, 2));
+                                                                  juce::StringArray{"1x", "2x", "4x", "8x"}, 1));
     params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID{idRenderOversampling, 1},
                                                                   "Render Oversampling",
                                                                   juce::StringArray{"1x", "2x", "4x", "8x"}, 3));

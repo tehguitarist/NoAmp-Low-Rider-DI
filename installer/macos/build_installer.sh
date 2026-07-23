@@ -27,8 +27,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-AU_SRC="$ARTEFACTS/AU/NoAmpLowRiderDI.component"
-VST3_SRC="$ARTEFACTS/VST3/NoAmpLowRiderDI.vst3"
+AU_SRC="$ARTEFACTS/AU/NoAmp Low Rider DI.component"
+VST3_SRC="$ARTEFACTS/VST3/NoAmp Low Rider DI.vst3"
 
 [ -d "$AU_SRC" ] || { echo "error: $AU_SRC not found — build NoAmpLowRiderDI_AU first" >&2; exit 1; }
 [ -d "$VST3_SRC" ] || { echo "error: $VST3_SRC not found — build NoAmpLowRiderDI_VST3 first" >&2; exit 1; }
