@@ -231,6 +231,12 @@ changes earns its way in — V1L keeps its Phase-4 `Cj=220pF`/`m=0.0` unchanged.
    point = MEMORY (candidate: the CH34-9 self-bias node, 100k/220k on 47 µF, drooping under
    asymmetric draw — netlists.md L4 [○]). V1L's LF even-harmonic deficit joins the proven-memory
    class (Gap I, V1L midband compression): best-effort, do not re-tune the clip element for it.
+   **Bias-droop paper test done** (`v1l_biasdroop_feasibility.py`, user-directed): MARGINAL — the
+   offset mechanism (unique in this topology: window ≡ input-referred by substitution) is the
+   first candidate with the harmonic authority to produce the rising slope (~0.73 dB rms ceiling,
+   odds clean), BUT needs 0.2→1.5 V of droop at the estimated clip amplitudes (pins the physical
+   ceiling) and would be fit forever against one blend-mislabelled capture on a FINAL matrix.
+   **Do not build**; recorded as authority-yes/magnitude-marginal/evidence-starved.
 5. **Nothing shipped.** No parameter change earns the six-guardrail bar. Full `ctest` (35/35) green
    before and after; only `analysis/cj_scan.py` (now revision-parametric),
    `analysis/knob_tolerant_null.py` (boundary guard), and the two new report-only scan scripts

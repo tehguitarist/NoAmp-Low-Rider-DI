@@ -108,6 +108,31 @@
 >     compression deficit** — best-effort, no lever without a genuinely new (memory-carrying)
 >     idea, and any future attempt must model the bias node, not tune the clip element.
 >
+> **6. BIAS-DROOP PAPER TEST (same day, user-directed): `v1l_biasdroop_feasibility.py` — verdict
+> MARGINAL; recommendation DO NOT BUILD.** No renders, no model changes (the
+> `gapd_memoryless_impossibility.py` style, L-010 discipline). Solves the shipped zener device law
+> (ZenerPairT constants) for a sine with the zener centre offset by a level-tracking δ, and scores
+> the E2-free observable (per-level H2-slope differences, which survive the downstream EQ chain;
+> 400 Hz anchor excluded — its H2 lands in the 800 Hz notch, Gap G). Findings:
+>   - **Structural result worth keeping: in this feedback topology a "window" offset and an
+>     "input-referred" offset are MATHEMATICALLY IDENTICAL** (substitution W = V − δ; confirmed
+>     bit-identical numerically) — there is only ONE offset mechanism available in the stage, so
+>     the test covers the whole class, not one variant.
+>   - **The mechanism HAS the harmonic authority the static class lacks**: with δ free per level
+>     (monotone, ≤1.5 V) the pedal's rising H2 slopes are reachable to ~0.73 dB rms with odd
+>     harmonics undisturbed (<1 dB) — the first candidate all session that is not structurally
+>     dead. The harness's own static-δ control correctly reproduces the falling-slope class
+>     refutation, so it discriminates.
+>   - **But the required magnitudes are only marginally physical**: at the estimated clip-node
+>     amplitude (~5–8 V would-be at −18 dBFS) the needed droop runs 0.2→1.5 V and PINS at the
+>     1.5 V ceiling (> half the bias node's 2.6 V headroom). A cheap 5/10/25 mV trajectory exists
+>     only at clip-onset amplitudes (~3 V), below the estimate.
+>   - **And the evidence wall is permanent**: the trend being chased lives in ONE capture (V1030)
+>     whose blend label is independently known wrong, and the capture matrix is FINAL — a
+>     bias-droop model would be fit forever against n=1 suspect data (guardrail #6).
+>   Recorded as: mechanism has authority / marginal magnitude / evidence-starved — the sharpest
+>   statement of the lead, in case anything ever changes. Nothing built.
+>
 > ## ✅✅ v1.0.0 — RELEASE-READINESS AUDIT DONE (2026-07-23, later session). VERSION 0.9.1 → 1.0.0.
 > Prompted by the user asking whether the project is ready to ship. Full audit, not a guess: clean
 > `git status`, a full `cmake --build build -j8` (every target incl. AU/VST3, zero errors/warnings),
