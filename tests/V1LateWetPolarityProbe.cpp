@@ -43,7 +43,7 @@
 using namespace nalr;
 
 static constexpr double kFs = 48000.0;
-static constexpr double kProbeHz = 30.0; // below the bridged-T, S-K corners and the C10 159 Hz HP
+[[maybe_unused]] static constexpr double kProbeHz = 30.0; // below the bridged-T, S-K corners and the C10 159 Hz HP
 static constexpr double kAmp = 1e-3;     // tiny: keeps every nonlinearity out of this measurement
 
 static int failures = 0;

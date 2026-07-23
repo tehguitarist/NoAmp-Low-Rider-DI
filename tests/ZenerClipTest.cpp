@@ -166,7 +166,11 @@ int main()
         }
     }
     std::printf("      worst residual %.2e @ x=%.2f\n", worstRes, worstX);
-    check(worstRes < 1e-10, "omega residual < 1e-10 across x in [-30,30]");
+    // 2-Halley spec (2026-07-23 CPU pass, AccurateOmega.h): the deliberate 2-step solve leaves a
+    // ~1e-4 worst-case residual near x=1 (3 steps reached ~1e-13 but cost ~27% of the clipper for a
+    // -123 dB waveform change). Gate at 5e-4 — still >1000x tighter than omega4's floor — and let
+    // the DC-transfer checks below prove the solve accuracy the circuit actually sees.
+    check(worstRes < 5e-4, "omega residual < 5e-4 across x in [-30,30] (2-Halley spec)");
 
     // ------------------------------------------------------------ 2. DC transfer vs exact reference
     const double Rin = 10.0e3, Rf = 220.0e3, Cj = 150.0e-12;
@@ -191,6 +195,9 @@ int main()
     std::printf("      worst rel err: below knee %.2e, through/above %.2e\n", worstBelow, worstThrough);
     check(worstBelow < 0.01, "below-knee matches reference within 1% (= ideal -Rf/Rin gain)");
     check(worstThrough < 0.05, "through/above-knee matches reference within 5%");
+    // Change-1 gate (hq-eco plan): 2-Halley must stay WELL within the spec above, not just inside it
+    // (3-step measured 1.4e-5 / 1e-7; a 2-step regression would surface here long before 1%/5%).
+    check(worstBelow < 1e-3 && worstThrough < 1e-3, "2-Halley DC transfer within 0.1% of exact-Newton solve");
 
     // linear-gain spot check at tiny signal
     const double gLin = wdfDC(clip, 1e-3) / -1e-3;

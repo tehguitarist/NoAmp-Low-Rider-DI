@@ -100,6 +100,10 @@ private:
     juce::ComboBox osRealtimeBox, osRenderBox;
     juce::TextButton scaleButton{"100%"};
     std::unique_ptr<juce::ComboBoxParameterAttachment> osRealtimeAttach, osRenderAttach;
+    // HQ/Eco toggle (dsp.md "HQ / Eco mode": quality control, lives with the OS selectors).
+    juce::TextButton hqButton{"HQ"};
+    std::unique_ptr<juce::ButtonParameterAttachment> hqAttach;
+    juce::TooltipWindow tooltipWindow{this}; // hover tooltips (currently just the HQ button's)
     juce::ApplicationProperties appProps;
 
     // ── Bypass + LED (BYPASS caption is code-drawn; ACTIVE is baked into the texture) ──────────

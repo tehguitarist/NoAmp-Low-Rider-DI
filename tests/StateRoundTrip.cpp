@@ -39,6 +39,7 @@ int main()
         {NoAmpLowRiderDIAudioProcessor::idOversampling, 1.0f},       // "8x"
         {NoAmpLowRiderDIAudioProcessor::idRenderOversampling, 0.0f}, // "1x"
         {NoAmpLowRiderDIAudioProcessor::idBypass, 1.0f},
+        {NoAmpLowRiderDIAudioProcessor::idHQ, 0.0f}, // Eco (non-default; default is HQ on)
     };
 
     NoAmpLowRiderDIAudioProcessor proc1;

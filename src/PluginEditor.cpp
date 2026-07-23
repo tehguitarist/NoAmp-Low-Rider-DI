@@ -274,6 +274,14 @@ NoAmpLowRiderDIAudioProcessorEditor::NoAmpLowRiderDIAudioProcessorEditor(NoAmpLo
     osRenderAttach = std::make_unique<juce::ComboBoxParameterAttachment>(
         *apvts.getParameter(Proc::idRenderOversampling), osRenderBox);
 
+    // HQ/Eco toggle — with the OS selectors per ui.md (quality control): lit on / dim off, same
+    // segmented style as the LOCK toggle, immediately after the RENDER box.
+    hqButton.setComponentID("os");
+    hqButton.setClickingTogglesState(true);
+    hqButton.setTooltip("High-quality drive solver. Off = Eco: lighter CPU, subtly coarser at high drive.");
+    addAndMakeVisible(hqButton);
+    hqAttach = std::make_unique<juce::ButtonParameterAttachment>(*apvts.getParameter(Proc::idHQ), hqButton);
+
     // JucePlugin_VersionString is only defined for the real plugin target (juce_add_plugin
     // generates it); console-app test targets that source this file directly fall back to the
     // project version passed in via NALR_VERSION_STRING (CMakeLists.txt).
@@ -497,6 +505,9 @@ void NoAmpLowRiderDIAudioProcessorEditor::resized()
         osRenderLabel.setBounds(area.removeFromLeft(40.0f * sc).toNearestInt());
         area.removeFromLeft(5.0f * sc);
         osRenderBox.setBounds(area.removeFromLeft(36.0f * sc).reduced(0.0f, boxVPad).toNearestInt());
+        area.removeFromLeft(12.0f * sc);
+        // HQ toggle sits immediately after the RENDER box (ui.md "HQ / Eco mode" placement).
+        hqButton.setBounds(area.removeFromLeft(30.0f * sc).reduced(0.0f, boxVPad).toNearestInt());
         area.removeFromLeft(12.0f * sc);
         trimLockLabel.setBounds(area.removeFromLeft(24.0f * sc).toNearestInt());
         area.removeFromLeft(5.0f * sc);

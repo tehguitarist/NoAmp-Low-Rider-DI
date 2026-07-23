@@ -192,7 +192,7 @@ int main()
     std::printf("FeatureProfile: CPU cost + accuracy delta per performance-affecting feature\n\n");
 
     // ---------------------------------------------------------------------------------------------
-    std::printf("Feature 1: zener DRIVE clip omega provider (AccurateOmega vs chowdsp omega4)\n");
+    std::printf("Feature 1: zener DRIVE clip omega provider (2-Halley HQ default vs omega4 Eco)\n");
     {
         const int nSamples = 2'000'000;
         const double msAccurate = timeZenerClipper<nalr::AccurateOmega>(nSamples);
@@ -220,20 +220,48 @@ int main()
             check(std::isfinite(thdAccurate) && std::isfinite(thdOmega4), "zener THD measurements finite");
         }
 
-        // A lever is "real" only if omega4's ABSOLUTE floor climbs to an audible/problematic level
-        // (dsp.md's generic claim is ~-35 dB) -- a dB GAP between two already-inaudible floors (e.g.
-        // -146 vs -139 dB) is not material even though it's nonzero. Here omega4 never exceeds the
-        // level AccurateOmega itself reaches from the zener's own sinh() curvature (both hit -78.9 dB
-        // at the largest tested amplitude) -- i.e. omega4 adds NO extra audible floor for this stage's
-        // actual (Is, Vt, Rin) operating range, contrary to the generic per-element expectation.
-        const bool realLever = cpuRatio > 1.15 && worstOmega4FloorDb > -60.0;
-        std::printf("  -> %s: CPU delta is %s (%.2fx) but omega4's floor never exceeds %.1f dB here --\n",
-                    realLever ? "REAL LEVER" : "NOT a real lever", cpuRatio > 1.15 ? "material" : "small", cpuRatio,
+        // DECISION MADE (2026-07-23, hq-eco plan): the toggle SHIPPED, HQ default on. The small-signal
+        // sweep above (<= 0.05 V in, barely onto the knee) shows omega4 adding no extra floor -- the
+        // original "NOT a real lever" read -- but pushing into the HARD-CLIP regime (0.5-1.5 V in)
+        // shows omega4 deviating ~-42 dB (~0.75% RMS) from the reference waveform, while being ~2.65x
+        // cheaper on the clipper. So omega4 IS a genuine Eco lever there, and HQ-on now runs the
+        // 2-Halley AccurateOmega (itself -123 dB from the old 3-step -- indistinguishable, 27% cheaper).
+        std::printf("  -> DECISION MADE: HQ/Eco toggle shipped, HQ (2-Halley AccurateOmega) default on.\n");
+        std::printf("     CPU ratio 2-Halley vs omega4 Eco: %.2fx. Small-signal floors agree (worst omega4\n", cpuRatio);
+        std::printf("     %.1f dB) -- the Eco lever's real cost only appears at hard clip (~-42 dB deviation,\n",
                     worstOmega4FloorDb);
-        std::printf("     %s\n", realLever
-                                     ? "an HQ toggle would be worth adding."
-                                     : "well below any audible threshold, so an HQ toggle here buys no real accuracy.");
+        std::printf("     measured in the 2026-07-23 CPU pass; see the bit-identity guard below).\n");
         check(std::isfinite(msAccurate) && std::isfinite(msOmega4), "zener CPU timings finite");
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // HQ-off == omega4 bit-identity guard (dsp.md "HQ / Eco mode": "Add a FeatureProfile guard
+    // asserting HQ-off is bit-identical to the omega4 chain, so the button can't silently become a
+    // no-op"). The PRODUCTION-typed clipper with the runtime Eco branch engaged must produce the
+    // exact same samples as an omega4-templated clipper -- if they diverge, the Eco branch isn't
+    // actually reaching omega4.
+    std::printf("\nHQ-off bit-identity guard (runtime Eco branch == compile-time omega4 chain)\n");
+    {
+        nalr::ZenerFeedbackClipper<nalr::AccurateOmega> eco; // production type, runtime Eco
+        nalr::ZenerFeedbackClipper<chowdsp::Omega::Omega> o4; // omega4 via template, HQ path
+        eco.setParams(10.0e3, 220.0e3, 220.0e-12);
+        o4.setParams(10.0e3, 220.0e3, 220.0e-12);
+        eco.prepare(48000.0);
+        o4.prepare(48000.0);
+        eco.setHighQuality(false); // Eco: runtime branch to omega4
+        o4.setHighQuality(true);   // HQ: template provider IS omega4
+
+        double maxAbsDiff = 0.0;
+        const int N = 1 << 15;
+        for (int n = 0; n < N; ++n)
+        {
+            // Drive well into hard clip (1.5 V in ~ 33 V at the zener before clamping) -- the regime
+            // where the two solvers differ most, so any branch-plumbing fault shows up loudest.
+            const double x = 1.5 * std::sin(2.0 * kPi * 997.0 * (double) n / 48000.0);
+            maxAbsDiff = std::max(maxAbsDiff, std::abs(eco.process(x) - o4.process(x)));
+        }
+        std::printf("  max |eco - omega4-templated| over %d driven samples: %.3e\n", N, maxAbsDiff);
+        check(maxAbsDiff == 0.0, "HQ-off is bit-identical to the omega4 chain (Eco branch reaches omega4)");
     }
 
     // ---------------------------------------------------------------------------------------------

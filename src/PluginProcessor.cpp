@@ -62,6 +62,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout NoAmpLowRiderDIAudioProcesso
     // last so it doesn't shift existing sessions' automation indices.
     params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{idTrimLock, 1}, "Trim Lock", true));
 
+    // HQ/Eco (dsp.md "HQ / Eco mode"): on (default) = 2-Halley AccurateOmega zener solve; off (Eco)
+    // = chowdsp omega4 (2.65x cheaper clipper, ~-42 dB deviation at hard clip only). Inert on V1
+    // Early (no zener). Appended last so existing sessions/presets (which lack `hq`) default to true.
+    params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID{idHQ, 1}, "HQ", true));
+
     return {params.begin(), params.end()};
 }
 
@@ -86,6 +91,7 @@ NoAmpLowRiderDIAudioProcessor::NoAmpLowRiderDIAudioProcessor()
     pOversampling = apvts.getRawParameterValue(idOversampling);
     pRenderOversampling = apvts.getRawParameterValue(idRenderOversampling);
     pBypass = apvts.getRawParameterValue(idBypass);
+    pHQ = apvts.getRawParameterValue(idHQ);
 }
 
 void NoAmpLowRiderDIAudioProcessor::runRevision(int revision, int channel, double* data, int numSamples) noexcept
@@ -209,19 +215,23 @@ void NoAmpLowRiderDIAudioProcessor::processBlock(juce::AudioBuffer<float>& buffe
         revisionCrossfade.setCurrentAndTargetValue(0.0f);
         revisionCrossfade.setTargetValue(1.0f);
     }
+    const bool wantHQ = pHQ->load() > 0.5f;
     for (auto& d : dspEarly)
     {
         d.setOversamplingFactor(wantFactor);
+        d.setHighQuality(wantHQ); // no-op on V1E (no zener) — kept for uniform loop bodies
         d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(), pTreble->load());
     }
     for (auto& d : dspLate)
     {
         d.setOversamplingFactor(wantFactor);
+        d.setHighQuality(wantHQ);
         d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pBass->load(), pTreble->load());
     }
     for (auto& d : dspV2)
     {
         d.setOversamplingFactor(wantFactor);
+        d.setHighQuality(wantHQ);
         d.setParams(pDrive->load(), pPresence->load(), pBlend->load(), pLevel->load(), pMid->load(),
                     pMidShift->load() < 0.5f, pBass->load(), pTreble->load(), pBassShift->load() < 0.5f);
     }

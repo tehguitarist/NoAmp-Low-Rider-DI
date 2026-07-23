@@ -184,6 +184,9 @@ public:
     // and relies on OS + AccurateOmega). On by default, matching V1E's RailClip.
     void setADAA(bool on) noexcept { railA.setADAA(on); }
 
+    // HQ/Eco toggle for the zener omega solve (ZenerPairT) — Eco swaps to chowdsp omega4.
+    void setHighQuality(bool b) noexcept { clipB.setHighQuality(b); }
+
     // drive in [0,1]. R_wa = drive*Rpot (stage-A feedback), R_wb = (1-drive)*Rpot (stage-B input),
     // complementary. At drive=0: R_wa=0 (min gain), R_wb=Rpot (max attenuation).
     void setDrive(double drive01_) noexcept

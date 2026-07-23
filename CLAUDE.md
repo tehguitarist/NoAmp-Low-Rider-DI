@@ -148,7 +148,14 @@ without images.
 > carry-forwards" section below already asks for — apply it here too, this section is what grew to
 > 3000+ lines and made every session expensive before the 2026-07-23 cleanup.
 
-**CURRENT: v1.0.0 — release-ready, all work on `main`.** Full audit passed 2026-07-23: clean build
+**CURRENT: v1.0.1 — HQ/Eco toggle + 2-Halley omega default landed (2026-07-23, later session).**
+`hq` APVTS bool (default on, appended last) → OS-strip toggle → runtime omega branch in
+`ZenerPairT` (Eco = chowdsp omega4, ~15% off V1L/V2 CPU; inert on V1E); HQ-on default is now a
+deliberate 2-step `AccurateOmega` (−123 dB from 3-step, 27% cheaper clipper). Bit-identity guard in
+`FeatureProfile`; README performance table + dsp.md "HQ / Eco mode" record the lever reversal. Full
+work order archived at `docs/history/hq-eco-implementation-plan.md`.
+
+**v1.0.0 baseline — release-ready, all work on `main`.** Full audit passed 2026-07-23: clean build
 (all targets incl. AU/VST3, zero warnings), `auval -v aufx NALR LPrc` **PASSES**, CI green on
 macOS/Windows/Linux, installers correctly named, 36 factory presets, 35/35 ctest green including a
 new adaptive-threshold `tests/FullSweepTest.cpp` (closes build-sequence step 10 — corners + knob-walk

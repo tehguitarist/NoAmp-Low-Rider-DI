@@ -142,6 +142,7 @@ public:
 
     void setOversamplingFactor(int factor) noexcept { driveRegion.setOversamplingFactor(factor); }
     void setADAA(bool on) noexcept { driveRegion.setADAA(on); }
+    void setHighQuality(bool) noexcept {} // V1 Early has no zener; HQ is inert here (uniform API)
     void setRailKnee(double kneeVolts) noexcept { driveRegion.setRailKnee(kneeVolts); }
     void setRailVoltages(double vNeg, double vPos) noexcept { driveRegion.setRailVoltages(vNeg, vPos); }
     void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }

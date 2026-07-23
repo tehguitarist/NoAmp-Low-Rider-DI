@@ -108,17 +108,25 @@ int main()
     }
 
     // --- V1 Late: zener DRIVE + recovery oversampled (ZenerDriveClipRecovery) --------------------
+    // HQ (default, 2-Halley AccurateOmega) and Eco (omega4 via the runtime toggle) both measured —
+    // the zener omega solve is the HQ/Eco lever, so only V1L/V2 get Eco rows (inert on V1E).
     {
         nalr::V1LateDSP dsp;
         dsp.prepare(kFs, kBlock);
         dsp.setParams(0.6, 0.5, 0.6, 0.6, 0.5, 0.5);
-        for (int os : osFactors)
+        for (bool hq : {true, false})
         {
-            dsp.setOversamplingFactor(os);
-            dsp.reset();
-            auto r = bench(dsp);
-            std::printf("| V1 Late   | %dx        | %17.1f%% | %18d |\n", os, r.cpuPercent, dsp.getLatencySamples());
-            check(r.finite, "V1 Late stays finite under sustained render");
+            dsp.setHighQuality(hq);
+            for (int os : osFactors)
+            {
+                dsp.setOversamplingFactor(os);
+                dsp.reset();
+                auto r = bench(dsp);
+                std::printf("| V1 Late%s | %dx        | %17.1f%% | %18d |\n", hq ? "  " : "*", os, r.cpuPercent,
+                            dsp.getLatencySamples());
+                check(r.finite, hq ? "V1 Late (HQ) stays finite under sustained render"
+                                   : "V1 Late (Eco) stays finite under sustained render");
+            }
         }
     }
 
@@ -127,15 +135,22 @@ int main()
         nalr::V2DSP dsp;
         dsp.prepare(kFs, kBlock);
         dsp.setParams(0.6, 0.5, 0.6, 0.6, 0.5, false, 0.5, 0.5, false);
-        for (int os : osFactors)
+        for (bool hq : {true, false})
         {
-            dsp.setOversamplingFactor(os);
-            dsp.reset();
-            auto r = bench(dsp);
-            std::printf("| V2        | %dx        | %17.1f%% | %18d |\n", os, r.cpuPercent, dsp.getLatencySamples());
-            check(r.finite, "V2 stays finite under sustained render");
+            dsp.setHighQuality(hq);
+            for (int os : osFactors)
+            {
+                dsp.setOversamplingFactor(os);
+                dsp.reset();
+                auto r = bench(dsp);
+                std::printf("| V2%s      | %dx        | %17.1f%% | %18d |\n", hq ? "  " : "*", os, r.cpuPercent,
+                            dsp.getLatencySamples());
+                check(r.finite, hq ? "V2 (HQ) stays finite under sustained render"
+                                   : "V2 (Eco) stays finite under sustained render");
+            }
         }
     }
+    std::printf("\n(* = Eco / HQ-off: omega4 zener solve. V1 Early has no zener, so no Eco rows.)\n");
 
     std::printf("\nAll three revisions oversample their DRIVE nonlinearity; V1L/V2's zener solve costs more\n");
     std::printf("per factor than V1E's rail clamp (heavier per-sample Newton/omega work).\n");

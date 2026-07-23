@@ -51,18 +51,21 @@ carry the most of them.
 
 | Revision | OS factor | CPU % of realtime | Latency (samples) |
 |----------|-----------|-------------------|-------------------|
-| V1 Early | 1x        | 1.3%              | 0                 |
+| V1 Early | 1x        | 1.7%              | 0                 |
 | V1 Early | 2x        | 1.9%              | 49                |
-| V1 Early | 4x        | 2.7%              | 61                |
-| V1 Early | 8x        | 4.2%              | 65                |
-| V1 Late  | 1x        | 2.0%              | 0                 |
-| V1 Late  | 2x        | 3.6%              | 49                |
-| V1 Late  | 4x        | 6.0%              | 61                |
-| V1 Late  | 8x        | 11.0%             | 65                |
-| V2       | 1x        | 1.9%              | 0                 |
-| V2       | 2x        | 3.2%              | 49                |
-| V2       | 4x        | 5.1%              | 61                |
-| V2       | 8x        | 9.0%              | 65                |
+| V1 Early | 4x        | 2.8%              | 61                |
+| V1 Early | 8x        | 4.4%              | 65                |
+| V1 Late  | 1x        | 1.8%              | 0                 |
+| V1 Late  | 2x        | 3.2%              | 49                |
+| V1 Late  | 4x        | 5.4%              | 61                |
+| V1 Late  | 8x        | 10.0%             | 65                |
+| V2       | 1x        | 1.8%              | 0                 |
+| V2       | 2x        | 2.9%              | 49                |
+| V2       | 4x        | 4.6%              | 61                |
+| V2       | 8x        | 8.0%              | 65                |
+
+With **Eco** (HQ off — see below), V1 Late drops to 1.7/2.9/4.8/8.5% and V2 to 1.6/2.5/3.9/6.7%
+across the same factors; V1 Early is unaffected (no zener, HQ is inert there).
 
 All three revisions oversample their DRIVE nonlinearity. V1 Late / V2 cost more per factor than
 V1 Early — their zener clip is a per-sample Newton/omega solve, heavier than V1 Early's hard rail
@@ -70,16 +73,22 @@ clamp, and they run more of the wet-path calibration layers above. `OSFidelity` 
 oversampling cuts zener aliasing by ~43 dB from 1× to 8×. Latency is unchanged from Phase 9 — none
 of the added layers sit inside the oversampled region or add their own delay.
 
-**No HQ toggle.** `FeatureProfile` A/B'd the two candidate CPU/accuracy levers per `dsp.md`'s
-"HQ / Eco mode" guidance and found neither justifies one:
+**HQ/Eco toggle (added 2026-07-23, v1.0.1).** The original `FeatureProfile` read ("omega4 is
+accuracy-equivalent, no toggle needed") was measured only up to the zener knee; re-measuring into
+the hard-clip regime showed chowdsp's `omega4` deviating ~−42 dB (~0.75% RMS) from the accurate
+solve while cutting the clipper's CPU ~2×. So the `HQ` button (in the OS strip, default **on**)
+now selects:
 
-- **Zener-clip omega solver** (`AccurateOmega` vs chowdsp's `omega4`): `AccurateOmega` costs ~2.7x
-  the CPU, but omega4's distortion floor never exceeds the level the zener's own physical curvature
-  already produces at any realistic drive — omega4 buys back CPU with no perceptible accuracy cost
-  for this stage's specific operating range. Kept `AccurateOmega` as the shipping default (already
-  near-negligible in absolute per-sample terms).
-- **Rail-clip ADAA** (V1 Early): ~7.6 dB less 1x aliasing for ~3.4 ns/sample extra — a free win,
-  left always-on.
+- **HQ on (default)**: `AccurateOmega`, now deliberately 2 Halley steps — the third step cost ~27%
+  of the clipper for a −123 dB waveform change (indistinguishable), so 2-Halley is the new default
+  and is itself slightly cheaper than the previous release (see table above).
+- **HQ off (Eco)**: swaps the zener omega solve to `omega4` — lighter CPU (Eco rows above), subtly
+  coarser only at high drive. Inert on V1 Early (its rail clip has no omega solve).
+- **Rail-clip ADAA** (V1 Early): ~7.6 dB less 1x aliasing for ~zero cost — a free win, always-on,
+  not part of the toggle.
+
+A `FeatureProfile` guard asserts HQ-off renders bit-identical to a compile-time omega4 chain, so
+the button can never silently become a no-op.
 
 **Low-OS top-octave restore.** The recovery cab-sim filters live inside the oversampled drive region,
 so at low oversampling their bilinear discretisation droops the top octave (a pure discretisation

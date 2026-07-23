@@ -77,6 +77,7 @@ public:
     static constexpr const char* idOversampling = "oversampling";
     static constexpr const char* idRenderOversampling = "render_oversampling";
     static constexpr const char* idBypass = "bypass";
+    static constexpr const char* idHQ = "hq";
 
 private:
     // Output gain = kOutputMakeup[revision] * dbToGain(outTrimDb) / kInputRef (calibration doc §1).
@@ -103,6 +104,7 @@ private:
     std::atomic<float>* pOversampling = nullptr;
     std::atomic<float>* pRenderOversampling = nullptr;
     std::atomic<float>* pBypass = nullptr;
+    std::atomic<float>* pHQ = nullptr;
 
     juce::SmoothedValue<float> inputGainSmoothed;
     juce::SmoothedValue<float> outputGainSmoothed;

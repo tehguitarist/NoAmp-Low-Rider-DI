@@ -215,6 +215,7 @@ public:
 
     void setOversamplingFactor(int factor) noexcept { driveRegion.setOversamplingFactor(factor); }
     void setADAA(bool on) noexcept { driveRegion.setADAA(on); }
+    void setHighQuality(bool b) noexcept { driveRegion.setHighQuality(b); } // HQ/Eco zener omega toggle
     void setRailKnee(double kneeVolts) noexcept { driveRegion.setRailKnee(kneeVolts); }
     void setRailVoltages(double vNeg, double vPos) noexcept { driveRegion.setRailVoltages(vNeg, vPos); }
     void setRecoverySaturation(double gain, double knee) noexcept { driveRegion.setRecoverySaturation(gain, knee); }

@@ -208,6 +208,16 @@ audible accuracy). Leave free/near-free features always-on (a toggle for them is
   single-digit % of a core).
 - UI: a lit-on / dim-off toggle in the OS/scale strip with a brief customer-facing tooltip; `hq`
   `AudioParameterBool` default true (see `architecture.md`).
+- **THIS PEDAL'S DECISION (2026-07-23, reversing the Phase-9 read): the toggle IS shipped.**
+  FeatureProfile's original "omega4 is accuracy-equivalent → no toggle" conclusion was measured only
+  up to 0.05 V in (barely onto the zener knee). Re-measuring into the hard-clip regime (0.5–1.5 V in)
+  shows omega4 deviating ~−42 dB (~0.75% RMS) from the accurate solve while being ~2.65× cheaper on
+  the clipper — a genuine Eco lever after all. Shipped exactly per the pattern above: HQ on (default)
+  = `AccurateOmega`, now deliberately **2 Halley steps** (the third step cost ~27% of the clipper for
+  a −123 dB waveform change — see `AccurateOmega.h`); HQ off (Eco) = omega4 via the runtime branch in
+  `ZenerPairT`. Inert on V1 Early (no zener; kept always-visible). Bit-identity guard lives in
+  `tests/FeatureProfile.cpp`. The "do NOT use the default omega" rule above still governs the
+  DEFAULT path — Eco is the labelled lower-quality opt-in, not a default.
 
 ## Oversampling
 

@@ -56,7 +56,7 @@ struct Tone
 {
     double fund, thd;
 };
-Tone tone(nalr::ZenerDriveModule& m, double amp, double f0, double fs)
+[[maybe_unused]] Tone tone(nalr::ZenerDriveModule& m, double amp, double f0, double fs)
 {
     m.reset();
     const int per = (int) std::llround(fs / f0);

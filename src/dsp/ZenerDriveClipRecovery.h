@@ -69,6 +69,7 @@ public:
     void setRailVoltages(double vNeg, double vPos) noexcept { drive.setRailVoltages(vNeg, vPos); }
     void setRailKnee(double kneeVolts) noexcept { drive.setRailKnee(kneeVolts); }
     void setADAA(bool on) noexcept { drive.setADAA(on); }
+    void setHighQuality(bool b) noexcept { drive.setHighQuality(b); } // HQ/Eco zener omega toggle
     void setRecoverySaturation(double gain, double knee) noexcept { saturator.setSaturation(gain, knee); }
     void setSaturationOffset(double dcOffset) noexcept { saturator.setOffset(dcOffset); }
 

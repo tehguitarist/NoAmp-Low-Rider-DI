@@ -127,6 +127,14 @@ public:
 
     inline void incident(T x) noexcept { wdf.a = x; }
 
+    // HQ/Eco runtime toggle (dsp.md "HQ / Eco mode"): HQ on (default) = the template OmegaProvider
+    // (2-Halley AccurateOmega in production); off (Eco) = chowdsp omega4, measured 2.65x cheaper at
+    // ~0.75% RMS waveform deviation AT HARD CLIP ONLY (-42 dB — inaudible at normal levels). omega4
+    // is only ever reached via this explicit opt-in, so dsp.md's "do NOT use the default omega"
+    // standing rule (which governs the default path) is not violated. highQ is block-invariant, so
+    // the branch predicts perfectly — effectively free.
+    void setHighQuality(bool b) noexcept { highQ = b; }
+
     // Werner et al. "An Improved and Generalized Diode Clipper Model for WDFs", eqn (18), antiparallel
     // pair — solved with OmegaProvider (AccurateOmega). Odd-symmetric fold via signum; the +/- swings use
     // their own (VtP/VtN) knee constants so a mismatch (m != 0) makes the clip asymmetric (even harmonics).
@@ -138,7 +146,10 @@ public:
         const T ovt = pos ? oneOverVtP : oneOverVtN;
         const T rio = pos ? R_Is_overVtP : R_Is_overVtN;
         const T lrio = pos ? logR_Is_overVtP : logR_Is_overVtN;
-        wdf.b = wdf.a + (T) 2 * lambda * (R_Is - vt * OmegaProvider::omega(lrio + lambda * wdf.a * ovt + rio));
+        const T arg = lrio + lambda * wdf.a * ovt + rio;
+        const T om = highQ ? OmegaProvider::omega(arg)                  // HQ: template provider (2-Halley AccurateOmega)
+                           : (T) chowdsp::Omega::Omega::omega((double) arg); // Eco: omega4
+        wdf.b = wdf.a + (T) 2 * lambda * (R_Is - vt * om);
         return wdf.b;
     }
 
@@ -150,6 +161,7 @@ private:
     T Vth{}, Vt{}, Is{}, mismatch{};
     T VtP{}, VtN{}, oneOverVtP{}, oneOverVtN{};
     T R_Is{}, R_Is_overVtP{}, R_Is_overVtN{}, logR_Is_overVtP{}, logR_Is_overVtN{};
+    bool highQ = true; // HQ/Eco toggle — see setHighQuality()
     const Next& next;
 };
 
@@ -192,6 +204,9 @@ public:
     // stage-B attenuation). Ig = vIn/Rin is a plain scalar, so only oneOverRin changes -- no WDF
     // impedance re-propagation (Rf/Cj/zener, which DO drive the tree, are untouched).
     void setInputResistance(double Rin) noexcept { oneOverRin = 1.0 / Rin; }
+
+    // HQ/Eco toggle — forwarded to the zener root's runtime omega branch (see ZenerPairT above).
+    void setHighQuality(bool b) noexcept { zener.setHighQuality(b); }
 
     void prepare(double fs)
     {
