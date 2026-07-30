@@ -1,5 +1,9 @@
 # NoAmp Low Rider DI
 
+![Build](https://github.com/tehguitarist/NoAmp-Low-Rider-DI/actions/workflows/ci.yml/badge.svg?branch=main)
+[![License](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://opensource.org/license/agpl-v3)
+[![Downloads](https://img.shields.io/github/downloads/tehguitarist/NoAmp-Low-Rider-DI/total)](https://somsubhra.github.io/github-release-stats/?username=tehguitarist&repository=NoAmp-Low-Rider-DI&page=1&per_page=30)
+
 A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, JUCE 8) modelled directly from
 three reverse-engineered generations of the Tech 21 SansAmp Bass Driver DI (BDDI).
 As far as I'm aware this is the first BDDI plugin to accurately model all three revisions, each of which have it's huge proponents. As far as I could find, it's also the only accurate BDDI plugin that still works on modern PCs outside captures (excepting the Honeycomb plugin - which is by it's own admission BDDI inspired).
