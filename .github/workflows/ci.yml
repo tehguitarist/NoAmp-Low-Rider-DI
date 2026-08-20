@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [macos-latest, macos-13, windows-latest, ubuntu-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v6

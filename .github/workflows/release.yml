@@ -171,6 +171,134 @@ jobs:
             NoAmpLowRiderDI-macOS-v*.zip
             NoAmpLowRiderDI-macOS-v*.pkg
 
+  macos-intel:
+    name: macOS build (Intel)
+    needs: version
+    runs-on: macos-13
+    steps:
+      - uses: actions/checkout@v6
+        with: { submodules: recursive }
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+      - name: Build AU + VST3
+        run: cmake --build build --config Release --target NoAmpLowRiderDI_AU --target NoAmpLowRiderDI_VST3 --parallel
+
+      # --- Signing/notarization: requires the nine APPLE_* secrets. Delete these steps (through
+      # "Clean up keychain") if you haven't set them up yet — see build.md.
+      - name: Import signing certificates
+        env:
+          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_INSTALLER_CERT_P12_BASE64: ${{ secrets.APPLE_INSTALLER_CERT_P12_BASE64 }}
+          APPLE_INSTALLER_CERT_PASSWORD: ${{ secrets.APPLE_INSTALLER_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          INSTALLER_CERT_PATH="$RUNNER_TEMP/installer-cert.p12"
+
+          echo "$APPLE_CERT_P12_BASE64" | base64 --decode -o "$CERT_PATH"
+          echo "$APPLE_INSTALLER_CERT_P12_BASE64" | base64 --decode -o "$INSTALLER_CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security import "$INSTALLER_CERT_PATH" -k "$KEYCHAIN_PATH" -P "$APPLE_INSTALLER_CERT_PASSWORD" -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productsign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed 's/"//g')
+
+          rm -f "$CERT_PATH" "$INSTALLER_CERT_PATH"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Sign AU + VST3
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          for bundle in \
+            "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmp Low Rider DI.component" \
+            "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3"; do
+            codesign --force --deep --options runtime --timestamp \
+              --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" "$bundle"
+            codesign --verify --deep --strict --verbose=2 "$bundle"
+          done
+
+      - name: Notarize AU + VST3
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          NOTARIZE_ZIP="$RUNNER_TEMP/notarize.zip"
+          NOTARIZE_DIR="$RUNNER_TEMP/notarize"
+          mkdir -p "$NOTARIZE_DIR"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmp Low Rider DI.component" "$NOTARIZE_DIR/"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3" "$NOTARIZE_DIR/"
+          ditto -c -k --keepParent "$NOTARIZE_DIR" "$NOTARIZE_ZIP"
+
+          xcrun notarytool submit "$NOTARIZE_ZIP" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/AU/NoAmp Low Rider DI.component"
+          xcrun stapler staple "build/NoAmpLowRiderDI_artefacts/Release/VST3/NoAmp Low Rider DI.vst3"
+
+      - name: Package
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          # Zip only the AU/VST3 bundles — see the ARM job's comment. Filenames carry an "Intel"
+          # tag so this job's assets never collide with the ARM job's in the same GitHub Release.
+          PKG_DIR="$RUNNER_TEMP/NoAmpLowRiderDI"
+          mkdir -p "$PKG_DIR"
+          cp -R "build/NoAmpLowRiderDI_artefacts/Release/AU" "build/NoAmpLowRiderDI_artefacts/Release/VST3" "$PKG_DIR/"
+          ditto -c -k --sequesterRsrc --keepParent "$PKG_DIR" "NoAmpLowRiderDI-macOS-Intel-v${VERSION}.zip"
+
+      - name: Build installer
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          installer/macos/build_installer.sh "$VERSION" build/NoAmpLowRiderDI_artefacts/Release .
+          # build_installer.sh always names its output "NoAmpLowRiderDI-macOS-v<version>-Installer.pkg"
+          # — rename it so this Intel build's asset doesn't collide with the ARM job's.
+          mv "NoAmpLowRiderDI-macOS-v${VERSION}-Installer.pkg" "NoAmpLowRiderDI-macOS-Intel-v${VERSION}-Installer.pkg"
+
+      - name: Sign + notarize installer
+        env:
+          APPLE_INSTALLER_SIGNING_IDENTITY: ${{ secrets.APPLE_INSTALLER_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          PKG="NoAmpLowRiderDI-macOS-Intel-v${VERSION}-Installer.pkg"
+          SIGNED_PKG="$RUNNER_TEMP/signed.pkg"
+
+          productsign --sign "$APPLE_INSTALLER_SIGNING_IDENTITY" --keychain "$KEYCHAIN_PATH" \
+            "$PKG" "$SIGNED_PKG"
+          mv "$SIGNED_PKG" "$PKG"
+
+          xcrun notarytool submit "$PKG" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple "$PKG"
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain "$KEYCHAIN_PATH" || true
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: NoAmpLowRiderDI-macOS-Intel
+          path: |
+            NoAmpLowRiderDI-macOS-Intel-v*.zip
+            NoAmpLowRiderDI-macOS-Intel-v*.pkg
+
   windows:
     name: Windows build
     needs: version
@@ -273,7 +401,7 @@ jobs:
 
   publish:
     name: Publish release
-    needs: [version, macos, windows, linux]
+    needs: [version, macos, macos-intel, windows, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
