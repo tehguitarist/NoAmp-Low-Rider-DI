@@ -174,7 +174,12 @@ jobs:
   macos-intel:
     name: macOS build (Intel)
     needs: version
-    runs-on: macos-13
+    # GitHub's macos-13 (Intel-hosted) runner pool has become unreliable/near-retired — jobs can
+    # sit in "waiting for a runner" indefinitely. Build the Intel slice by CROSS-COMPILING on the
+    # Apple Silicon runner instead (Xcode's clang + the macOS SDK support this natively via
+    # -DCMAKE_OSX_ARCHITECTURES=x86_64 below) — no Intel hardware needed, and it's not subject to
+    # that pool's availability.
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
         with: { submodules: recursive }
