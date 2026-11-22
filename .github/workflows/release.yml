@@ -408,7 +408,7 @@ jobs:
   linux:
     name: Linux build
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # pinned as in ci.yml: a .deb built on ubuntu-latest (26.04) needs a newer glibc than 22.04/24.04 users have
     steps:
       - uses: actions/checkout@v6
         with: { submodules: recursive }

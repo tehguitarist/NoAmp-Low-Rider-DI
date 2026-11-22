@@ -22,7 +22,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        # Ubuntu pinned: ubuntu-latest moves to a new image (Ubuntu 26.04, GCC 15) that changes floating-point test results and
+        # raises the glibc a Linux build needs. Move the pin deliberately, after one green run on the new image.
+        os: [macos-latest, windows-latest, ubuntu-24.04]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
