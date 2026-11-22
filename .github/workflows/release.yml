@@ -58,6 +58,22 @@ jobs:
       - name: Build AU + VST3
         run: cmake --build build --config Release --target NoAmpLowRiderDI_AU --target NoAmpLowRiderDI_VST3 --parallel
 
+      - name: Check minimum macOS version
+        # Fails the release if a binary would not load on older macOS: prints what each slice needs and what it links.
+        run: |
+          for bin in build/*_artefacts/Release/VST3/*.vst3/Contents/MacOS/* build/*_artefacts/Release/AU/*.component/Contents/MacOS/*; do
+            [ -e "$bin" ] || continue
+            echo "== $bin"; lipo -info "$bin"; vtool -show-build "$bin"; otool -L "$bin"
+            # vtool prints one block per slice: arm64 as "minos", x86_64 as a LC_VERSION_MIN_MACOSX "version". Every slice
+            # must have a minimum of macOS 11 or lower, and at least one must be found.
+            mins=$(vtool -show-build "$bin" | awk '/minos/ {print $2} /LC_VERSION_MIN_MACOSX/ {f=1} f && /^ *version/ {print $2; f=0}')
+            [ -n "$mins" ] || { echo "::error::no minimum macOS version found in $bin"; exit 1; }
+            for minos in $mins; do
+              echo "minos=$minos"
+              case "$minos" in 10.*|11.*) ;; *) echo "::error::$bin needs macOS $minos"; exit 1 ;; esac
+            done
+          done
+
       # --- Signing/notarization: requires the nine APPLE_* secrets. Delete these steps (through
       # "Clean up keychain") if you haven't set them up yet — see build.md.
       - name: Import signing certificates
@@ -190,6 +206,22 @@ jobs:
       - name: Build AU + VST3
         run: cmake --build build --config Release --target NoAmpLowRiderDI_AU --target NoAmpLowRiderDI_VST3 --parallel
 
+      - name: Check minimum macOS version
+        # Fails the release if a binary would not load on older macOS: prints what each slice needs and what it links.
+        run: |
+          for bin in build/*_artefacts/Release/VST3/*.vst3/Contents/MacOS/* build/*_artefacts/Release/AU/*.component/Contents/MacOS/*; do
+            [ -e "$bin" ] || continue
+            echo "== $bin"; lipo -info "$bin"; vtool -show-build "$bin"; otool -L "$bin"
+            # vtool prints one block per slice: arm64 as "minos", x86_64 as a LC_VERSION_MIN_MACOSX "version". Every slice
+            # must have a minimum of macOS 11 or lower, and at least one must be found.
+            mins=$(vtool -show-build "$bin" | awk '/minos/ {print $2} /LC_VERSION_MIN_MACOSX/ {f=1} f && /^ *version/ {print $2; f=0}')
+            [ -n "$mins" ] || { echo "::error::no minimum macOS version found in $bin"; exit 1; }
+            for minos in $mins; do
+              echo "minos=$minos"
+              case "$minos" in 10.*|11.*) ;; *) echo "::error::$bin needs macOS $minos"; exit 1 ;; esac
+            done
+          done
+
       # --- Signing/notarization: requires the nine APPLE_* secrets. Delete these steps (through
       # "Clean up keychain") if you haven't set them up yet — see build.md.
       - name: Import signing certificates
@@ -317,6 +349,16 @@ jobs:
 
       - name: Build VST3
         run: cmake --build build --config Release --target NoAmpLowRiderDI_VST3 --parallel
+
+      - name: Check the DLL needs no Visual C++ runtime
+        shell: pwsh
+        run: |
+          $vsroot = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vsroot\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          $dll = Get-ChildItem "build/*_artefacts/Release/VST3/*.vst3/Contents/x86_64-win" -Filter *.vst3 | Select-Object -First 1
+          $deps = & $dumpbin.FullName /dependents $dll.FullName
+          $deps
+          if ($deps -match '(?i)vcruntime|msvcp|concrt|ucrtbase|api-ms-win-crt') { throw "The plug-in still depends on the Visual C++ / UCRT runtime DLLs" }
 
       - name: Package
         shell: pwsh
