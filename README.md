@@ -134,7 +134,7 @@ deepest, as expected for the revision with no clipping module at all.
 
 Requirements: CMake 3.15+, a C++17 compiler, and the `libs/JUCE`, `libs/chowdsp_wdf`, and
 `libs/xsimd` submodules (`git submodule update --init --recursive`). Supports AU + VST3 on macOS;
-VST3 on Windows and Linux.
+VST3 on Windows; VST3 + LV2 on Linux.
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release

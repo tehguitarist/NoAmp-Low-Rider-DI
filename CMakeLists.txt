@@ -43,12 +43,19 @@ add_subdirectory(libs/chowdsp_wdf)
 get_target_property(_chowdsp_inc chowdsp_wdf INTERFACE_INCLUDE_DIRECTORIES)
 set_target_properties(chowdsp_wdf PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_chowdsp_inc}")
 
+# LV2 is built on Linux only (an empty value elsewhere, so the FORMATS list below is unchanged).
+set(PLUGIN_LV2_FORMAT "")
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set(PLUGIN_LV2_FORMAT LV2)
+endif()
+
 juce_add_plugin(NoAmpLowRiderDI
     COMPANY_NAME "Leigh Pierce"
     BUNDLE_ID com.leighpierce.noamplowriderdi
     PLUGIN_MANUFACTURER_CODE LPrc
     PLUGIN_CODE NALR
-    FORMATS AU VST3
+    FORMATS AU VST3 ${PLUGIN_LV2_FORMAT}
+    LV2URI "https://github.com/tehguitarist/NoAmp-Low-Rider-DI"   # permanent: hosts identify the plug-in by it
     PRODUCT_NAME "NoAmp Low Rider DI"
     COPY_PLUGIN_AFTER_BUILD TRUE      # installs the AU to ~/Library/Audio/Plug-Ins/Components/
 )

@@ -425,14 +425,17 @@ jobs:
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release
 
-      - name: Build VST3
-        run: cmake --build build --config Release --target NoAmpLowRiderDI_VST3 --parallel
+      - name: Build VST3 and LV2
+        run: |
+          cmake --build build --config Release --target NoAmpLowRiderDI_VST3 --parallel
+          cmake --build build --config Release --target NoAmpLowRiderDI_LV2 --parallel
 
       - name: Package
         run: |
           VERSION="${{ needs.version.outputs.version }}"
           (cd build/NoAmpLowRiderDI_artefacts/Release/VST3 && \
             zip -r "${GITHUB_WORKSPACE}/NoAmpLowRiderDI-Linux-v${VERSION}.zip" "NoAmp Low Rider DI.vst3")
+          (cd build/NoAmpLowRiderDI_artefacts/Release/LV2 && zip -r "${GITHUB_WORKSPACE}/NoAmpLowRiderDI-Linux-v${VERSION}.zip" "NoAmp Low Rider DI.lv2")
 
       - name: Build installer
         run: |

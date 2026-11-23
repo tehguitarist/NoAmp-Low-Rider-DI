@@ -4,6 +4,6 @@ Section: sound
 Priority: optional
 Architecture: amd64
 Maintainer: Leigh Pierce <leighpierce@me.com>
-Description: NoAmp Low Rider DI plugin (VST3)
+Description: NoAmp Low Rider DI plugin (VST3, LV2)
  Circuit-level emulation of the Tech 21 SansAmp Bass Driver DI, with three selectable circuit
  revisions (V1 Early, V1 Late, V2).
