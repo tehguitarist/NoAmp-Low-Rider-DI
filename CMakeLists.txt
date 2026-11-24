@@ -8,7 +8,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS deployment v
 # crashes). Needs CMP0091 (NEW from cmake_minimum_required 3.15); must precede the targets, so JUCE.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-project(NoAmpLowRiderDI VERSION 1.0.3)   # bump VERSION to force Logic to rescan the AU after changes
+project(NoAmpLowRiderDI VERSION 1.0.4)   # bump VERSION to force Logic to rescan the AU after changes
 
 # Fallback version string for console-app targets that source PluginEditor.cpp directly (e.g.
 # StateRoundTrip, UIRenderProbe) — they don't get juce_add_plugin's generated JucePlugin_VersionString.
