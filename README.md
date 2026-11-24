@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://opensource.org/license/agpl-v3)
 [![Downloads](https://img.shields.io/github/downloads/tehguitarist/NoAmp-Low-Rider-DI/total)](https://somsubhra.github.io/github-release-stats/?username=tehguitarist&repository=NoAmp-Low-Rider-DI&page=1&per_page=30)
 
-A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, JUCE 8) modelled directly from
+A circuit-accurate, revision-switchable DI/preamp plugin (AU/VST3, plus LV2 on Linux; JUCE 8) modelled directly from
 three reverse-engineered generations of the Tech 21 SansAmp Bass Driver DI (BDDI).
 As far as I'm aware this is the first BDDI plugin to accurately model all three revisions, each of which have it's huge proponents. As far as I could find, it's also the only accurate BDDI plugin that still works on modern PCs outside captures (excepting the Honeycomb plugin - which is by it's own admission BDDI inspired).
 
@@ -166,7 +166,7 @@ docs/                         calibration, FR targets, capture protocol, UI asse
 Platform installers (`.pkg` on macOS with an AU/VST3 choice screen, `.exe` via NSIS on Windows,
 `.deb` on Linux) are built from `installer/{macos,windows,linux}` by the `release.yml` GitHub
 Actions workflow (manual `workflow_dispatch` trigger only). Alternatively, build from source per
-above and copy the resulting AU/VST3 bundle into your system's plugin folder.
+above and copy the resulting AU/VST3/LV2 bundle into your system's plugin folder.
 
 ## Known Limitations
 
